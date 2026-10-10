@@ -1,0 +1,48 @@
+{
+  "name": "worldline",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview --host",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "app": "tauri dev",
+    "app:build": "tauri build --bundles app",
+    "app:package": "tauri build --bundles app && bash scripts/make-dmg.sh"
+  },
+  "dependencies": {
+    "@date-fns/tz": "^1.5.0",
+    "@tauri-apps/api": "2.12.2",
+    "@tauri-apps/plugin-http": "2.8.1",
+    "@tauri-apps/plugin-opener": "2.7.0",
+    "@tauri-apps/plugin-sql": "2.5.0",
+    "@tiptap/core": "3.31.4",
+    "@tiptap/extension-list": "3.31.4",
+    "@tiptap/extension-mathematics": "3.31.4",
+    "@tiptap/extensions": "3.31.4",
+    "@tiptap/markdown": "3.31.4",
+    "@tiptap/pm": "3.31.4",
+    "@tiptap/react": "3.31.4",
+    "@tiptap/starter-kit": "3.31.4",
+    "chrono-node": "^2.10.2",
+    "city-timezones": "^1.3.4",
+    "date-fns": "^4.4.0",
+    "katex": "0.18.11",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "rrule": "2.8.1",
+    "zustand": "^5.0.15"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "2.12.1",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.2",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.3",
+    "vitest": "^5.0.3"
+  }
+}

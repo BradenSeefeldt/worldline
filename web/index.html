@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="theme-color" content="#ffffff" />
+    <script>
+      // Paint the saved theme from the first frame (no flash of the wrong colours); App keeps it up to date.
+      (function () {
+        var id = 'system';
+        try { id = (JSON.parse(localStorage.getItem('calendar-v1') || '{}').state || {}).theme || 'system'; } catch (e) {}
+        var dark = window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches;
+        var theme = id === 'system' ? (dark ? 'dark' : 'light') : id;
+        document.documentElement.dataset.theme = theme;
+        document.documentElement.dataset.mode = ['dark', 'midnight', 'obsidian', 'bumblebee', 'graphite', 'navy', 'abyss', 'cobalt', 'fjord', 'lagoon', 'evergreen', 'espresso', 'bordeaux', 'aubergine'].indexOf(theme) >= 0 ? 'dark' : 'light'; // = DARK_THEMES in src/lib/theme.ts
+      })();
+    </script>
+    <link rel="icon" href="/icon.svg" type="image/svg+xml" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <title>Worldline</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

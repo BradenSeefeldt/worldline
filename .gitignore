@@ -1,0 +1,15 @@
+# dependencies and build output
+node_modules/
+web/dist/
+web/release/
+web/src-tauri/target/
+web/src-tauri/gen/
+web/.vitest/
+*.tsbuildinfo
+.DS_Store
+
+# local only: backups, design notes, prototypes, editor/agent settings
+.backup-before-meeting-notes/
+proposals/
+web/prototype/
+.claude/

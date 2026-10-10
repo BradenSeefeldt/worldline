@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <defs>
+    <!-- deep-space background -->
+    <linearGradient id="bg" x1="0.15" y1="0" x2="0.85" y2="1">
+      <stop offset="0" stop-color="#1a2150"/>
+      <stop offset="0.55" stop-color="#0e1233"/>
+      <stop offset="1" stop-color="#07081c"/>
+    </linearGradient>
+    <radialGradient id="halo" cx="0.5" cy="0.52" r="0.55">
+      <stop offset="0" stop-color="#5a5cff" stop-opacity="0.38"/>
+      <stop offset="1" stop-color="#5a5cff" stop-opacity="0"/>
+    </radialGradient>
+    <!-- the light cone: future (up) and past (down), fading toward the edges -->
+    <linearGradient id="futureCone" gradientUnits="userSpaceOnUse" x1="0" y1="560" x2="0" y2="100">
+      <stop offset="0" stop-color="#9db8ff" stop-opacity="0.42"/>
+      <stop offset="1" stop-color="#9db8ff" stop-opacity="0.06"/>
+    </linearGradient>
+    <linearGradient id="pastCone" gradientUnits="userSpaceOnUse" x1="0" y1="560" x2="0" y2="924">
+      <stop offset="0" stop-color="#7f9cff" stop-opacity="0.26"/>
+      <stop offset="1" stop-color="#7f9cff" stop-opacity="0.04"/>
+    </linearGradient>
+    <!-- the worldline: cool in the past, warm toward the future -->
+    <linearGradient id="line" x1="0" y1="1" x2="0" y2="0">
+      <stop offset="0" stop-color="#38bdf8"/>
+      <stop offset="0.5" stop-color="#a78bfa"/>
+      <stop offset="1" stop-color="#fb923c"/>
+    </linearGradient>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="22"/>
+    </filter>
+    <filter id="softglow" x="-100%" y="-100%" width="300%" height="300%">
+      <feGaussianBlur stdDeviation="14"/>
+    </filter>
+    <clipPath id="tile"><rect x="100" y="100" width="824" height="824" rx="185"/></clipPath>
+  </defs>
+
+  <!-- macOS icon grid: an 824 px rounded square centred on a 1024 canvas -->
+  <rect x="100" y="100" width="824" height="824" rx="185" fill="url(#bg)"/>
+  <g clip-path="url(#tile)">
+    <rect x="100" y="100" width="824" height="824" fill="url(#halo)"/>
+    <!-- faint spacetime grid -->
+    <g stroke="#ffffff" stroke-opacity="0.045" stroke-width="3">
+      <path d="M100 272H924M100 432H924M100 592H924M100 752H924"/>
+      <path d="M272 100V924M432 100V924M592 100V924M752 100V924"/>
+    </g>
+    <!-- light cone through "now" (512, 560), edges at 45° -->
+    <path d="M512 560 L-48 0 L1072 0 Z" fill="url(#futureCone)"/>
+    <path d="M512 560 L48 1024 L976 1024 Z" fill="url(#pastCone)"/>
+    <path d="M-48 0 L512 560 L1072 0 M48 1024 L512 560 L976 1024" fill="none" stroke="#c7d6ff" stroke-opacity="0.55" stroke-width="6" stroke-linecap="round"/>
+    <!-- the worldline (timelike: always steeper than the cone's edges) -->
+    <path id="wl" d="M430 900 C 455 780, 560 700, 512 560 S 470 330, 600 140" fill="none" stroke="url(#line)" stroke-width="56" stroke-linecap="round" filter="url(#glow)" opacity="0.85"/>
+    <path d="M430 900 C 455 780, 560 700, 512 560 S 470 330, 600 140" fill="none" stroke="url(#line)" stroke-width="38" stroke-linecap="round"/>
+    <path d="M430 900 C 455 780, 560 700, 512 560 S 470 330, 600 140" fill="none" stroke="#ffffff" stroke-opacity="0.6" stroke-width="9" stroke-linecap="round"/>
+  </g>
+  <!-- events on the worldline: past, now, a future one -->
+  <g>
+    <circle cx="498" cy="738" r="30" fill="#38bdf8" filter="url(#softglow)" opacity="0.9"/>
+    <circle cx="498" cy="738" r="20" fill="#e0f4ff"/>
+    <circle cx="512" cy="560" r="52" fill="#ffffff" filter="url(#softglow)" opacity="0.75"/>
+    <circle cx="512" cy="560" r="34" fill="#ffffff"/>
+    <circle cx="512" cy="560" r="16" fill="#a78bfa"/>
+    <circle cx="489" cy="369" r="30" fill="#fb923c" filter="url(#softglow)" opacity="0.9"/>
+    <circle cx="489" cy="369" r="20" fill="#fff1e6"/>
+  </g>
+</svg>

@@ -1,0 +1,612 @@
+[
+  {
+    "input": "Group meeting tmrw 2pm #research",
+    "title": "Group meeting",
+    "start": "2026-10-08 14:00",
+    "end": "2026-10-08 15:00",
+    "cal": "research"
+  },
+  {
+    "input": "Lunch with June on Friday",
+    "title": "Lunch with June",
+    "start": "2026-10-09 12:00",
+    "end": "2026-10-09 13:00"
+  },
+  {
+    "input": "Coffee with April tomorrow at 10.",
+    "title": "Coffee with April",
+    "start": "2026-10-08 10:00",
+    "end": "2026-10-08 11:00"
+  },
+  {
+    "input": "Call Will at 3",
+    "title": "Call Will",
+    "start": "2026-10-08 15:00",
+    "end": "2026-10-08 16:00"
+  },
+  {
+    "input": "Meeting with May next Tuesday 11-12",
+    "title": "Meeting with May",
+    "start": "2026-10-13 11:00",
+    "end": "2026-10-13 12:00"
+  },
+  {
+    "input": "Drinks with Sunny Friday night",
+    "title": "Drinks with Sunny",
+    "start": "2026-10-09 19:00",
+    "end": "2026-10-09 20:00"
+  },
+  {
+    "input": "Dentist appointment Oct 22 at 9:30am",
+    "title": "Dentist appointment",
+    "start": "2026-10-22 09:30",
+    "end": "2026-10-22 10:30"
+  },
+  {
+    "input": "AAS abstract deadline oct 30",
+    "title": "AAS abstract",
+    "start": "2026-10-30 17:00",
+    "end": "2026-10-30 17:00"
+  },
+  {
+    "input": "Thesis committee meeting Nov 12 2-3:30 in MP 1318",
+    "title": "Thesis committee meeting",
+    "start": "2026-11-12 14:00",
+    "end": "2026-11-12 15:30",
+    "loc": "MP 1318"
+  },
+  {
+    "input": "Dept lunch talk wed 12:00 #department",
+    "title": "Dept lunch talk",
+    "start": "2026-10-14 12:00",
+    "end": "2026-10-14 13:00",
+    "cal": "dept"
+  },
+  {
+    "input": "Telecon with the EHT group thursday 8am",
+    "title": "Telecon with the EHT group",
+    "start": "2026-10-08 08:00",
+    "end": "2026-10-08 09:00"
+  },
+  {
+    "input": "Conference oct 20-23 in Vienna",
+    "title": "Conference",
+    "start": "2026-10-20",
+    "end": "2026-10-23",
+    "loc": "Vienna"
+  },
+  {
+    "input": "Conference in Vienna oct 20-23",
+    "title": "Conference",
+    "start": "2026-10-20",
+    "end": "2026-10-23",
+    "loc": "Vienna"
+  },
+  {
+    "input": "Submit HPC job eod",
+    "title": "Submit HPC job",
+    "start": "2026-10-08 17:00",
+    "end": "2026-10-08 18:00"
+  },
+  {
+    "input": "Run Solver restart in 2 hours",
+    "title": "Run Solver restart",
+    "start": "2026-10-07 21:10",
+    "end": "2026-10-07 22:10"
+  },
+  {
+    "input": "Check on the job in 30 min",
+    "title": "Check on the job",
+    "start": "2026-10-07 19:40",
+    "end": "2026-10-07 20:40"
+  },
+  {
+    "input": "Gym tomorrow morning",
+    "title": "Gym",
+    "start": "2026-10-08 09:00",
+    "end": "2026-10-08 10:00"
+  },
+  {
+    "input": "Dinner at Pai with Jan saturday",
+    "title": "Dinner with Jan",
+    "start": "2026-10-10 18:30",
+    "end": "2026-10-10 19:30",
+    "loc": "Pai"
+  },
+  {
+    "input": "Brunch with Mom and Dad sunday",
+    "title": "Brunch with Mom and Dad",
+    "start": "2026-10-11 11:00",
+    "end": "2026-10-11 12:00"
+  },
+  {
+    "input": "Haircut at 1530 friday",
+    "title": "Haircut",
+    "start": "2026-10-09 15:30",
+    "end": "2026-10-09 16:30"
+  },
+  {
+    "input": "Seminar 3 o'clock tomorrow in MP 102",
+    "title": "Seminar",
+    "start": "2026-10-08 15:00",
+    "end": "2026-10-08 16:00",
+    "loc": "MP 102"
+  },
+  {
+    "input": "Office hours 2 to 4 thursday",
+    "title": "Office hours",
+    "start": "2026-10-08 14:00",
+    "end": "2026-10-08 16:00"
+  },
+  {
+    "input": "Flight to Vancouver nov 5 6:45am",
+    "title": "Flight to Vancouver",
+    "start": "2026-11-05 06:45",
+    "end": "2026-11-05 07:45"
+  },
+  {
+    "input": "Vacation dec 19 to jan 3",
+    "title": "Vacation",
+    "start": "2026-12-19",
+    "end": "2027-01-03"
+  },
+  {
+    "input": "Camping this weekend #personal",
+    "title": "Camping",
+    "start": "2026-10-10",
+    "end": "2026-10-11",
+    "cal": "personal"
+  },
+  {
+    "input": "Mom's birthday oct 25",
+    "title": "Mom's birthday",
+    "start": "2026-10-25",
+    "end": "2026-10-25"
+  },
+  {
+    "input": "Pay rent nov 1",
+    "title": "Pay rent",
+    "start": "2026-11-01",
+    "end": "2026-11-01"
+  },
+  {
+    "input": "Schedule a meeting with Alex tomorrow at 11 about the flux eruption paper",
+    "title": "Meeting with Alex about the flux eruption paper",
+    "start": "2026-10-08 11:00",
+    "end": "2026-10-08 12:00"
+  },
+  {
+    "input": "Remind me to email Jordan friday",
+    "title": "Email Jordan",
+    "start": "2026-10-09",
+    "end": "2026-10-09"
+  },
+  {
+    "input": "Add dentist on the 15th at 2pm",
+    "title": "Dentist",
+    "start": "2026-10-15 14:00",
+    "end": "2026-10-15 15:00"
+  },
+  {
+    "input": "Pay credit card bill the 3rd",
+    "title": "Pay credit card bill",
+    "start": "2026-11-03",
+    "end": "2026-11-03"
+  },
+  {
+    "input": "Yoga 7am tmr",
+    "title": "Yoga",
+    "start": "2026-10-08 07:00",
+    "end": "2026-10-08 08:00"
+  },
+  {
+    "input": "Breakfast with Sunny tomorrow",
+    "title": "Breakfast with Sunny",
+    "start": "2026-10-08 08:30",
+    "end": "2026-10-08 09:30"
+  },
+  {
+    "input": "Pickup basketball at the gym 8pm thursday",
+    "title": "Pickup basketball",
+    "start": "2026-10-08 20:00",
+    "end": "2026-10-08 21:00",
+    "loc": "the gym"
+  },
+  {
+    "input": "Work on proposal at home friday afternoon",
+    "title": "Work on proposal",
+    "start": "2026-10-09 14:00",
+    "end": "2026-10-09 15:00",
+    "loc": "home"
+  },
+  {
+    "input": "Movie night with Will and May Saturday at 8 p.m.",
+    "title": "Movie night with Will and May",
+    "start": "2026-10-10 20:00",
+    "end": "2026-10-10 21:00"
+  },
+  {
+    "input": "Meet Kai tomorrow 3-5 @ Robarts",
+    "title": "Meet Kai",
+    "start": "2026-10-08 15:00",
+    "end": "2026-10-08 17:00",
+    "loc": "Robarts"
+  },
+  {
+    "input": "Party 10pm-2am saturday",
+    "title": "Party",
+    "start": "2026-10-10 22:00",
+    "end": "2026-10-11 02:00"
+  },
+  {
+    "input": "Study session for an hour and a half tomorrow at 1",
+    "title": "Study session",
+    "start": "2026-10-08 13:00",
+    "end": "2026-10-08 14:30"
+  },
+  {
+    "input": "Paper reading for 90 min monday at 10",
+    "title": "Paper reading",
+    "start": "2026-10-12 10:00",
+    "end": "2026-10-12 11:30"
+  },
+  {
+    "input": "Write intro 1h30 thursday 9am",
+    "title": "Write intro",
+    "start": "2026-10-08 09:00",
+    "end": "2026-10-08 10:30"
+  },
+  {
+    "input": "Quick sync with Priya for half an hour at noon tomorrow",
+    "title": "Quick sync with Priya",
+    "start": "2026-10-08 12:00",
+    "end": "2026-10-08 12:30"
+  },
+  {
+    "input": "Coffee chat half past 3 friday",
+    "title": "Coffee chat",
+    "start": "2026-10-09 15:30",
+    "end": "2026-10-09 16:30"
+  },
+  {
+    "input": "Bus to Montreal quarter to 5 sunday",
+    "title": "Bus to Montreal",
+    "start": "2026-10-11 16:45",
+    "end": "2026-10-11 17:45"
+  },
+  {
+    "input": "Observing run nov 9 to nov 12",
+    "title": "Observing run",
+    "start": "2026-11-09",
+    "end": "2026-11-12"
+  },
+  {
+    "input": "Lunch with June at noon on Monday.",
+    "title": "Lunch with June",
+    "start": "2026-10-12 12:00",
+    "end": "2026-10-12 13:00"
+  },
+  {
+    "input": "Meeting with Jordan next Friday at 2 p.m.",
+    "title": "Meeting with Jordan",
+    "start": "2026-10-16 14:00",
+    "end": "2026-10-16 15:00"
+  },
+  {
+    "input": "Doctor's appointment tomorrow at 10:15 a.m.",
+    "title": "Doctor's appointment",
+    "start": "2026-10-08 10:15",
+    "end": "2026-10-08 11:15"
+  },
+  {
+    "input": "I have a TA meeting on Thursday at 4.",
+    "title": "TA meeting",
+    "start": "2026-10-08 16:00",
+    "end": "2026-10-08 17:00"
+  },
+  {
+    "input": "There's a colloquium Wednesday at 3:30 in McLennan Physical Labs.",
+    "title": "Colloquium",
+    "start": "2026-10-14 15:30",
+    "end": "2026-10-14 16:30",
+    "loc": "McLennan Physical Labs"
+  },
+  {
+    "input": "Book a massage saturday at 11",
+    "title": "Massage",
+    "start": "2026-10-10 11:00",
+    "end": "2026-10-10 12:00"
+  },
+  {
+    "input": "Set up a call with the Illinois group tomorrow at 9",
+    "title": "Call with the Illinois group",
+    "start": "2026-10-08 09:00",
+    "end": "2026-10-08 10:00"
+  },
+  {
+    "input": "Halloween party oct 31 at 9pm",
+    "title": "Halloween party",
+    "start": "2026-10-31 21:00",
+    "end": "2026-10-31 22:00"
+  },
+  {
+    "input": "Dinner tomorrow",
+    "title": "Dinner",
+    "start": "2026-10-08 18:30",
+    "end": "2026-10-08 19:30"
+  },
+  {
+    "input": "Lunch with Sam",
+    "title": "Lunch with Sam",
+    "start": "2026-10-08 12:00",
+    "end": "2026-10-08 13:00"
+  },
+  {
+    "input": "Supper with roommates sunday",
+    "title": "Supper with roommates",
+    "start": "2026-10-11 18:30",
+    "end": "2026-10-11 19:30"
+  },
+  {
+    "input": "Grocery run tonite at 9",
+    "title": "Grocery run",
+    "start": "2026-10-07 21:00",
+    "end": "2026-10-07 22:00"
+  },
+  {
+    "input": "Grant report due eod friday",
+    "title": "Grant report",
+    "start": "2026-10-09 17:00",
+    "end": "2026-10-09 17:00"
+  },
+  {
+    "input": "Start production run at midnight",
+    "title": "Start production run",
+    "start": "2026-10-08 00:00",
+    "end": "2026-10-08 01:00"
+  },
+  {
+    "input": "Referee report due in 2 weeks",
+    "title": "Referee report",
+    "start": "2026-10-21 17:00",
+    "end": "2026-10-21 17:00"
+  },
+  {
+    "input": "Plasma journal club tuesday 4-5pm @ Dept lounge",
+    "title": "Plasma journal club",
+    "start": "2026-10-13 16:00",
+    "end": "2026-10-13 17:00",
+    "loc": "Dept lounge"
+  },
+  {
+    "input": "Meeting with Alex 11-1 thursday",
+    "title": "Meeting with Alex",
+    "start": "2026-10-08 11:00",
+    "end": "2026-10-08 13:00"
+  },
+  {
+    "input": "Telecon between 2 and 3 tomorrow #research",
+    "title": "Telecon",
+    "start": "2026-10-08 14:00",
+    "end": "2026-10-08 15:00",
+    "cal": "research"
+  },
+  {
+    "input": "Detector testing at the lab friday at 10",
+    "title": "Detector testing",
+    "start": "2026-10-09 10:00",
+    "end": "2026-10-09 11:00",
+    "loc": "the lab"
+  },
+  {
+    "input": "Pick up package at work tomorrow",
+    "title": "Pick up package",
+    "start": "2026-10-08",
+    "end": "2026-10-08",
+    "loc": "work"
+  },
+  {
+    "input": "Climbing with Jordan at Basecamp thursday evening",
+    "title": "Climbing with Jordan",
+    "start": "2026-10-08 18:00",
+    "end": "2026-10-08 19:00",
+    "loc": "Basecamp"
+  },
+  {
+    "input": "Practice talk dec 2 1pm",
+    "title": "Practice talk",
+    "start": "2026-12-02 13:00",
+    "end": "2026-12-02 14:00"
+  },
+  {
+    "input": "Christmas party dec 18 at 6",
+    "title": "Christmas party",
+    "start": "2026-12-18 18:00",
+    "end": "2026-12-18 19:00"
+  },
+  {
+    "input": "Defense rehearsal all day nov 20",
+    "title": "Defense rehearsal",
+    "start": "2026-11-20",
+    "end": "2026-11-20"
+  },
+  {
+    "input": "Workshop all day tomorrow in Waterloo",
+    "title": "Workshop",
+    "start": "2026-10-08",
+    "end": "2026-10-08",
+    "loc": "Waterloo"
+  },
+  {
+    "input": "Hike with April and Jan sunday morning",
+    "title": "Hike with April and Jan",
+    "start": "2026-10-11 09:00",
+    "end": "2026-10-11 10:00"
+  },
+  {
+    "input": "Laundry saturday morning",
+    "title": "Laundry",
+    "start": "2026-10-10 09:00",
+    "end": "2026-10-10 10:00"
+  },
+  {
+    "input": "Renew passport by oct 28",
+    "title": "Renew passport",
+    "start": "2026-10-28 17:00",
+    "end": "2026-10-28 17:00"
+  },
+  {
+    "input": "Meet Will at Union Station at 5:45",
+    "title": "Meet Will",
+    "start": "2026-10-08 17:45",
+    "end": "2026-10-08 18:45",
+    "loc": "Union Station"
+  },
+  {
+    "input": "Allocation proposal due nov 15 at noon #research",
+    "title": "Allocation proposal",
+    "start": "2026-11-15 12:00",
+    "end": "2026-11-15 12:00",
+    "cal": "research"
+  },
+  {
+    "input": "Reading group with the plasma people at 10am next Tuesday",
+    "title": "Reading group with the plasma people",
+    "start": "2026-10-13 10:00",
+    "end": "2026-10-13 11:00"
+  },
+  {
+    "input": "Trip to Chile jan 10 - jan 24",
+    "title": "Trip to Chile",
+    "start": "2027-01-10",
+    "end": "2027-01-24"
+  },
+  {
+    "input": "Brunch at Lady Marmalade with Sunny sunday",
+    "title": "Brunch with Sunny",
+    "start": "2026-10-11 11:00",
+    "end": "2026-10-11 12:00",
+    "loc": "Lady Marmalade"
+  },
+  {
+    "input": "Call with Mom 8pm",
+    "title": "Call with Mom",
+    "start": "2026-10-07 20:00",
+    "end": "2026-10-07 21:00"
+  },
+  {
+    "input": "Soccer game nov 7 at 2:30",
+    "title": "Soccer game",
+    "start": "2026-11-07 14:30",
+    "end": "2026-11-07 15:30"
+  },
+  {
+    "input": "Bake sale at school oct 16",
+    "title": "Bake sale",
+    "start": "2026-10-16",
+    "end": "2026-10-16",
+    "loc": "school"
+  },
+  {
+    "input": "Midterm grading thursday 6-9",
+    "title": "Midterm grading",
+    "start": "2026-10-08 18:00",
+    "end": "2026-10-08 21:00"
+  },
+  {
+    "input": "Seminar Oct 14 at 4.",
+    "title": "Seminar",
+    "start": "2026-10-14 16:00",
+    "end": "2026-10-14 17:00"
+  },
+  {
+    "input": "Ski trip with Will jan 15-17",
+    "title": "Ski trip with Will",
+    "start": "2027-01-15",
+    "end": "2027-01-17"
+  },
+  {
+    "input": "Weekly check-in w/ Alex mon 10am",
+    "title": "Check-in w/ Alex",
+    "start": "2026-10-12 10:00",
+    "end": "2026-10-12 11:00"
+  },
+  {
+    "input": "Coffee with Eva in 45 min",
+    "title": "Coffee with Eva",
+    "start": "2026-10-07 19:55",
+    "end": "2026-10-07 20:55"
+  },
+  {
+    "input": "Write up Tracer notes for 2h tomorrow afternoon",
+    "title": "Write up Tracer notes",
+    "start": "2026-10-08 14:00",
+    "end": "2026-10-08 16:00"
+  },
+  {
+    "input": "Sunny's birthday dinner on the 23rd at 7:30",
+    "title": "Sunny's birthday dinner",
+    "start": "2026-10-23 19:30",
+    "end": "2026-10-23 20:30"
+  },
+  {
+    "input": "Department BBQ May 3",
+    "title": "Department BBQ",
+    "start": "2027-05-03",
+    "end": "2027-05-03"
+  },
+  {
+    "input": "June's defense nov 19 at 10",
+    "title": "June's defense",
+    "start": "2026-11-19 10:00",
+    "end": "2026-11-19 11:00"
+  },
+  {
+    "input": "Flu shot at the pharmacy tomorrow",
+    "title": "Flu shot at the pharmacy",
+    "start": "2026-10-08",
+    "end": "2026-10-08"
+  },
+  {
+    "input": "Submit jobs on cluster tomorrow morning",
+    "title": "Submit jobs on cluster",
+    "start": "2026-10-08 09:00",
+    "end": "2026-10-08 10:00"
+  },
+  {
+    "input": "Lunch with Jan and April on Thursday at 12:30",
+    "title": "Lunch with Jan and April",
+    "start": "2026-10-08 12:30",
+    "end": "2026-10-08 13:30"
+  },
+  {
+    "input": "Office move nov 2",
+    "title": "Office move",
+    "start": "2026-11-02",
+    "end": "2026-11-02"
+  },
+  {
+    "input": "Run analysis script at 11pm",
+    "title": "Run analysis script",
+    "start": "2026-10-07 23:00",
+    "end": "2026-10-08 00:00"
+  },
+  {
+    "input": "Squash with Will friday at 7",
+    "title": "Squash with Will",
+    "start": "2026-10-09 19:00",
+    "end": "2026-10-09 20:00"
+  },
+  {
+    "input": "Telecon at 8 tomorrow",
+    "title": "Telecon",
+    "start": "2026-10-08 08:00",
+    "end": "2026-10-08 09:00"
+  },
+  {
+    "input": "Breakfast meeting with the dean at 7 tomorrow",
+    "title": "Breakfast meeting with the dean",
+    "start": "2026-10-08 07:00",
+    "end": "2026-10-08 08:00"
+  }
+]
