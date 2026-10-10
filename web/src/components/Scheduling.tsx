@@ -33,6 +33,22 @@ function copyLink(id: string) {
   useStore.getState().showToast('Link copied · bookings appear here on their own', false);
 }
 
+/** Delete a link — and its upcoming meetings, after saying so. Returns whether it was deleted. */
+async function deleteLink(l: BookingLink) {
+  const st = useStore.getState();
+  const n = st.events.filter((e) => e.bookedVia === l.id && e.end > Date.now()).length;
+  const meetings = `${n} upcoming meeting${n === 1 ? '' : 's'}`;
+  if (!isFinished(l) && !unused(l)) {
+    const body = n
+      ? `The link stops working, and its ${meetings} ${n === 1 ? 'is' : 'are'} removed from your calendar. Anyone who booked sees that it was cancelled when they open the link.`
+      : 'The link stops working.';
+    if (!(await ask({ title: `Delete “${l.title}”?`, body, confirm: n ? `Delete link and ${n === 1 ? 'meeting' : 'meetings'}` : 'Delete link', danger: true }))) return false;
+  }
+  st.deleteLink(l.id);
+  st.showToast(`Deleted link “${l.title}”${n ? ` and its ${meetings}` : ''}`, false);
+  return true;
+}
+
 const dayDate = (e: number) => {
   const { y, m, d } = fromEpochDay(e);
   return new Date(y, m, d);
@@ -86,13 +102,10 @@ export function SchedulingBody() {
           <button className="sl-btn" title="Open the page guests see" onClick={(e) => { e.stopPropagation(); window.open(linkUrl(l.id), '_blank'); }}>↗</button>
           <button
             className="sl-btn danger"
-            title="Delete link (booked meetings stay on your calendar)"
-            onClick={async (e) => {
+            title="Delete link (and its upcoming meetings)"
+            onClick={(e) => {
               e.stopPropagation();
-              if (isFinished(l) || unused(l) || (await ask({ title: `Delete “${l.title}”?`, body: 'The link stops working. Meetings already booked through it stay on your calendar.', confirm: 'Delete link', danger: true }))) {
-                st().deleteLink(l.id);
-                st().showToast(`Deleted link “${l.title}”`, false);
-              }
+              void deleteLink(l);
             }}
           >
             <Trash />
@@ -234,10 +247,7 @@ function LinkEditor({ id, onClose }: { id: string; onClose: () => void }) {
         <button
           className="ce-btn subtle-danger"
           onClick={async () => {
-            if (unused(link) || (await ask({ title: `Delete “${link.title}”?`, body: 'The link stops working. Meetings already booked through it stay on your calendar.', confirm: 'Delete link', danger: true }))) {
-              st.deleteLink(id);
-              onClose();
-            }
+            if (await deleteLink(link)) onClose();
           }}
         >
           <Trash /> Delete

@@ -13,8 +13,11 @@ export const RELAYS = BUILTIN;
 
 /** What the scheduling code needs from "the network" — the real relays, or an in-memory one in tests. */
 export interface Transport {
-  /** Send to every relay; resolves with how many accepted it. */
+  /** Send to every relay; resolves with how many accepted it (waits for the slowest, up to 8 s). */
   publish: (ev: Event) => Promise<number>;
+  /** Send to every relay; resolves true as soon as ONE has stored it (false if none can), the rest keep going in
+   *  the background. For a guest pressing Save: the first relay is enough to be safe, no need to wait for the slowest. */
+  send: (ev: Event) => Promise<boolean>;
   /** Everything matching from every relay that answers within a few seconds (duplicates removed). */
   query: (filter: Filter) => Promise<Event[]>;
   /** New matching events as they arrive (and stored ones first). Returns a function that stops it. */
@@ -58,6 +61,7 @@ export function relayTransport(relays = RELAYS): Transport {
     size: relays.length,
     close: () => pool.destroy(),
     publish: async (ev) => (await Promise.allSettled(pool.publish(relays, ev, { maxWait: 8000 }))).filter((r) => r.status === 'fulfilled').length,
+    send: (ev) => Promise.any(pool.publish(relays, ev, { maxWait: 8000 })).then(() => true, () => false),
     query: (filter) => pool.querySync(relays, filter, { maxWait: 7000 }),
     subscribe: (filter, onEvent) => {
       const sub = pool.subscribeMany(relays, filter, { onevent: onEvent });
@@ -82,6 +86,7 @@ export function memoryTransport(opts: { down?: boolean } = {}): Transport & { ev
       for (const s of subs) if (matchFilter(s.filter, ev)) s.on(ev);
       return 1;
     },
+    send: async (ev: Event) => (await t.publish(ev)) > 0,
     query: async (filter: Filter) => (t.down ? [] : t.events.filter((e) => matchFilter(filter, e))),
     subscribe: (filter: Filter, on: (ev: Event) => void) => {
       const s = { filter, on };

@@ -42,7 +42,7 @@ export function Header({ v, updatedAt }: { v: PublicView; updatedAt?: number }) 
 /** One of this guest's own bookings and what the host's app said about it. */
 export interface MyBooking {
   start: number;
-  status: 'pending' | 'ok' | 'taken' | 'busy' | 'closed' | 'invalid' | 'lost';
+  status: 'pending' | 'ok' | 'taken' | 'busy' | 'closed' | 'invalid' | 'cancelled' | 'lost';
 }
 const refused = (s: MyBooking['status']) => s !== 'pending' && s !== 'ok';
 const why: Record<string, string> = {
@@ -52,6 +52,11 @@ const why: Record<string, string> = {
   closed: 'the link stopped taking bookings',
   invalid: 'it isn’t one of the offered times',
 };
+/** What to tell a guest whose booking isn't going ahead. */
+const notGoing = (b: MyBooking, host: string, closedByOther = false) =>
+  b.status === 'cancelled'
+    ? `Your meeting on ${format(b.start, 'EEE MMM d')} at ${format(b.start, 'h:mm a')} was cancelled by ${host || 'the host'}.`
+    : `Sorry — your booking for ${format(b.start, 'EEE MMM d')} at ${format(b.start, 'h:mm a')} didn’t go through: ${closedByOther ? 'someone else booked this link just before you' : why[b.status]}.`;
 
 // ---------------------------------------------------------------- one person books a slot
 export function BookView({ v, mine, updatedAt, onConfirm }: {
@@ -92,7 +97,7 @@ export function BookView({ v, mine, updatedAt, onConfirm }: {
     return (
       <div className="gp-card">
         <Header v={v} />
-        <p className="gp-error">Sorry — your booking for {format(last.start, 'EEE MMM d')} at {format(last.start, 'h:mm a')} didn’t go through: {v.finalStart ? 'someone else booked this link just before you' : why[last.status]}.</p>
+        <p className="gp-error">{notGoing(last, v.hostName, !!v.finalStart && last.status !== 'cancelled')}</p>
         <p className="gp-empty">This link isn’t taking more bookings. Ask {v.hostName || 'the person who sent it'} for another time.</p>
       </div>
     );
@@ -125,7 +130,7 @@ export function BookView({ v, mine, updatedAt, onConfirm }: {
   return (
     <div className="gp-card">
       <Header v={v} updatedAt={updatedAt} />
-      {bad && <p className="gp-error">Your booking for {format(bad.start, 'EEE MMM d')} at {format(bad.start, 'h:mm a')} didn’t go through: {why[bad.status]}. Please pick another time.</p>}
+      {bad && <p className="gp-error">{notGoing(bad, v.hostName)} Please pick another time.</p>}
       {!v.days.length ? (
         <p className="gp-empty">No open times right now — please check back later.</p>
       ) : (

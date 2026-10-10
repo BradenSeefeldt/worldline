@@ -53,7 +53,7 @@ export interface BookingLink {
    *  published availability (seconds), so the next one is always newer. */
   nostr?: { sk: string; secret: string; lastPub?: number };
   /** Your app's answer to each guest's request (keyed by the guest's key), published back so their page can say. */
-  decisions?: Record<string, { id: string; status: 'ok' | 'taken' | 'busy' | 'closed' | 'invalid'; start: number }>;
+  decisions?: Record<string, { id: string; status: 'ok' | 'taken' | 'busy' | 'closed' | 'invalid' | 'cancelled'; start: number }>;
   responses: PollResponse[];
 }
 

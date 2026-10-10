@@ -8,6 +8,7 @@ import { BookView, PollView, type MyBooking } from '../pages/GuestPage';
 import { KIND, derive, latestPerGuest, openAvail, openGuestMsg, parseFragment, resolveHolds, sealGuestMsg, withHolds, type Decoded, type LinkRef, type RemoteView } from '../lib/schedwire';
 import type { Transport } from '../lib/relays';
 import { useNow } from '../lib/hooks';
+import { format } from 'date-fns';
 
 /** What this browser remembers about a link: its own bookings (the signed events, to send again if a relay lost
  *  them) and its poll key + answer. Only in this browser's storage. */
@@ -30,7 +31,6 @@ const save = (ref: LinkRef, s: Saved) => {
     /* private mode: it just won't be remembered */
   }
 };
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const OFFLINE = 'Couldn’t reach the network — check your connection and try again.';
 
 function Card({ title, children }: { title: string; children?: React.ReactNode }) {
@@ -46,8 +46,6 @@ export function RemoteGuest({ transport, hash }: { transport: Transport; hash: s
   const [saved, setSaved] = useState<Saved>(() => (ref ? load(ref) : { bookings: [] }));
   const now = useNow(30_000);
   const best = useRef(0);
-  const latest = useRef<RemoteView | null>(null); // the newest availability, for code that awaits
-  latest.current = avail?.view ?? null;
 
   useEffect(() => {
     if (!ref || !tags) return;
@@ -72,8 +70,8 @@ export function RemoteGuest({ transport, hash }: { transport: Transport; hash: s
     const slow = setTimeout(() => setPhase((p) => (p === 'loading' ? 'slow' : p)), 9000);
     // send this browser's own messages again: if a relay dropped them, this puts them back
     const mine = load(ref);
-    for (const b of mine.bookings) if (!b.lost) void transport.publish(b.ev).catch(() => 0);
-    if (mine.poll?.ev) void transport.publish(mine.poll.ev).catch(() => 0);
+    for (const b of mine.bookings) if (!b.lost) void transport.send(b.ev).catch(() => 0);
+    if (mine.poll?.ev) void transport.send(mine.poll.ev).catch(() => 0);
     return () => {
       stopA();
       stopM();
@@ -82,6 +80,17 @@ export function RemoteGuest({ transport, hash }: { transport: Transport; hash: s
   }, [ref, tags, transport]);
 
   const view = avail?.view ?? null;
+  // A booking of this browser's that lost a same-moment race: remember it as lost and withdraw it (once).
+  useEffect(() => {
+    if (!ref || !view || view.mode !== 'book') return;
+    const { losers } = resolveHolds(view, [...msgs.values()], Date.now());
+    const lost = saved.bookings.filter((b) => !b.lost && losers.some((h) => h.pk === b.ev.pubkey));
+    if (!lost.length) return;
+    for (const b of lost) void transport.send(sealGuestMsg({ t: 'cancel' }, ref, hexToBytes(b.sk), b.ev.created_at + 1)).catch(() => 0);
+    const next = { ...saved, bookings: saved.bookings.map((b) => (lost.includes(b) ? { ...b, lost: true } : b)) };
+    save(ref, next);
+    setSaved(next);
+  }, [view, msgs, saved, ref, transport]);
   useEffect(() => {
     document.title = view ? `${view.title}${view.hostName ? ` · ${view.hostName}` : ''}` : 'Worldline';
   }, [view]);
@@ -95,7 +104,16 @@ export function RemoteGuest({ transport, hash }: { transport: Transport; hash: s
         <p className="gp-empty">Either it hasn’t been published yet (the calendar that made it publishes as soon as it’s online), or this device can’t reach the network. This page keeps trying — it will appear here on its own.</p>
       </Card>
     );
-  if (view.gone) return <Card title="This link is closed"><p className="gp-empty">It was deleted or replaced. Ask for a new one.</p></Card>;
+  if (view.gone) {
+    // their meeting went with the link: say so plainly
+    const off = saved.bookings.filter((b) => !b.lost && b.start > now);
+    return (
+      <Card title={off.length ? 'This meeting was cancelled' : 'This link is closed'}>
+        {off.map((b) => <p key={b.ev.id} className="gp-error">Your meeting on {format(b.start, 'EEEE, MMMM d')} at {format(b.start, 'h:mm a')} is cancelled{view.hostName ? ` — ${view.hostName} deleted this link` : ''}.</p>)}
+        <p className="gp-empty">{off.length ? 'Ask for a new link if you’d like another time.' : 'It was deleted or replaced. Ask for a new one.'}</p>
+      </Card>
+    );
+  }
 
   const all = [...msgs.values()];
   const minePks = new Set([...saved.bookings.map((b) => b.ev.pubkey), ...(saved.poll?.ev ? [saved.poll.ev.pubkey] : [])]);
@@ -112,27 +130,14 @@ export function RemoteGuest({ transport, hash }: { transport: Transport; hash: s
     const confirm = async (start: number, name: string) => {
       const sk = generateSecretKey();
       const ev = sealGuestMsg({ t: 'book', start, name }, ref, sk, Math.max(Math.floor(Date.now() / 1000), avail!.at + 1));
-      const acks = await transport.publish(ev).catch(() => 0);
-      if (!acks) return { ok: false, reason: OFFLINE };
+      if (!(await transport.send(ev).catch(() => false))) return { ok: false, reason: OFFLINE };
+      // Held from this moment: the page says "You're booked" at once. If someone else's request turns out to have come
+      // first (it shows up within a second or two), the same rule every page and the host's app use marks this one
+      // lost, and the watcher above withdraws it.
       const next: Saved = { ...saved, bookings: [...saved.bookings, { sk: bytesToHex(sk), ev, start }] };
       save(ref, next);
-      // Two people clicking the same time within a second or two: wait a moment, look again, and apply the rule
-      // every page and the host's app use (earliest request wins).
-      await sleep(2500);
-      const fresh = await transport.query({ kinds: [KIND], '#d': [tags!.msgTag] }).catch(() => [] as Event[]);
-      const decoded = latestPerGuest([...all, ...fresh.map((e) => openGuestMsg(e, ref)).filter((d): d is Decoded => !!d), { pk: ev.pubkey, id: ev.id, at: ev.created_at, msg: { t: 'book', start } }]);
-      setMsgs(new Map(decoded.map((d) => [d.pk, d])));
       setSaved(next);
-      const cur = latest.current ?? view;
-      const dec = cur.decisions[ev.pubkey];
-      if (dec?.id === ev.id && dec.status !== 'ok') return { ok: true }; // the host's app already answered: the page shows why
-      if (resolveHolds(cur, decoded, Date.now()).losers.some((h) => h.pk === ev.pubkey)) {
-        void transport.publish(sealGuestMsg({ t: 'cancel' }, ref, sk, ev.created_at + 1)).catch(() => 0);
-        const kept = { ...next, bookings: next.bookings.map((b) => (b.ev.id === ev.id ? { ...b, lost: true } : b)) };
-        save(ref, kept);
-        setSaved(kept);
-        return { ok: false, reason: '' }; // the page says why (the booking is remembered as lost)
-      }
+      setMsgs((m) => new Map(m).set(ev.pubkey, { pk: ev.pubkey, id: ev.id, at: ev.created_at, msg: { t: 'book', start } }));
       return { ok: true };
     };
     return <BookView key={view.id} v={shown} mine={myBookings} updatedAt={view.updatedAt} onConfirm={confirm} />;
@@ -145,8 +150,7 @@ export function RemoteGuest({ transport, hash }: { transport: Transport; hash: s
   const onSave = async (name: string, cells: number[]) => {
     const sk = saved.poll ? hexToBytes(saved.poll.sk) : generateSecretKey();
     const ev = sealGuestMsg({ t: 'poll', name, cells }, ref, sk, Math.max(Math.floor(Date.now() / 1000), (saved.poll?.ev?.created_at ?? 0) + 1, avail!.at + 1));
-    const acks = await transport.publish(ev).catch(() => 0);
-    if (!acks) return { ok: false, reason: OFFLINE };
+    if (!(await transport.send(ev).catch(() => false))) return { ok: false, reason: OFFLINE };
     const next = { ...saved, poll: { sk: bytesToHex(sk), ev, name, cells } };
     save(ref, next);
     setSaved(next);

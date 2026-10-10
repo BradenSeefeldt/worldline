@@ -275,7 +275,8 @@ on their own (see *How links work between people* below).
   (“✓ Mon Oct 12 · 2 – 3 PM”; click it to jump to the meeting) and stays in the list until the meeting has
   happened. Reusable links list their next three bookings. Opening a used-up link shows the guest the time
   they booked. Then links move to a folded **Finished** group; **Clear finished**
-  removes them. Deleting a link never deletes meetings already booked through it.
+  removes them. Deleting a link also removes its upcoming meetings from your calendar (past ones stay); anyone who booked sees on
+  the link's page that their meeting was cancelled. Deleting a single booked meeting tells that guest the same.
 - **Privacy:** guests only ever receive `publicView` (open times + what you chose to share). Tested.
 - The link editor shows whether it's live (“Live · on 6 of 7 relays · updated just now”). **New address** replaces a
   link that was shared more widely than you meant: the old address shows “closed”; booked meetings stay.

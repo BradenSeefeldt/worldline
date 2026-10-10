@@ -10,7 +10,7 @@ import type { Event } from 'nostr-tools/pure';
 import { useStore } from './store';
 import { expand } from '../lib/recurrence';
 import { isFinished, linkSpan, publicView, type BookingLink } from '../lib/booking';
-import { KIND, derive, liveDecisions, mergeResponses, nextCreatedAt, openGuestMsg, planBookings, refOf, sealAvail, type Decoded } from '../lib/schedwire';
+import { KIND, derive, publishedDecisions, mergeResponses, nextCreatedAt, openGuestMsg, planBookings, refOf, sealAvail, type Decoded } from '../lib/schedwire';
 import { RELAYS, loadRelayList, relayTransport, type Transport } from '../lib/relays';
 
 const HEARTBEAT = 3 * 3_600_000; // republish at least this often while the app runs
@@ -40,7 +40,7 @@ export function startScheduleSync(t: Transport = relayTransport(), clock = () =>
   async function publish(l: BookingLink, keys: NonNullable<BookingLink['nostr']>, gone = false) {
     const now = clock();
     const view = viewOf(l, now);
-    const opts = { noticeMin: l.noticeMin, singleUse: !!l.singleUse, decisions: liveDecisions(l.decisions, l.durationMin, now), gone };
+    const opts = { noticeMin: l.noticeMin, singleUse: !!l.singleUse, decisions: publishedDecisions(l, st().events, now), gone };
     const sig = JSON.stringify([view.days, view.title, view.hostName, view.durationMin, view.location, view.note, view.closed, view.finalStart, opts]);
     if (!gone && published.get(l.id) === sig && now - (publishedAt.get(l.id) ?? 0) < HEARTBEAT) return;
     const createdAt = nextCreatedAt(now, keys.lastPub);

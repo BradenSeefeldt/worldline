@@ -213,6 +213,7 @@ interface State {
   setShowTasks: (on: boolean) => void;
   createLink: (mode: LinkMode) => string;
   updateLink: (id: string, patch: Partial<BookingLink>) => void;
+  /** Delete a link and its upcoming meetings (past ones stay, as a record). Guests see the meeting was cancelled. */
   deleteLink: (id: string) => void;
   /** Bookings that came in over the relays (data/schedSync.ts): the meetings go onto your calendar and the decisions
    *  are kept (and published back). Not an undo step — like a subscribed calendar's refresh, it isn't your edit. */
@@ -446,7 +447,13 @@ export const useStore = create<State>()(
             ...(patch.hostName !== undefined ? { myName: patch.hostName } : {}),
           }));
         },
-        deleteLink: (id) => set((x) => ({ links: x.links.filter((l) => l.id !== id) })),
+        deleteLink: (id) => {
+          const now = Date.now();
+          const gone = (e: CalEvent) => e.bookedVia === id && e.end > now;
+          // also out of the undo history, so undoing an earlier edit can't bring a cancelled meeting back
+          const without = (x: Snapshot) => ({ ...x, events: x.events.filter((e) => !gone(e)) });
+          set((x) => ({ links: x.links.filter((l) => l.id !== id), events: x.events.filter((e) => !gone(e)), past: x.past.map(without), future: x.future.map(without) }));
+        },
         clearFinishedLinks: () => set((x) => ({ links: x.links.filter((l) => !isFinished(l)) })),
         setMyName: (myName) => set({ myName }),
         applyRemoteBookings: (linkId, accepts, decisions) => {

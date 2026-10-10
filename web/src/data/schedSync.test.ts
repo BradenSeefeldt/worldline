@@ -31,6 +31,7 @@ const sec = (ms: number) => Math.floor(ms / 1000);
 function network(...relays: Transport[]): Transport {
   return {
     publish: async (ev) => (await Promise.all(relays.map((r) => r.publish(ev)))).reduce((a, b) => a + b, 0),
+    send: async (ev) => (await Promise.all(relays.map((r) => r.publish(ev)))).some((n) => n > 0),
     query: async (f: Filter) => [...new Map((await Promise.all(relays.map((r) => r.query(f)))).flat().map((e) => [e.id, e])).values()],
     subscribe: (f, on) => {
       const seen = new Set<string>();
@@ -194,5 +195,50 @@ describe('scheduling between computers, end to end', () => {
     expect(view.gone).toBe(true);
     expect(view.days).toEqual([]);
     engine.stop();
+  });
+});
+
+describe('cancelling', () => {
+  it('deleting a booked meeting tells the guest it was cancelled; deleting the link removes its upcoming meetings', async () => {
+    const st = useStore.getState();
+    const id = st.createLink('book');
+    const days = [14, 15].map((d) => epochDay(2026, 9, d));
+    st.updateLink(id, { title: 'Cancel test', days, firstDay: days[0], lastDay: days[1], singleUse: false, timeZone: 'America/Toronto' });
+    const engine = startScheduleSync(net, clock);
+    await engine.tick();
+    const url = guestUrl('https://x/', useStore.getState().links.find((l) => l.id === id)!.nostr!);
+    const { ref } = await guestLooks(url);
+    const a = book(ref, t(14, 10), sec(now), 'Ana');
+    const b = book(ref, t(15, 10), sec(now), 'Ben');
+    await a.send();
+    await b.send();
+    await settle();
+    engine.process();
+    const evs = () => useStore.getState().events.filter((e) => e.bookedVia === id);
+    expect(evs()).toHaveLength(2);
+    // you delete Ana's meeting from the calendar: her page now says cancelled, Ben's still confirmed
+    useStore.getState().deleteEvent(evs().find((e) => e.title.includes('Ana'))!.id);
+    await engine.tick();
+    let v = (await guestLooks(url)).view;
+    expect(v.decisions[a.ev.pubkey].status).toBe('cancelled');
+    expect(v.decisions[b.ev.pubkey].status).toBe('ok');
+    // you delete the link: Ben's upcoming meeting goes too, and the closed notice says it's cancelled
+    useStore.getState().deleteLink(id);
+    expect(evs()).toHaveLength(0);
+    await settle();
+    await settle();
+    v = (await guestLooks(url)).view;
+    expect(v.gone).toBe(true);
+    expect(v.decisions[b.ev.pubkey].status).toBe('cancelled');
+    engine.stop();
+  });
+
+  it('past meetings stay when their link is deleted (a record of what happened)', () => {
+    const st = useStore.getState();
+    const id = st.createLink('book');
+    const cal = st.calendars[0].id;
+    useStore.setState((s) => ({ events: [...s.events, { id: 'past-one', calendarId: cal, title: 'Old', start: Date.now() - 86_400_000, end: Date.now() - 82_800_000, allDay: false, bookedVia: id }] }));
+    useStore.getState().deleteLink(id);
+    expect(useStore.getState().events.some((e) => e.id === 'past-one')).toBe(true);
   });
 });

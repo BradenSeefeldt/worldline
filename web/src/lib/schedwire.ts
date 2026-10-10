@@ -90,7 +90,7 @@ export function derive(secret: Uint8Array) {
 
 // ---------------------------------------------------------------- the availability (host → guests)
 
-export type Status = 'ok' | 'taken' | 'busy' | 'closed' | 'invalid';
+export type Status = 'ok' | 'taken' | 'busy' | 'closed' | 'invalid' | 'cancelled';
 
 /** A decision your app made about one guest's request (keyed by the guest's key). */
 export interface Decision {
@@ -423,3 +423,13 @@ export function mergeResponses(link: BookingLink, msgs: Decoded[], offeredCells:
 /** Decisions guests still need to see: drop ones for meetings more than two days past (keeps the message small). */
 export const liveDecisions = (decisions: Record<string, Decision> | undefined, durationMin: number, now: number) =>
   Object.fromEntries(Object.entries(decisions ?? {}).filter(([, d]) => d.start + durationMin * MIN > now - 2 * 86_400_000));
+
+/** What guests are told about each booking: your app's answers, plus "cancelled" for a booked meeting that's no longer
+ *  on your calendar (you deleted it, or deleted the link) — so their page stops saying "confirmed". */
+export function publishedDecisions(link: BookingLink, events: CalEvent[], now: number): Record<string, Decision> {
+  const out = liveDecisions(link.decisions, link.durationMin, now);
+  const onCalendar = new Set(events.map((e) => e.id));
+  for (const b of link.bookings)
+    if (b.guestKey && b.eventId && b.end > now && !onCalendar.has(b.eventId)) out[b.guestKey] = { id: b.id, status: 'cancelled', start: b.start };
+  return out;
+}
