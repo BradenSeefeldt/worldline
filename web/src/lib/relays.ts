@@ -3,23 +3,13 @@
 import { SimplePool } from 'nostr-tools/pool';
 import { matchFilter, type Filter } from 'nostr-tools/filter';
 import type { Event } from 'nostr-tools/pure';
+import { BUILTIN, parseRelayList, type RelayList } from './relaylist';
 
-/**
- * Chosen by testing (Oct 2026): free, no sign-up, accept kind 30078 from a brand-new key, return it by its tag, and
- * still serve events more than a year old. Run independently by different people in different places.
- * Relays that failed: paid or invite-only (nostr.wine, nostr.land, web-of-trust / NIP-05 relays), kind-restricted
- * (relay.nos.social, purplepag.es), short memory (relay.snort.social, nostr-pub.wellorder.net), gone (relay.nostr.band).
- * The guest page and the app share this list, so a later version can change it and old links keep working.
- */
-export const RELAYS = [
-  'wss://relay.damus.io',
-  'wss://nos.lol',
-  'wss://relay.primal.net',
-  'wss://nostr.mom',
-  'wss://offchain.pub',
-  'wss://relay.nostr.net',
-  'wss://nostr.oxtr.dev',
-];
+export { guestRelays, type RelayList } from './relaylist';
+
+/** The relays in use (kept current by public/relays.json — see lib/relaylist.ts). Chosen by testing: free, no
+ *  sign-up, accept kind 30078 from a brand-new key, return it by its tag, and still serve year-old events. */
+export const RELAYS = BUILTIN;
 
 /** What the scheduling code needs from "the network" — the real relays, or an in-memory one in tests. */
 export interface Transport {
@@ -29,11 +19,44 @@ export interface Transport {
   query: (filter: Filter) => Promise<Event[]>;
   /** New matching events as they arrive (and stored ones first). Returns a function that stops it. */
   subscribe: (filter: Filter, onEvent: (ev: Event) => void) => () => void;
+  /** How many relays it talks to (for "Live · on 6 of 7 relays"). */
+  size?: number;
+  /** Disconnect from everything (when switching to a new relay list). */
+  close?: () => void;
+}
+
+/** The current relay list: fetched (and remembered for next time), else the last one remembered, else built in.
+ *  A fetch that fails or returns nonsense never replaces a good list. */
+export async function loadRelayList(url: string, cacheKey = 'wl-relays'): Promise<RelayList | null> {
+  try {
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), 5000);
+    const res = await fetch(url, { signal: ctl.signal, cache: 'no-cache' });
+    clearTimeout(timer);
+    const list = res.ok ? parseRelayList(await res.json()) : null;
+    if (list) {
+      try {
+        localStorage.setItem(cacheKey, JSON.stringify(list));
+      } catch {
+        /* no storage: fine */
+      }
+      return list;
+    }
+  } catch {
+    /* offline or blocked: fall back */
+  }
+  try {
+    return parseRelayList(JSON.parse(localStorage.getItem(cacheKey) ?? 'null'));
+  } catch {
+    return null;
+  }
 }
 
 export function relayTransport(relays = RELAYS): Transport {
   const pool = new SimplePool({ enablePing: true, enableReconnect: true });
   return {
+    size: relays.length,
+    close: () => pool.destroy(),
     publish: async (ev) => (await Promise.allSettled(pool.publish(relays, ev, { maxWait: 8000 }))).filter((r) => r.status === 'fulfilled').length,
     query: (filter) => pool.querySync(relays, filter, { maxWait: 7000 }),
     subscribe: (filter, onEvent) => {

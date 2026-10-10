@@ -226,8 +226,8 @@ interface State {
   /** New address for a link (the old one was shared too widely): the old address shows "closed". */
   resetLinkKeys: (linkId: string) => void;
   /** Sync status per link, for the editor (not saved). */
-  linkSync: Record<string, { relays: number; at: number; error?: string }>;
-  setLinkSync: (linkId: string, st: { relays: number; at: number; error?: string }) => void;
+  linkSync: Record<string, { relays: number; total: number; at: number; error?: string }>;
+  setLinkSync: (linkId: string, st: { relays: number; total: number; at: number; error?: string }) => void;
   /** Remove finished links (booked, scheduled or past). Meetings already booked stay on your calendar. */
   clearFinishedLinks: () => void;
   setMyName: (name: string) => void;

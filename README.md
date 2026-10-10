@@ -283,9 +283,18 @@ on their own (see *How links work between people* below).
 #### How links work between people
 
 No server of mine, no accounts. Messages go through **Nostr relays** — public message boards run independently by
-different people, where anyone can post a signed message without signing up. Worldline uses seven of them
-(`web/src/lib/relays.ts`, chosen by testing: free, no sign-up, and still serving year-old messages) and sends
-everything to all of them; any one that keeps a message is enough.
+different people, where anyone can post a signed message without signing up. Worldline uses seven of them and
+sends everything to all of them; any one that keeps a message is enough.
+
+**The relay list keeps itself current.** It's a file, `web/public/relays.json`, served beside the guest page. Every
+Monday a GitHub Action (`.github/workflows/relays.yml`) tests each relay in use and each candidate: post a message,
+read it back, and check it still keeps messages over 180 days old. A relay that fails three tries 20 minutes apart is
+swapped for the fastest working candidate in a **pull request**; merge it and that's all. The guest page uses the
+new list within minutes; running apps check the list every 6 hours and move over by themselves (no new release).
+A removed relay is *retired*, not forgotten: the guest page keeps using retired relays for a year, so an app still on
+the old list (offline, or an older version) keeps reaching guests. If the list can't fix itself (no working
+candidates left), the Action opens an issue instead. Run it by hand from the Actions tab, or locally:
+`node scripts/check-relays.ts` (from `web/`). Logic and tests: `web/src/lib/relaylist.ts`, `relaylist.test.ts`.
 
 - **The address** is `https://bradenseefeldt.github.io/worldline/#…`. The page there is code only. Everything after
   `#` — the link's public key and a 32-byte secret — stays in the guest's browser: browsers never send it to the
@@ -307,7 +316,7 @@ everything to all of them; any one that keeps a message is enough.
 
 | If… | Then |
 |---|---|
-| A relay is down, refuses, or goes away for good | The others carry it. Every message goes to all seven; reads ask all seven and merge. A later version can change the list: links hold no relay addresses, so old links keep working. |
+| A relay is down, refuses, or goes away for good | The others carry it. Every message goes to all seven; reads ask all seven and merge. The weekly check replaces it (pull request); links hold no relay addresses, so old links keep working. |
 | A relay deletes old messages | Worldline re-sends your availability every 3 h while it runs; a guest's page re-sends that guest's own booking each time they open it. All seven would have to drop the same booking before your Worldline next runs for it to be lost. |
 | Worldline is closed for days or weeks | Bookings wait on the relays and are collected the next time it opens (a meeting already past is still added, “while you were away”). Guests see the last published times, with “Times last updated 5 days ago” after a day; held times stay held for other guests in the meantime. On the Mac, closing the window keeps Worldline running (⌘Q quits), so this mostly doesn't arise. |
 | You became busy at a held time before Worldline saw the booking (a subscribed calendar changed) | Worldline refuses it and tells you (toast); the guest's page says the time is no longer free and offers others. Their only way to hear is that page — there's no email, by design. |

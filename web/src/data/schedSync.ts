@@ -11,7 +11,7 @@ import { useStore } from './store';
 import { expand } from '../lib/recurrence';
 import { isFinished, linkSpan, publicView, type BookingLink } from '../lib/booking';
 import { KIND, derive, liveDecisions, mergeResponses, nextCreatedAt, openGuestMsg, planBookings, refOf, sealAvail, type Decoded } from '../lib/schedwire';
-import { relayTransport, type Transport } from '../lib/relays';
+import { RELAYS, loadRelayList, relayTransport, type Transport } from '../lib/relays';
 
 const HEARTBEAT = 3 * 3_600_000; // republish at least this often while the app runs
 const fmt = (t: number) => new Date(t).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
@@ -51,8 +51,8 @@ export function startScheduleSync(t: Transport = relayTransport(), clock = () =>
     if (gone) return;
     if (!relays) {
       published.delete(l.id); // try again next time
-      st().setLinkSync(l.id, { relays: 0, at: now, error: 'offline' });
-    } else st().setLinkSync(l.id, { relays, at: now });
+      st().setLinkSync(l.id, { relays: 0, total: t.size ?? RELAYS.length, at: now, error: 'offline' });
+    } else st().setLinkSync(l.id, { relays, total: t.size ?? RELAYS.length, at: now });
   }
 
   /** Publish what changed; (re)subscribe if the set of open links changed. */
@@ -167,4 +167,24 @@ export function startScheduleSync(t: Transport = relayTransport(), clock = () =>
       document.removeEventListener?.('visibilitychange', onVis);
     },
   };
+}
+
+/** The relay list on the project's GitHub Pages (kept current by a weekly check — lib/relaylist.ts). */
+const RELAY_LIST = import.meta.env.DEV ? '/relays.json' : 'https://bradenseefeldt.github.io/worldline/relays.json';
+
+/** Start syncing on the current relay list; look at the list again every 6 hours and move to the new relays if it
+ *  changed (everything is republished there; nothing to restart). */
+export async function runScheduling() {
+  let relays = (await loadRelayList(RELAY_LIST))?.relays ?? RELAYS;
+  let t = relayTransport(relays);
+  let engine = startScheduleSync(t);
+  window.setInterval(async () => {
+    const next = (await loadRelayList(RELAY_LIST))?.relays;
+    if (!next || next.join() === relays.join()) return;
+    engine.stop();
+    t.close?.();
+    relays = next;
+    t = relayTransport(relays);
+    engine = startScheduleSync(t);
+  }, 6 * 3_600_000);
 }

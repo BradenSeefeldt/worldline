@@ -2,10 +2,9 @@
 import { StrictMode, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { RemoteGuest } from './RemoteGuest';
-import { relayTransport } from '../lib/relays';
+import { guestRelays, loadRelayList, relayTransport, type Transport } from '../lib/relays';
 import '../styles.css';
 
-const transport = relayTransport();
 const mq = window.matchMedia('(prefers-color-scheme: dark)');
 const theme = () => {
   document.documentElement.dataset.theme = mq.matches ? 'dark' : 'light';
@@ -13,7 +12,7 @@ const theme = () => {
 };
 theme();
 
-function Root() {
+function Root({ transport }: { transport: Transport }) {
   const [hash, setHash] = useState(window.location.hash);
   useEffect(() => {
     const on = () => setHash(window.location.hash);
@@ -32,8 +31,13 @@ function Root() {
   );
 }
 
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <Root />
-  </StrictMode>,
-);
+// The relays: the current list (next to this page) plus any retired within the last year, so a link made by an app
+// still on an older list works too (lib/relaylist.ts).
+void loadRelayList('./relays.json').then((list) => {
+  const transport = relayTransport(guestRelays(list, new Date().toISOString().slice(0, 10)));
+  createRoot(document.getElementById('root')!).render(
+    <StrictMode>
+      <Root transport={transport} />
+    </StrictMode>,
+  );
+});

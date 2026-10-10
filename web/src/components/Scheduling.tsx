@@ -10,7 +10,6 @@ import { Avatar, Avatars, PollGrid } from '../pages/GuestPage';
 import { Close, Trash } from './Icons';
 import { DayPicker } from './DayPicker';
 import { guestUrl } from '../lib/schedwire';
-import { RELAYS } from '../lib/relays';
 import { useNow } from '../lib/hooks';
 
 /** The guest page: one static page on the project's GitHub Pages (in development, this dev server's copy). */
@@ -265,7 +264,7 @@ function SyncLine({ id }: { id: string }) {
     <div className="sl-sync">
       <span className={cls('sl-live', sync?.relays ? 'on' : sync && 'off')}>
         <i />
-        {!sync ? 'Publishing…' : sync.relays ? `Live · on ${sync.relays} of ${RELAYS.length} relays · updated ${ago}` : 'Not published yet — no network? Retrying every minute'}
+        {!sync ? 'Publishing…' : sync.relays ? `Live · on ${sync.relays} of ${sync.total} relays · updated ${ago}` : 'Not published yet — no network? Retrying every minute'}
       </span>
       <button className="tk-more" onClick={reset} title="If the link was shared more widely than you meant">New address</button>
     </div>
