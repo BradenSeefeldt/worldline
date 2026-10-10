@@ -10,7 +10,7 @@ web/.vitest/
 .DS_Store
 
 # local only: backups, design notes, prototypes, editor/agent settings
-.backup-before-meeting-notes/
+.backup-*/
 proposals/
 web/prototype/
 .claude/
