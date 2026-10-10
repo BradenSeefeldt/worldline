@@ -182,6 +182,8 @@ interface State {
   showDeadlines: boolean; // deadlines aren't in a calendar, so they have their own show/hide
   showTasks: boolean; // dated tasks drawn on the calendar
   collapsed: Record<string, boolean>; // folded sidebar sections
+  sideOrder: string[]; // the sidebar's cards, in the order you dragged them into (lib/reorder.ts)
+  setSideOrder: (order: string[]) => void;
 
   setView: (v: ViewMode) => void;
   goTo: (date: number, smooth?: boolean) => void;
@@ -327,6 +329,7 @@ export const useStore = create<State>()(
         showDeadlines: true,
         showTasks: true,
         collapsed: {},
+        sideOrder: [],
         past: [],
         future: [],
         pendingId: null,
@@ -434,6 +437,7 @@ export const useStore = create<State>()(
         setShowHomeHours: (showHomeHours) => set({ showHomeHours }),
         setShowDeadlines: (showDeadlines) => set({ showDeadlines }),
         setShowTasks: (showTasks) => set({ showTasks }),
+        setSideOrder: (sideOrder) => set({ sideOrder }),
         createLink: (mode) => {
           const s = get();
           const id = Math.random().toString(36).slice(2, 10);
@@ -902,6 +906,7 @@ export const useStore = create<State>()(
         showDeadlines: s.showDeadlines,
         showTasks: s.showTasks,
         collapsed: s.collapsed,
+        sideOrder: s.sideOrder,
         tasks: s.tasks,
         habits: s.habits,
         habitLog: s.habitLog,

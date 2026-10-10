@@ -2487,3 +2487,9 @@ html.in-app :is(input, textarea, [contenteditable], .pj-doc, .ro-notes, .panel) 
 .ce-drop:hover, .ce-drop:focus-visible { border-color: var(--text-3); outline: none; }
 .ce-drop.over { border-color: var(--focus); background: color-mix(in srgb, var(--focus) 10%, transparent); color: var(--focus); }
 .ce-drop.over b { color: var(--focus); }
+/* Reordering the sidebar's cards (Sidebar.tsx → useCardDrag): the dragged card lifts and follows the pointer,
+   the others slide out of its way, and it glides into place when dropped. */
+.side-slot { position: relative; transition: transform 0.18s cubic-bezier(0.2, 0.8, 0.2, 1); }
+.side-slot.lifted { z-index: 5; transition: none; }
+.side-slot.lifted > .side-section { box-shadow: var(--shadow); scale: 1.02; transition: scale 0.12s; }
+body.side-dragging, body.side-dragging * { cursor: grabbing !important; user-select: none; }

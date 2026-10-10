@@ -1,4 +1,4 @@
-import { useMemo, useState, type CSSProperties, type ReactNode } from 'react';
+import { useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { addDays, addMonths, format, isSameDay, isSameMonth, startOfDay, startOfMonth, startOfWeek } from 'date-fns';
 import { useStore } from '../data/store';
 import { useEventsIn } from '../data/useEvents';
@@ -13,6 +13,7 @@ import { TasksBody, useTaskSummary } from './TasksSection';
 import { justDragged, startBlockDrag } from './BlockDrag';
 import { SchedulingBody } from './Scheduling';
 import { Settings } from './Settings';
+import { landingIndex, moveTo, orderedIds, shiftFor } from '../lib/reorder';
 
 function MiniMonth() {
   const range = useStore((s) => s.visibleRange);
@@ -378,20 +379,144 @@ function HabitsSection() {
   );
 }
 
+// The cards between the mini month (pinned at the top) and Settings (at the bottom), in their default order.
+const CARDS: Record<string, () => ReactNode> = {
+  tasks: () => <Tasks />,
+  deadlines: () => <Deadlines />,
+  habits: () => <HabitsSection />,
+  scheduling: () => (
+    <Section id="scheduling" title="Scheduling" badge={<LinkCount />}>
+      <SchedulingBody />
+    </Section>
+  ),
+  calendars: () => <Calendars />,
+};
+const CARD_IDS = Object.keys(CARDS);
+
+/**
+ * Drag a card by its title row to reorder the sidebar. The card lifts and follows the pointer, the cards it passes
+ * slide out of its way, and on release it settles into its new place (saved). A plain click still folds the card;
+ * Alt+↑ / Alt+↓ on a focused title moves it too. Mouse and trackpad (a touch on the phone drawer scrolls instead).
+ */
+function useCardDrag(order: string[]) {
+  const els = useRef(new Map<string, HTMLDivElement>());
+  const box = useRef<HTMLElement | null>(null);
+  const [drag, setDrag] = useState<{ id: string; from: number; to: number; dy: number; room: number } | null>(null);
+  const settle = useRef<{ id: string; top: number } | null>(null);
+  const topOf = (el: HTMLElement) => el.getBoundingClientRect().top + (box.current?.scrollTop ?? 0);
+
+  // After a drop: the card is laid out in its new place; start it where it was let go and glide the rest of the way.
+  useLayoutEffect(() => {
+    const st = settle.current;
+    const el = st && els.current.get(st.id);
+    settle.current = null;
+    if (!st || !el) return;
+    const off = st.top - topOf(el);
+    el.style.transition = 'none';
+    el.style.transform = `translateY(${off}px)`;
+    void el.offsetHeight;
+    el.style.transition = '';
+    el.style.transform = '';
+  }, [order]);
+
+  const commit = (next: string[]) => useStore.getState().setSideOrder(next);
+
+  const onPointerDown = (e: React.PointerEvent, id: string) => {
+    const t = e.target as HTMLElement;
+    if (e.button !== 0 || e.pointerType === 'touch' || !t.closest('.side-head') || t.closest('.side-add, input, select, textarea')) return;
+    const from = order.indexOf(id);
+    const sx = e.clientX, sy = e.clientY, scroll0 = box.current?.scrollTop ?? 0;
+    let live: { tops: number[]; heights: number[]; room: number } | null = null;
+    let lastY = sy, raf = 0, to = from;
+    const place = () => {
+      if (!live) return;
+      const dy = lastY - sy + ((box.current?.scrollTop ?? 0) - scroll0);
+      to = landingIndex(live.tops, live.heights, from, live.tops[from] + live.heights[from] / 2 + dy);
+      setDrag({ id, from, to, dy, room: live.room });
+    };
+    // near the sidebar's top or bottom edge, keep scrolling it
+    const autoscroll = () => {
+      const b = box.current;
+      if (b && live) {
+        const r = b.getBoundingClientRect();
+        const v = lastY < r.top + 40 ? -8 : lastY > r.bottom - 40 ? 8 : 0;
+        if (v) {
+          b.scrollTop += v;
+          place();
+        }
+      }
+      raf = requestAnimationFrame(autoscroll);
+    };
+    const move = (ev: PointerEvent) => {
+      lastY = ev.clientY;
+      if (!live) {
+        if (Math.hypot(ev.clientX - sx, ev.clientY - sy) < 5) return;
+        const list = order.map((x) => els.current.get(x)!);
+        const tops = list.map(topOf), heights = list.map((el) => el.offsetHeight);
+        const gap = tops.length > 1 ? tops[1] - tops[0] - heights[0] : 10;
+        live = { tops, heights, room: heights[from] + gap };
+        document.body.classList.add('side-dragging');
+        raf = requestAnimationFrame(autoscroll);
+      }
+      ev.preventDefault();
+      place();
+    };
+    const up = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      window.removeEventListener('pointercancel', up);
+      cancelAnimationFrame(raf);
+      document.body.classList.remove('side-dragging');
+      if (!live) return; // a click: let it fold the card as usual
+      // the click that ends a drag must not also fold the card (and if no click comes, don't eat the next one)
+      const eat = (c: MouseEvent) => { c.stopPropagation(); c.preventDefault(); };
+      window.addEventListener('click', eat, { capture: true, once: true });
+      setTimeout(() => window.removeEventListener('click', eat, true), 60);
+      const el = els.current.get(id);
+      settle.current = el ? { id, top: topOf(el) } : null;
+      setDrag(null);
+      if (to !== from) commit(moveTo(order, id, to));
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+    window.addEventListener('pointercancel', up);
+  };
+
+  const onKeyDown = (e: React.KeyboardEvent, id: string) => {
+    if (!e.altKey || (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') || !(e.target as HTMLElement).closest('.side-head')) return;
+    e.preventDefault();
+    const i = order.indexOf(id);
+    const j = e.key === 'ArrowUp' ? i - 1 : i + 1;
+    if (j < 0 || j >= order.length) return;
+    commit(moveTo(order, id, j));
+    requestAnimationFrame(() => els.current.get(id)?.querySelector<HTMLElement>('.side-head-btn')?.focus());
+  };
+
+  const slot = (id: string, i: number) => ({
+    ref: (el: HTMLDivElement | null) => void (el ? els.current.set(id, el) : els.current.delete(id)),
+    className: cls('side-slot', drag?.id === id && 'lifted', drag && drag.id !== id && 'making-room'),
+    style: drag ? { transform: `translateY(${drag.id === id ? drag.dy : shiftFor(i, drag.from, drag.to, drag.room)}px)` } : undefined,
+    onPointerDown: (e: React.PointerEvent) => onPointerDown(e, id),
+    onKeyDown: (e: React.KeyboardEvent) => onKeyDown(e, id),
+  });
+  return { box, slot };
+}
+
 export function Sidebar() {
   const [settings, setSettings] = useState(false);
+  const saved = useStore((s) => s.sideOrder);
+  const order = useMemo(() => orderedIds(saved, CARD_IDS), [saved]);
+  const { box, slot } = useCardDrag(order);
   return (
-    <aside className="sidebar">
+    <aside className="sidebar" ref={box}>
       {/* the Mac app: a strip for the window buttons (red / yellow / green) that also drags the window */}
       <div className="win-strip" data-tauri-drag-region />
       <MiniMonth />
-      <Tasks />
-      <Deadlines />
-      <HabitsSection />
-      <Section id="scheduling" title="Scheduling" badge={<LinkCount />}>
-        <SchedulingBody />
-      </Section>
-      <Calendars />
+      {order.map((id, i) => (
+        <div key={id} {...slot(id, i)}>
+          {CARDS[id]()}
+        </div>
+      ))}
       <button className="side-settings" onClick={() => setSettings(true)}>
         <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden>
           <circle cx="8" cy="8" r="2.2" />

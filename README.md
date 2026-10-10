@@ -130,6 +130,9 @@ Small actions you tick off — deliberately simple: a title, an optional date, d
 - **Deadline checklists:** a deadline's card has a Checklist (“Add a step…”, dates allowed); progress shows
   as “✓ 1/4” in the sidebar and on its runway track.
 - **Nudges:** a task overdue 3+ days gets one suggestion (“Move Call the bank to tomorrow” — or done / drop).
+- **Reorder the sidebar:** drag a card by its title (Tasks, Deadlines, Habits, Scheduling, Calendars) to where you want
+  it — the others slide out of the way; or focus a title and press Alt+↑ / Alt+↓. The mini month stays on top.
+  Remembered. (`web/src/lib/reorder.ts`, `reorder.test.ts`.)
 - Sidebar: Tasks, Deadlines, Calendars — each a card with a subtle cyan border, an icon, a count badge, a
   calendar switch, a fold chevron, and a fading divider under the title; the mini month stays pinned.
   The Deadlines flag and count take the most urgent deadline's colour (red if anything is overdue),
