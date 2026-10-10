@@ -1,35 +1,26 @@
-// What someone you send a link to sees. It is built ONLY from `publicView` — open times and
-// what you chose to share — exactly what a guest's browser would receive once this is online.
+// What someone you send a link to sees. It is built ONLY from what your app publishes — `publicView`: open times and
+// what you chose to share — plus other guests' holds / answers. No data source here: the page that loads it from the
+// relays is guest/RemoteGuest.tsx; your app's poll results reuse PollGrid.
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { format } from 'date-fns';
-import { useStore } from '../data/store';
-import { expand } from '../lib/recurrence';
-import { heat, icsFor, linkSpan, meetingAt, publicView, type PublicView } from '../lib/booking';
+import { format, formatDistanceToNowStrict } from 'date-fns';
+import { heat, icsFor, meetingAt, type PublicView } from '../lib/booking';
 import { fromEpochDay, localZone, zoneAbbr, zoneCity } from '../lib/zone';
-import { useNow } from '../lib/hooks';
 import { cls, fmtTimeRange } from '../lib/format';
 
 const MIN = 60_000;
-
-function usePublicView(id: string): PublicView | null {
-  const link = useStore((s) => s.links.find((l) => l.id === id));
-  const events = useStore((s) => s.events);
-  const myName = useStore((s) => s.myName);
-  const now = useNow(60_000);
-  return useMemo(() => {
-    if (!link) return null;
-    const { from, to } = linkSpan(link);
-    return publicView(link, expand(events, from, to), now, myName);
-  }, [link, events, now, myName]);
-}
 
 const dayLabel = (day: number, slots: number[]) => {
   const ref = slots[0] ?? (() => { const d = fromEpochDay(day); return new Date(d.y, d.m, d.d).getTime(); })();
   return { dow: format(ref, 'EEE'), date: format(ref, 'MMM d') };
 };
 
-function Header({ v }: { v: PublicView }) {
+const icsHref = (v: PublicView, start: number) =>
+  `data:text/calendar;charset=utf-8,${encodeURIComponent(icsFor(`${v.title}${v.hostName ? ` with ${v.hostName}` : ''}`, start, start + v.durationMin * MIN, v.location))}`;
+
+/** `updatedAt`: when the host's app last published — said only when it's been a while (their Mac was off). */
+export function Header({ v, updatedAt }: { v: PublicView; updatedAt?: number }) {
   const tz = localZone();
+  const stale = updatedAt && Date.now() - updatedAt > 24 * 3_600_000 && !v.closed;
   return (
     <header className="gp-head">
       <div className="gp-host">{v.hostName ? (v.mode === 'book' ? `Book time with ${v.hostName}` : `${v.hostName} is finding a time`) : v.mode === 'book' ? 'Book a time' : 'Find a time together'}</div>
@@ -39,60 +30,102 @@ function Header({ v }: { v: PublicView }) {
         <span title={zoneCity(tz)}>Times in {zoneAbbr(tz)}</span>
       </div>
       {v.note && <p className="gp-note">{v.note}</p>}
+      {stale && (
+        <p className="gp-stale">
+          Times last updated {formatDistanceToNowStrict(updatedAt)} ago. {v.mode === 'book' ? `Pick one anyway — ${v.hostName || 'the host'}’s calendar checks it and confirms here when it’s next online.` : 'Your answer is saved either way.'}
+        </p>
+      )}
     </header>
   );
 }
 
+/** One of this guest's own bookings and what the host's app said about it. */
+export interface MyBooking {
+  start: number;
+  status: 'pending' | 'ok' | 'taken' | 'busy' | 'closed' | 'invalid' | 'lost';
+}
+const refused = (s: MyBooking['status']) => s !== 'pending' && s !== 'ok';
+const why: Record<string, string> = {
+  taken: 'someone else booked it first',
+  lost: 'someone else booked it a moment before you',
+  busy: 'it’s no longer free',
+  closed: 'the link stopped taking bookings',
+  invalid: 'it isn’t one of the offered times',
+};
+
 // ---------------------------------------------------------------- one person books a slot
-function BookView({ v }: { v: PublicView }) {
+export function BookView({ v, mine, updatedAt, onConfirm }: {
+  v: PublicView;
+  mine: MyBooking[]; // newest last
+  updatedAt?: number;
+  onConfirm: (start: number, name: string) => Promise<{ ok: boolean; reason?: string }>;
+}) {
   const [day, setDay] = useState<number | null>(v.days[0]?.day ?? null);
   const [slot, setSlot] = useState<number | null>(null);
+  const [name, setName] = useState('');
   const [error, setError] = useState('');
-  const [done, setDone] = useState<{ start: number; end: number } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [another, setAnother] = useState(false); // "Book another time" on a reusable link
   const current = v.days.find((d) => d.day === day) ?? v.days[0];
+  const last = mine[mine.length - 1];
+  const now = Date.now();
 
-  if (done) {
-    const ics = `data:text/calendar;charset=utf-8,${encodeURIComponent(icsFor(`${v.title}${v.hostName ? ` with ${v.hostName}` : ''}`, done.start, done.end, v.location))}`;
+  if (last && !refused(last.status) && !another && last.start + v.durationMin * MIN > now) {
+    const confirmed = last.status === 'ok';
     return (
       <div className="gp-card gp-done">
         <div className="gp-check">✓</div>
         <h1 className="gp-title">You're booked</h1>
-        <p className="gp-when">{format(done.start, 'EEEE, MMMM d')} · {fmtTimeRange(done.start, done.end)}</p>
-        <p className="gp-sub">{v.title}{v.hostName ? ` with ${v.hostName}` : ''}{v.location ? ` · ${v.location}` : ''}</p>
+        <p className="gp-when">{format(last.start, 'EEEE, MMMM d')} · {fmtTimeRange(last.start, last.start + v.durationMin * MIN)}</p>
+        <p className="gp-sub">{v.title}{v.hostName ? ` with ${v.hostName}` : ''}{v.location ? ` · ${v.location}` : ''} · times in {zoneAbbr(localZone())}</p>
+        <p className={cls('gp-status', confirmed && 'ok')}>
+          {confirmed ? `✓ Confirmed — it’s on ${v.hostName || 'their'}${v.hostName ? '’s' : ''} calendar` : <><i className="gp-dot" />{`The time is held for you. ${v.hostName || 'Their'}${v.hostName ? '’s' : ''} calendar adds it automatically next time it’s open — this page will say so.`}</>}
+        </p>
         <div className="gp-actions">
-          <a className="gp-btn" href={ics} download={`${v.title}.ics`}>Add to my calendar</a>
-          {!v.closed && <button className="gp-btn ghost" onClick={() => { setDone(null); setSlot(null); }}>Book another time</button>}
+          <a className="gp-btn" href={icsHref(v, last.start)} download={`${v.title}.ics`}>Add to my calendar</a>
+          {!v.closed && <button className="gp-btn ghost" onClick={() => { setAnother(true); setSlot(null); }}>Book another time</button>}
         </div>
       </div>
     );
   }
+  if (v.closed && last && refused(last.status) && last.start > now)
+    return (
+      <div className="gp-card">
+        <Header v={v} />
+        <p className="gp-error">Sorry — your booking for {format(last.start, 'EEE MMM d')} at {format(last.start, 'h:mm a')} didn’t go through: {v.finalStart ? 'someone else booked this link just before you' : why[last.status]}.</p>
+        <p className="gp-empty">This link isn’t taking more bookings. Ask {v.hostName || 'the person who sent it'} for another time.</p>
+      </div>
+    );
   if (v.closed && v.finalStart) {
     const end = v.finalStart + v.durationMin * MIN;
-    const ics = `data:text/calendar;charset=utf-8,${encodeURIComponent(icsFor(`${v.title}${v.hostName ? ` with ${v.hostName}` : ''}`, v.finalStart, end, v.location))}`;
     return (
       <div className="gp-card gp-done">
         <div className="gp-check">✓</div>
-        <h1 className="gp-title">{end < Date.now() ? 'This meeting was' : 'You’re booked for'}</h1>
+        <h1 className="gp-title">{end < now ? 'This meeting was' : 'This link has been booked'}</h1>
         <p className="gp-when">{format(v.finalStart, 'EEEE, MMMM d')} · {fmtTimeRange(v.finalStart, end)}</p>
         <p className="gp-sub">{v.title}{v.hostName ? ` with ${v.hostName}` : ''}{v.location ? ` · ${v.location}` : ''} · times in {zoneAbbr(localZone())}</p>
-        {end >= Date.now() && <div className="gp-actions"><a className="gp-btn" href={ics} download={`${v.title}.ics`}>Add to my calendar</a></div>}
       </div>
     );
   }
   if (v.closed) return <div className="gp-card"><Header v={v} /><p className="gp-empty">This link is no longer taking bookings.</p></div>;
-  const confirm = () => {
-    if (!slot) return;
-    const r = useStore.getState().addBooking(v.id, { start: slot });
+  const confirm = async () => {
+    if (!slot || busy) return;
+    setBusy(true);
+    setError('');
+    const r = await onConfirm(slot, name);
+    setBusy(false);
     if (!r.ok) {
       setError(r.reason ?? 'Something went wrong.');
       setSlot(null);
       return;
     }
-    setDone({ start: slot, end: slot + v.durationMin * MIN });
+    setAnother(false);
   };
+  const bad = last && refused(last.status) && last.start > now ? last : null;
   return (
     <div className="gp-card">
-      <Header v={v} />
+      <Header v={v} updatedAt={updatedAt} />
+      {bad && <p className="gp-error">Your booking for {format(bad.start, 'EEE MMM d')} at {format(bad.start, 'h:mm a')} didn’t go through: {why[bad.status]}. Please pick another time.</p>}
       {!v.days.length ? (
         <p className="gp-empty">No open times right now — please check back later.</p>
       ) : (
@@ -119,7 +152,8 @@ function BookView({ v }: { v: PublicView }) {
           {slot && (
             <div className="gp-confirm">
               <div className="gp-picked">{format(slot, 'EEEE, MMM d')} · <b>{fmtTimeRange(slot, slot + v.durationMin * MIN)}</b></div>
-              <button className="gp-btn" onClick={confirm} autoFocus>Confirm</button>
+              <input className="gp-input" placeholder="Your name (optional)" maxLength={80} value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && void confirm()} />
+              <button className="gp-btn" onClick={() => void confirm()} disabled={busy} autoFocus>{busy ? 'Booking…' : 'Confirm'}</button>
             </div>
           )}
           {error && <p className="gp-error">{error}</p>}
@@ -364,19 +398,25 @@ export function PollGrid({ v, mine, onChange, readOnly, extra, pick }: {
   );
 }
 
-function PollView({ v }: { v: PublicView }) {
-  // Remember who you are on this link (so you can come back and edit your answer).
-  const key = `poll-${v.id}-me`;
-  const saved = useMemo(() => {
-    try { return JSON.parse(localStorage.getItem(key) ?? 'null') as { id: string; name: string } | null; } catch { return null; }
-  }, [key]);
-  const me = useMemo(() => saved ?? { id: Math.random().toString(36).slice(2, 10), name: '' }, [saved]);
-  const link = useStore((s) => s.links.find((l) => l.id === v.id));
-  const existing = link?.responses.find((r) => r.id === me.id);
-  const [name, setName] = useState(existing?.name ?? me.name);
-  const [cells, setCells] = useState<Set<number>>(new Set(existing?.cells ?? []));
-  const [state, setState] = useState<'idle' | 'saved'>('idle');
-  const others = v.responses.filter((r) => r.name !== (existing?.name ?? ''));
+export function PollView({ v, others, mine, updatedAt, onSave }: {
+  v: PublicView;
+  others: { name: string; cells: number[] }[]; // everyone else's answers
+  mine: { name: string; cells: number[] } | null; // this browser's earlier answer
+  updatedAt?: number;
+  onSave: (name: string, cells: number[]) => Promise<{ ok: boolean; reason?: string }>;
+}) {
+  const [name, setName] = useState(mine?.name ?? '');
+  const [cells, setCells] = useState<Set<number>>(new Set(mine?.cells ?? []));
+  const [state, setState] = useState<'idle' | 'saving' | 'saved'>('idle');
+  const [error, setError] = useState('');
+  const seeded = useRef(!!mine);
+  useEffect(() => {
+    // their earlier answer arrived from the network after the page opened
+    if (!mine || seeded.current) return;
+    seeded.current = true;
+    setName(mine.name);
+    setCells(new Set(mine.cells));
+  }, [mine]);
 
   if (v.closed && v.finalStart)
     return (
@@ -385,47 +425,39 @@ function PollView({ v }: { v: PublicView }) {
         <h1 className="gp-title">{v.title}</h1>
         <p className="gp-when">Scheduled for {format(v.finalStart, 'EEEE, MMMM d')} · {fmtTimeRange(v.finalStart, v.finalStart + v.durationMin * MIN)}</p>
         <div className="gp-actions">
-          <a className="gp-btn" href={`data:text/calendar;charset=utf-8,${encodeURIComponent(icsFor(v.title, v.finalStart, v.finalStart + v.durationMin * MIN, v.location))}`} download={`${v.title}.ics`}>Add to my calendar</a>
+          <a className="gp-btn" href={icsHref(v, v.finalStart)} download={`${v.title}.ics`}>Add to my calendar</a>
         </div>
       </div>
     );
-  const save = () => {
-    if (!name.trim()) return;
-    localStorage.setItem(key, JSON.stringify({ id: me.id, name: name.trim() }));
-    useStore.getState().savePollResponse(v.id, { id: me.id, name, cells: [...cells] });
-    setState('saved');
+  if (v.closed) return <div className="gp-card"><Header v={v} /><p className="gp-empty">This poll is closed.</p></div>;
+  const save = async () => {
+    if (!name.trim() || state === 'saving') return;
+    setState('saving');
+    setError('');
+    const r = await onSave(name.trim(), [...cells]);
+    if (r.ok) setState('saved');
+    else {
+      setState('idle');
+      setError(r.reason ?? 'Something went wrong.');
+    }
   };
   const hours = (cells.size * v.cellMin) / 60;
+  const shown = others.filter((o) => o.name.trim().toLowerCase() !== name.trim().toLowerCase());
   return (
     <div className="gp-card wide">
-      <Header v={v} />
-      {others.length > 0 && (
-        <div className="gp-answered"><Avatars names={others.map((o) => o.name)} max={8} /><span>{others.length} {others.length === 1 ? 'person has' : 'people have'} answered</span></div>
+      <Header v={v} updatedAt={updatedAt} />
+      {shown.length > 0 && (
+        <div className="gp-answered"><Avatars names={shown.map((o) => o.name)} max={8} /><span>{shown.length} {shown.length === 1 ? 'person has' : 'people have'} answered</span></div>
       )}
-      <PollGrid v={v} mine={cells} onChange={(c) => { setCells(c); setState('idle'); }} extra={others} />
+      <PollGrid v={v} mine={cells} onChange={(c) => { setCells(c); setState('idle'); }} extra={shown} />
       <div className="gp-poll-bar">
-        <input className="gp-input" placeholder="Your name" value={name} onChange={(e) => { setName(e.target.value); setState('idle'); }} />
+        <input className="gp-input" placeholder="Your name" maxLength={80} value={name} onChange={(e) => { setName(e.target.value); setState('idle'); }} />
         <span className="gp-picked-n">{cells.size ? `${hours % 1 ? hours.toFixed(1) : hours} h selected` : 'Nothing selected yet'}</span>
-        <button className={cls('gp-btn', state === 'saved' && 'ok')} onClick={save} disabled={!name.trim()}>{state === 'saved' ? 'Saved ✓' : existing ? 'Update my times' : 'Save my times'}</button>
+        <button className={cls('gp-btn', state === 'saved' && 'ok')} onClick={() => void save()} disabled={!name.trim() || state === 'saving'}>
+          {state === 'saved' ? 'Saved ✓' : state === 'saving' ? 'Saving…' : mine ? 'Update my times' : 'Save my times'}
+        </button>
       </div>
-    </div>
-  );
-}
-
-export function GuestPage({ id }: { id: string }) {
-  const v = usePublicView(id);
-  useEffect(() => {
-    document.title = v ? `${v.title}${v.hostName ? ` · ${v.hostName}` : ''}` : 'Link not found';
-  }, [v]);
-  return (
-    <div className="gp">
-      {!v ? (
-        <div className="gp-card"><h1 className="gp-title">This link doesn't exist</h1><p className="gp-empty">It may have been deleted. Ask for a new one.</p></div>
-      ) : v.mode === 'book' ? (
-        <BookView v={v} />
-      ) : (
-        <PollView v={v} />
-      )}
+      {error && <p className="gp-error">{error}</p>}
     </div>
   );
 }

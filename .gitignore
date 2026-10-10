@@ -1,6 +1,7 @@
 # dependencies and build output
 node_modules/
 web/dist/
+web/dist-guest/
 web/release/
 web/src-tauri/target/
 web/src-tauri/gen/

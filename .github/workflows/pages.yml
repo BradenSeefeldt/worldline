@@ -1,0 +1,53 @@
+# The page people open from a Worldline scheduling link, on GitHub Pages: https://bradenseefeldt.github.io/worldline/
+# Code only — no data is ever stored here. A link's keys live after the "#" in its address, which browsers never send
+# to the server; the page fetches the (encrypted) free/busy straight from public Nostr relays.
+# Runs on every push to main that touches the web app, or by hand from the Actions tab.
+name: Guest page
+
+on:
+  push:
+    branches: [main]
+    paths: ['web/**', '.github/workflows/pages.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      - name: Tests
+        run: npm test
+        env:
+          TZ: America/Toronto
+      - run: npm run build:guest
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: web/dist-guest
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5

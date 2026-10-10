@@ -15,6 +15,7 @@ export interface Booking {
   end: number;
   createdAt: number;
   eventId?: string; // set once it's on your calendar
+  guestKey?: string; // booked from another computer: the guest's key on the relays
 }
 
 export interface PollResponse {
@@ -48,6 +49,11 @@ export interface BookingLink {
   closed?: boolean;
   finalStart?: number; // poll: the time you picked
   bookings: Booking[];
+  /** Its keys on the relays (lib/schedwire.ts): kept only in your database. `lastPub`: created_at of the last
+   *  published availability (seconds), so the next one is always newer. */
+  nostr?: { sk: string; secret: string; lastPub?: number };
+  /** Your app's answer to each guest's request (keyed by the guest's key), published back so their page can say. */
+  decisions?: Record<string, { id: string; status: 'ok' | 'taken' | 'busy' | 'closed' | 'invalid'; start: number }>;
   responses: PollResponse[];
 }
 
@@ -78,11 +84,12 @@ export interface Interval {
   end: number;
 }
 
-/** Your busy time inside the link's range — just intervals, nothing else leaves this function. */
+/** Your busy time inside the link's range — just intervals, nothing else leaves this function. Meetings booked
+ *  through this link always count, whichever calendar they went into. */
 export function busyFor(link: BookingLink, events: CalEvent[]): Interval[] {
   const blocking = new Set(link.blockingCalendars);
   return events
-    .filter((e) => blocking.has(e.calendarId) && !e.allDay && e.kind !== 'deadline' && e.kind !== 'task')
+    .filter((e) => (blocking.has(e.calendarId) || e.bookedVia === link.id) && !e.allDay && e.kind !== 'deadline' && e.kind !== 'task')
     .map((e) => ({ start: e.start - link.bufferMin * MIN, end: e.end + link.bufferMin * MIN }));
 }
 

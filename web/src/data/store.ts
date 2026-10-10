@@ -12,8 +12,8 @@ import { seriesKey, type Skip } from '../lib/suggest';
 import { encodeEvent, resolveEvent } from '../lib/recurrence';
 import { encodeDay, localZone } from '../lib/zone';
 import type { Task } from '../lib/tasks';
-import { isFinished, newLink, stillOpen, type BookingLink, type LinkMode } from '../lib/booking';
-import { expand } from '../lib/recurrence';
+import { isFinished, newLink, type BookingLink, type LinkMode, type PollResponse } from '../lib/booking';
+import { newLinkKeys, type Accept, type Decision } from '../lib/schedwire';
 import { endSeries, removeEvent, updateEvent, type Scope } from '../lib/mutate';
 import { normalizeFeedUrl, parseIcs } from '../lib/ics';
 import { fetchText, isApp } from '../lib/platform';
@@ -214,13 +214,23 @@ interface State {
   createLink: (mode: LinkMode) => string;
   updateLink: (id: string, patch: Partial<BookingLink>) => void;
   deleteLink: (id: string) => void;
-  /** A guest books a time. Re-checks the slot; the meeting goes straight onto your calendar. */
-  addBooking: (linkId: string, b: { start: number; name?: string; email?: string }) => { ok: boolean; reason?: string };
+  /** Bookings that came in over the relays (data/schedSync.ts): the meetings go onto your calendar and the decisions
+   *  are kept (and published back). Not an undo step — like a subscribed calendar's refresh, it isn't your edit. */
+  applyRemoteBookings: (linkId: string, accepts: Accept[], decisions: Record<string, Decision>) => string[];
+  /** Poll answers that came in over the relays. */
+  setPollResponses: (linkId: string, responses: PollResponse[]) => void;
+  /** Bookkeeping for the relays: when the link's availability was last published (seconds). */
+  setLinkPub: (linkId: string, lastPub: number) => void;
+  /** Give a link its keys if it has none (links made before v0.2). */
+  ensureLinkKeys: (linkId: string) => void;
+  /** New address for a link (the old one was shared too widely): the old address shows "closed". */
+  resetLinkKeys: (linkId: string) => void;
+  /** Sync status per link, for the editor (not saved). */
+  linkSync: Record<string, { relays: number; at: number; error?: string }>;
+  setLinkSync: (linkId: string, st: { relays: number; at: number; error?: string }) => void;
   /** Remove finished links (booked, scheduled or past). Meetings already booked stay on your calendar. */
   clearFinishedLinks: () => void;
   setMyName: (name: string) => void;
-  /** A guest saves (or updates) their availability on a group poll. */
-  savePollResponse: (linkId: string, r: { id: string; name: string; cells: number[] }) => void;
   /** You pick the final time for a poll: creates the event and closes the poll. */
   scheduleFromPoll: (linkId: string, start: number) => void;
   /** `due`: local midnight (stored as a date). */
@@ -297,6 +307,7 @@ export const useStore = create<State>()(
         theme: 'system',
         links: [],
         myName: '',
+        linkSync: {},
         view: initialView,
         visibleRange: { start: today, end: addDays(today, 7).getTime() },
         nav: { date: Date.now(), seq: 0, smooth: false },
@@ -425,7 +436,7 @@ export const useStore = create<State>()(
         createLink: (mode) => {
           const s = get();
           const id = Math.random().toString(36).slice(2, 10);
-          const link = newLink({ id, mode, hostName: '', calendars: s.calendars, calendarId: newEventCalendarId(s), timeZone: s.homeZone }); // name comes from Settings
+          const link = { ...newLink({ id, mode, hostName: '', calendars: s.calendars, calendarId: newEventCalendarId(s), timeZone: s.homeZone }), nostr: newLinkKeys() }; // name comes from Settings
           set((x) => ({ links: [link, ...x.links] }));
           return id;
         },
@@ -438,52 +449,45 @@ export const useStore = create<State>()(
         deleteLink: (id) => set((x) => ({ links: x.links.filter((l) => l.id !== id) })),
         clearFinishedLinks: () => set((x) => ({ links: x.links.filter((l) => !isFinished(l)) })),
         setMyName: (myName) => set({ myName }),
-        addBooking: (linkId, b) => {
-          const s = get();
-          const link = s.links.find((l) => l.id === linkId);
-          if (!link || link.closed) return { ok: false, reason: 'This link is closed.' };
-          const span = expand(s.events, b.start - 86_400_000, b.start + 2 * 86_400_000);
-          if (!stillOpen(link, span, b.start)) return { ok: false, reason: 'Sorry — that time was just taken. Please pick another.' };
-          record();
-          const end = b.start + link.durationMin * 60_000;
-          const eventId = newId();
-          const name = b.name?.trim() || '';
-          const booking = { id: newId(), name, email: b.email?.trim() || undefined, start: b.start, end, createdAt: Date.now(), eventId };
-          const ev: CalEvent = {
-            id: eventId,
+        applyRemoteBookings: (linkId, accepts, decisions) => {
+          const link = get().links.find((l) => l.id === linkId);
+          if (!link) return [];
+          const evs: CalEvent[] = accepts.map((a) => ({
+            id: newId(),
             calendarId: link.calendarId,
-            title: name ? `${link.title} · ${name}` : link.title,
-            start: b.start,
-            end,
+            title: a.name ? `${link.title} · ${a.name}` : link.title,
+            start: a.start,
+            end: a.start + link.durationMin * 60_000,
             allDay: false,
             location: link.location,
-            notes: `Booked through your “${link.title}” link${name ? ` by ${name}` : ''}.`,
+            notes: `Booked through your “${link.title}” link${a.name ? ` by ${a.name}` : ''}.`,
             bookedVia: link.id,
             createdAt: Date.now(),
-          };
-          set((x) => ({
-            events: [...x.events, ev],
-            links: x.links.map((l) =>
-              l.id === linkId ? { ...l, bookings: [...l.bookings, booking], ...(l.singleUse ? { closed: true, finalStart: b.start } : {}) } : l,
-            ),
           }));
-          return { ok: true };
-        },
-        savePollResponse: (linkId, r) =>
+          const bookings = accepts.map((a, i) => ({ id: a.id, name: a.name, start: a.start, end: evs[i].end, createdAt: a.at * 1000, eventId: evs[i].id, guestKey: a.pk }));
+          const last = accepts[accepts.length - 1];
+          // also into the undo history, so undoing an earlier edit of yours can't take a guest's booking away
+          const withEvs = (x: Snapshot) => ({ ...x, events: [...x.events, ...evs] });
           set((x) => ({
+            events: [...x.events, ...evs],
+            past: evs.length ? x.past.map(withEvs) : x.past,
+            future: evs.length ? x.future.map(withEvs) : x.future,
             links: x.links.map((l) =>
               l.id !== linkId
                 ? l
-                : {
-                    ...l,
-                    // one answer per person: same browser (id) or same name on another device
-                    responses: [
-                      ...l.responses.filter((p) => p.id !== r.id && p.name.trim().toLowerCase() !== r.name.trim().toLowerCase()),
-                      { ...r, name: r.name.trim(), updatedAt: Date.now() },
-                    ],
-                  },
+                : { ...l, bookings: [...l.bookings, ...bookings], decisions: { ...l.decisions, ...decisions }, ...(l.singleUse && last ? { closed: true, finalStart: last.start } : {}) },
             ),
-          })),
+          }));
+          return evs.map((e) => e.id);
+        },
+        setPollResponses: (linkId, responses) => set((x) => ({ links: x.links.map((l) => (l.id === linkId ? { ...l, responses } : l)) })),
+        setLinkPub: (linkId, lastPub) => set((x) => ({ links: x.links.map((l) => (l.id === linkId && l.nostr ? { ...l, nostr: { ...l.nostr, lastPub } } : l)) })),
+        ensureLinkKeys: (linkId) => {
+          if (get().links.find((l) => l.id === linkId)?.nostr) return;
+          set((x) => ({ links: x.links.map((l) => (l.id === linkId && !l.nostr ? { ...l, nostr: newLinkKeys() } : l)) }));
+        },
+        resetLinkKeys: (linkId) => set((x) => ({ links: x.links.map((l) => (l.id === linkId ? { ...l, nostr: newLinkKeys(), decisions: {} } : l)) })),
+        setLinkSync: (linkId, st) => set((x) => ({ linkSync: { ...x.linkSync, [linkId]: st } })),
         scheduleFromPoll: (linkId, start) => {
           const link = get().links.find((l) => l.id === linkId);
           if (!link) return;
@@ -907,7 +911,7 @@ export const useStore = create<State>()(
   ),
 );
 
-// Another tab changed the saved data (e.g. a guest booked in the booking-page tab): reload it here.
+// Another tab changed the saved data (development: the app open in two tabs): reload it here.
 if (typeof window !== 'undefined' && !isApp())
   window.addEventListener('storage', (e) => {
     if (e.key === 'calendar-v1') void useStore.persist.rehydrate();

@@ -3,12 +3,13 @@
 A calendar, habits and research-projects app for the Mac. Everything is stored on your computer; it can subscribe
 to any calendar link (a department's, a team's, a Google calendar's iCal address). Free; no account, no server.
 
-**Status:** a Mac app (Tauri) you can build and install. iPhone app and syncing between devices: later.
+**Status:** a Mac app (Tauri) you can build and install; scheduling links work between anyone. iPhone app and syncing between devices: later.
 
 ## The Mac app
 
 **Install** (from a built `.dmg`): open it, drag **Worldline** onto **Applications**, open it from Applications or
-Spotlight, and keep it in the Dock (right-click its Dock icon → *Options → Keep in Dock*).
+Spotlight, and keep it in the Dock (right-click its Dock icon → *Options → Keep in Dock*). Closing the window keeps
+it running in the background (so your scheduling links stay live); click the Dock icon to bring it back, ⌘Q to quit.
 
 The app isn't signed with a paid Apple Developer ID, so the first time a *downloaded* copy is opened macOS refuses
 ("Apple could not verify…"). Once: **System Settings → Privacy & Security**, scroll down, **Open Anyway**. (A copy
@@ -250,13 +251,17 @@ Sidebar → **Scheduling** → **+ Booking link** or **+ Group poll**. In the ed
 **drag across a two-month calendar to pick the days offered** — a new link starts with none — (or “Next 5 weekdays” /
 “Next 2 weeks”),
 the hours, length (default 1 h), a location and a note, which calendars count as busy, and where the
-meeting goes; **Copy link** to share it. Your name comes from **⚙ Settings**.
+meeting goes; **Copy link** to share it. Your name comes from **⚙ Settings**. Links work for anyone, on any
+phone or computer: the address opens a page on this project's GitHub Pages, and bookings come back to your Worldline
+on their own (see *How links work between people* below).
 
 - **Booking link** (like Calendly): the guest sees open times in their own time zone, picks one and
-  clicks **Confirm** — no name or email needed. The meeting lands on your calendar. The slot is re-checked
-  first (no double bookings). Defaults: no buffer, bookable any time, **single use** — after one booking
+  clicks **Confirm** — a name is optional, no email, no account. The time is held for them at once (nobody else can
+  take it), and your Worldline adds the meeting as soon as it's running (a toast says who booked); their page then
+  says **Confirmed**. Two people clicking the same time: the earlier one gets it, the other is told right away. Defaults: no buffer, bookable any time, **single use** — after one booking
   the link closes itself (switch it off for a reusable link like office hours).
-- **Group poll** (like when2meet): people enter a name and paint when they're free (one answer per name).
+- **Group poll** (like when2meet): people enter a name and paint when they're free (one answer per name; they can
+  come back and change it). Answers arrive in your results window by themselves.
   Each day is one continuous column like the week view; every half-hour row is labelled beside its box
   ("9 AM", "9:30"), with solid lines on the hour. Your busy time is one dark hatched **Unavailable**
   block per stretch. The guest's picks are solid green with a ✓; other people's answers are a faint
@@ -272,8 +277,50 @@ meeting goes; **Copy link** to share it. Your name comes from **⚙ Settings**.
   they booked. Then links move to a folded **Finished** group; **Clear finished**
   removes them. Deleting a link never deletes meetings already booked through it.
 - **Privacy:** guests only ever receive `publicView` (open times + what you chose to share). Tested.
-- **For now the links work on this computer only** (`#/book/<id>`); making them public needs a small
-  web service (plan: a free Cloudflare Worker that only receives busy/free blocks).
+- The link editor shows whether it's live (“Live · on 6 of 7 relays · updated just now”). **New address** replaces a
+  link that was shared more widely than you meant: the old address shows “closed”; booked meetings stay.
+
+#### How links work between people
+
+No server of mine, no accounts. Messages go through **Nostr relays** — public message boards run independently by
+different people, where anyone can post a signed message without signing up. Worldline uses seven of them
+(`web/src/lib/relays.ts`, chosen by testing: free, no sign-up, and still serving year-old messages) and sends
+everything to all of them; any one that keeps a message is enough.
+
+- **The address** is `https://bradenseefeldt.github.io/worldline/#…`. The page there is code only. Everything after
+  `#` — the link's public key and a 32-byte secret — stays in the guest's browser: browsers never send it to the
+  server, and the page sends it nowhere.
+- **Your free/busy** (`publicView`, nothing else) is published by Worldline as one message signed with the link's own
+  key and encrypted (NIP-44: ChaCha20 + HMAC) with a key derived from the secret. It's republished whenever your
+  calendar changes and every 3 hours while Worldline runs, so guests see current times.
+- **A booking or poll answer** is a message signed by a throwaway key made in the guest's browser, encrypted with the
+  link's key. That's what lets other guests see a time is held. A booking's name is sealed a second time, to your
+  link key only, so other guests see *that* a time is taken, not by whom. Worldline answers each request
+  (confirmed / taken / you're busy then) in its next published free/busy, which is how the guest's page knows.
+- **What relays see:** random-looking keys and tags, ciphertext, timestamps. Not who you are, not who booked, not
+  when. Each link has its own keys, so your links can't be tied to each other.
+- **Forgeries:** only your app can change a link's availability (it's signed); only someone with the link can book
+  (anything else fails to decrypt); a request for a time the link never offered is refused; each request is answered
+  once (restarting can't book it twice).
+
+**Where it can fail, and what happens:**
+
+| If… | Then |
+|---|---|
+| A relay is down, refuses, or goes away for good | The others carry it. Every message goes to all seven; reads ask all seven and merge. A later version can change the list: links hold no relay addresses, so old links keep working. |
+| A relay deletes old messages | Worldline re-sends your availability every 3 h while it runs; a guest's page re-sends that guest's own booking each time they open it. All seven would have to drop the same booking before your Worldline next runs for it to be lost. |
+| Worldline is closed for days or weeks | Bookings wait on the relays and are collected the next time it opens (a meeting already past is still added, “while you were away”). Guests see the last published times, with “Times last updated 5 days ago” after a day; held times stay held for other guests in the meantime. On the Mac, closing the window keeps Worldline running (⌘Q quits), so this mostly doesn't arise. |
+| You became busy at a held time before Worldline saw the booking (a subscribed calendar changed) | Worldline refuses it and tells you (toast); the guest's page says the time is no longer free and offers others. Their only way to hear is that page — there's no email, by design. |
+| Two guests click the same time | Earliest request wins (ties: smaller message id), the same rule on every page and in Worldline. The second sees “someone else booked it first” within seconds. |
+| A clock is wrong | Times are absolute instants, so time zones and the guest's clock don't affect what's shown. Worldline's published versions always count up even if this Mac's clock was set back. A guest whose clock runs fast is treated as asking now (can't dodge “not sooner than 4 h”). |
+| A guest has an old link | Deleted or replaced: the page says “This link is closed”. Mangled (cut short when pasted): the page says the address is incomplete instead of guessing. |
+| Someone who has the link misbehaves | Like any Calendly link, they can book; a flood of fake holds would block times until you look. Delete the link or give it a **New address**. People who don't have the link can do nothing. |
+
+Logic and tests: `web/src/lib/schedwire.ts` (keys, address, encryption, who gets a slot — `schedwire.test.ts`),
+`web/src/data/schedSync.ts` (Worldline's side), `web/src/guest/` (the guest page), and `schedSync.test.ts`, which runs
+your app and several guests end to end over in-memory relays (one of them down): a booking race, the app closed while
+someone books, poll answers, a deleted link. The guest page is built with `npm run build:guest` and deployed by
+`.github/workflows/pages.yml` on every push.
 
 ### Settings
 
@@ -406,6 +453,7 @@ web/                 the front end (React + TypeScript, built with Vite)
                      quickparse.ts (sentence → event); *.test.ts are the unit tests
   src/views/         TimeGrid.tsx (day/3-day/week), MonthView.tsx
   src/components/    Toolbar, Sidebar, EventPanel, QuickAdd, Toast
+  src/guest/         the page people open from a scheduling link (book.html → GitHub Pages)
 ```
 
 Tests: `npm test` · Type-check: `npm run typecheck` · Production build: `npm run build` (all from `web/`).

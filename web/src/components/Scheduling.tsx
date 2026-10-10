@@ -1,6 +1,6 @@
 // Your side of scheduling links: list, create, edit, copy, and pick the final time for a poll.
 import { useEffect, useMemo, useState, type CSSProperties } from 'react';
-import { format } from 'date-fns';
+import { format, formatDistanceToNowStrict } from 'date-fns';
 import { useStore } from '../data/store';
 import { expand } from '../lib/recurrence';
 import { bestTimes, heat, isFinished, linkDays, linkSpan, meetingAt, publicView, type BookingLink } from '../lib/booking';
@@ -9,8 +9,18 @@ import { cls, fmtTimeRange } from '../lib/format';
 import { Avatar, Avatars, PollGrid } from '../pages/GuestPage';
 import { Close, Trash } from './Icons';
 import { DayPicker } from './DayPicker';
+import { guestUrl } from '../lib/schedwire';
+import { RELAYS } from '../lib/relays';
+import { useNow } from '../lib/hooks';
 
-const linkUrl = (id: string) => `${window.location.origin}${window.location.pathname}#/book/${id}`;
+/** The guest page: one static page on the project's GitHub Pages (in development, this dev server's copy). */
+const GUEST_PAGE = import.meta.env.DEV ? `${window.location.origin}/book.html` : 'https://bradenseefeldt.github.io/worldline/';
+/** A link's address: the guest page + its keys after "#" (which never leave the guest's browser). */
+function linkUrl(id: string) {
+  useStore.getState().ensureLinkKeys(id);
+  const keys = useStore.getState().links.find((l) => l.id === id)?.nostr;
+  return keys ? guestUrl(GUEST_PAGE, keys) : GUEST_PAGE;
+}
 const DURATIONS = [15, 20, 30, 45, 60, 90, 120];
 const hhmm = (min: number) => `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`;
 const toMin = (v: string) => {
@@ -20,7 +30,7 @@ const toMin = (v: string) => {
 
 function copyLink(id: string) {
   void navigator.clipboard?.writeText(linkUrl(id));
-  useStore.getState().showToast('Link copied · it works on this computer until it’s published', false);
+  useStore.getState().showToast('Link copied · bookings appear here on their own', false);
 }
 
 const dayDate = (e: number) => {
@@ -219,6 +229,7 @@ function LinkEditor({ id, onClose }: { id: string; onClose: () => void }) {
           {calendars.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
       </div>
+      <SyncLine id={id} />
       <div className="ce-actions">
         <button
           className="ce-btn subtle-danger"
@@ -237,6 +248,27 @@ function LinkEditor({ id, onClose }: { id: string; onClose: () => void }) {
         </span>
       </div>
     </Modal>
+  );
+}
+
+/** Whether guests can see the link (published to the relays), and a new address if it was shared too widely. */
+function SyncLine({ id }: { id: string }) {
+  const sync = useStore((s) => s.linkSync[id]);
+  useNow(30_000);
+  const reset = () => {
+    if (!confirm('Give this link a new address? The current one stops working (anyone opening it sees that it’s closed). Meetings already booked stay on your calendar.')) return;
+    useStore.getState().resetLinkKeys(id);
+    copyLink(id);
+  };
+  const ago = sync ? (Date.now() - sync.at < 60_000 ? 'just now' : `${formatDistanceToNowStrict(sync.at)} ago`) : '';
+  return (
+    <div className="sl-sync">
+      <span className={cls('sl-live', sync?.relays ? 'on' : sync && 'off')}>
+        <i />
+        {!sync ? 'Publishing…' : sync.relays ? `Live · on ${sync.relays} of ${RELAYS.length} relays · updated ${ago}` : 'Not published yet — no network? Retrying every minute'}
+      </span>
+      <button className="tk-more" onClick={reset} title="If the link was shared more widely than you meant">New address</button>
+    </div>
   );
 }
 
