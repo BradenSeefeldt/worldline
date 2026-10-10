@@ -9,6 +9,7 @@ import { cls, fmtTimeRange } from '../lib/format';
 import { Avatar, Avatars, PollGrid } from '../pages/GuestPage';
 import { Close, Trash } from './Icons';
 import { DayPicker } from './DayPicker';
+import { ask } from './Confirm';
 import { guestUrl } from '../lib/schedwire';
 import { useNow } from '../lib/hooks';
 
@@ -86,9 +87,9 @@ export function SchedulingBody() {
           <button
             className="sl-btn danger"
             title="Delete link (booked meetings stay on your calendar)"
-            onClick={(e) => {
+            onClick={async (e) => {
               e.stopPropagation();
-              if (isFinished(l) || unused(l) || confirm(`Delete “${l.title}”? The link stops working. Meetings already booked through it stay on your calendar.`)) {
+              if (isFinished(l) || unused(l) || (await ask({ title: `Delete “${l.title}”?`, body: 'The link stops working. Meetings already booked through it stay on your calendar.', confirm: 'Delete link', danger: true }))) {
                 st().deleteLink(l.id);
                 st().showToast(`Deleted link “${l.title}”`, false);
               }
@@ -232,8 +233,8 @@ function LinkEditor({ id, onClose }: { id: string; onClose: () => void }) {
       <div className="ce-actions">
         <button
           className="ce-btn subtle-danger"
-          onClick={() => {
-            if (unused(link) || confirm(`Delete “${link.title}”? The link stops working. Meetings already booked through it stay on your calendar.`)) {
+          onClick={async () => {
+            if (unused(link) || (await ask({ title: `Delete “${link.title}”?`, body: 'The link stops working. Meetings already booked through it stay on your calendar.', confirm: 'Delete link', danger: true }))) {
               st.deleteLink(id);
               onClose();
             }
@@ -254,8 +255,8 @@ function LinkEditor({ id, onClose }: { id: string; onClose: () => void }) {
 function SyncLine({ id }: { id: string }) {
   const sync = useStore((s) => s.linkSync[id]);
   useNow(30_000);
-  const reset = () => {
-    if (!confirm('Give this link a new address? The current one stops working (anyone opening it sees that it’s closed). Meetings already booked stay on your calendar.')) return;
+  const reset = async () => {
+    if (!(await ask({ title: 'Give this link a new address?', body: 'The current address stops working (anyone opening it sees that it’s closed). Meetings already booked stay on your calendar.', confirm: 'New address' }))) return;
     useStore.getState().resetLinkKeys(id);
     copyLink(id);
   };
@@ -266,7 +267,7 @@ function SyncLine({ id }: { id: string }) {
         <i />
         {!sync ? 'Publishing…' : sync.relays ? `Live · on ${sync.relays} of ${sync.total} relays · updated ${ago}` : 'Not published yet — no network? Retrying every minute'}
       </span>
-      <button className="tk-more" onClick={reset} title="If the link was shared more widely than you meant">New address</button>
+      <button className="tk-more" onClick={() => void reset()} title="If the link was shared more widely than you meant">New address</button>
     </div>
   );
 }

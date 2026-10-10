@@ -8,6 +8,7 @@ import { THEMES } from '../lib/theme';
 import { cls } from '../lib/format';
 import { isApp } from '../lib/platform';
 import type { CSSProperties } from 'react';
+import { ask } from './Confirm';
 
 export function Settings({ onClose }: { onClose: () => void }) {
   const myName = useStore((s) => s.myName);
@@ -103,13 +104,13 @@ export function Settings({ onClose }: { onClose: () => void }) {
           </div>
           {!isApp() && <div className="set-row">
             <span>Development: replace everything with the sample data</span>
-            <button className="ce-btn subtle-danger" onClick={() => confirm('Replace everything with the demo data? (Your own events, habits and projects will be gone.)') && st.resetDemo()}>
+            <button className="ce-btn subtle-danger" onClick={async () => (await ask({ title: 'Replace everything with the demo data?', body: 'Your own events, habits and projects will be gone.', confirm: 'Load demo data', danger: true })) && st.resetDemo()}>
               Load demo data
             </button>
           </div>}
           <div className="set-row">
             <span>Erase everything and start with an empty calendar</span>
-            <button className="ce-btn subtle-danger" onClick={() => confirm('Erase all events, tasks, habits, projects and notes? This can’t be undone.') && st.startFresh()}>
+            <button className="ce-btn subtle-danger" onClick={async () => (await ask({ title: 'Erase everything?', body: 'All events, tasks, habits, projects and notes. This can’t be undone.', confirm: 'Erase everything', danger: true })) && st.startFresh()}>
               Erase everything
             </button>
           </div>

@@ -8,6 +8,7 @@ import { DragGhost } from './components/BlockDrag';
 import { QuickAdd } from './components/QuickAdd';
 import { HabitsPage } from './components/Habits';
 import { Toast } from './components/Toast';
+import { ConfirmHost } from './components/Confirm';
 import { TimeGrid } from './views/TimeGrid';
 import { MonthView } from './views/MonthView';
 import { useMediaQuery } from './lib/hooks';
@@ -146,6 +147,7 @@ export default function App() {
       </main>
       {quickAddOpen && <QuickAdd />}
       <Toast />
+      <ConfirmHost />
       <DragGhost />
     </div>
   );

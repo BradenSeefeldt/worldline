@@ -16,6 +16,15 @@ void loaded.then(() => {
     if (firstRun) useStore.getState().startFresh();
     routeLinksToBrowser();
   }
+  // A file dropped anywhere but a drop area (Import a file) does nothing — left alone, the page would be replaced by
+  // the file. Drop areas handle their own events first.
+  const strayFile = (e: DragEvent) => {
+    if (!e.dataTransfer?.types.includes('Files')) return;
+    e.preventDefault();
+    if (!(e.target as Element | null)?.closest?.('.ce-drop')) e.dataTransfer.dropEffect = 'none'; // no "+" cursor here
+  };
+  window.addEventListener('dragover', strayFile);
+  window.addEventListener('drop', strayFile);
   void runScheduling(); // scheduling links: publish free/busy, collect bookings and answers (data/schedSync.ts)
   createRoot(document.getElementById('root')!).render(
     <StrictMode>

@@ -2474,3 +2474,16 @@ html.in-app :is(input, textarea, [contenteditable], .pj-doc, .ro-notes, .panel) 
 .sl-live i { width: 7px; height: 7px; border-radius: 50%; background: var(--text-3); }
 .sl-live.on i { background: var(--ok); }
 .sl-live.off i { background: var(--danger); }
+/* "Are you sure?" (components/Confirm.tsx): above any editor it was opened from */
+.cf-scrim { z-index: 95; }
+.cf { width: min(400px, 100%); gap: 10px; }
+.cf-title { font-size: 16px; font-weight: 700; }
+.cf-body { margin: 0; font-size: 13.5px; color: var(--text-2); line-height: 1.45; }
+.cf-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 6px; }
+/* Import a file: a big area to drop an .ics onto (or click to choose one) */
+.ce-drop { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; min-height: 150px; padding: 18px; border: 2px dashed var(--line); border-radius: 14px; color: var(--text-2); text-align: center; cursor: pointer; transition: border-color 0.12s, background 0.12s, color 0.12s; }
+.ce-drop b { font-size: 15px; color: var(--text); }
+.ce-drop span { font-size: 12.5px; }
+.ce-drop:hover, .ce-drop:focus-visible { border-color: var(--text-3); outline: none; }
+.ce-drop.over { border-color: var(--focus); background: color-mix(in srgb, var(--focus) 10%, transparent); color: var(--focus); }
+.ce-drop.over b { color: var(--focus); }

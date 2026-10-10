@@ -43,7 +43,7 @@ format* (Google Calendar → the calendar's ⋮ → Settings and sharing → Int
 It's read-only here (its events change at their source), refreshed when the app opens and every 30 minutes
 (⋯ → **Refresh now**), and named from the feed unless you name it. Repeating events, moved and cancelled
 occurrences, and time zones (including Outlook's Windows zone names) are handled. **Import a file** copies an
-`.ics` file in as a calendar of your own (editable).
+`.ics` file in as a calendar of your own (editable): drop the file onto the big area, or click it to choose one.
 
 ## Run it in a browser (development)
 

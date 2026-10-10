@@ -16,6 +16,7 @@ export function CalendarEditor({ id, onClose }: { id: string | 'new'; onClose: (
   const [mode, setMode] = useState<'new' | 'subscribe' | 'import'>('new');
   const [url, setUrl] = useState('');
   const [busy, setBusy] = useState(false);
+  const [dragOver, setDragOver] = useState(false); // an .ics file is being dragged over the drop area
   const fileRef = useRef<HTMLInputElement>(null);
   const existing = id === 'new' ? undefined : calendars.find((c) => c.id === id);
   const unused = CALENDAR_COLORS.find((c) => !calendars.some((x) => x.color === c)) ?? CALENDAR_COLORS[0];
@@ -109,9 +110,31 @@ export function CalendarEditor({ id, onClose }: { id: string | 'new'; onClose: (
           </>
         )}
         {!existing && mode === 'import' && (
-          <p className="ce-help">
-            A calendar file (<b>.ics</b>), e.g. exported from another app. Its events are copied in as a new calendar of your own, which you can edit.
-          </p>
+          <>
+            <div
+              className={cls('ce-drop', dragOver && 'over')}
+              role="button"
+              tabIndex={0}
+              onClick={() => fileRef.current?.click()}
+              onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && fileRef.current?.click()}
+              onDragEnter={(e) => { e.preventDefault(); setDragOver(true); }}
+              onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; }}
+              onDragLeave={(e) => !e.currentTarget.contains(e.relatedTarget as Node) && setDragOver(false)}
+              onDrop={(e) => {
+                e.preventDefault();
+                setDragOver(false);
+                const f = e.dataTransfer.files?.[0];
+                if (f) void importFile(f);
+              }}
+            >
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M12 15V3m0 0-4 4m4-4 4 4" /><path d="M4 15v3a3 3 0 0 0 3 3h10a3 3 0 0 0 3-3v-3" /></svg>
+              <b>{dragOver ? 'Drop to import' : 'Drop an .ics file here'}</b>
+              <span>or click to choose one</span>
+            </div>
+            <p className="ce-help">
+              A calendar file (<b>.ics</b>), e.g. exported from another app. Its events are copied in as a new calendar of your own, which you can edit.
+            </p>
+          </>
         )}
         {existing?.url && (
           <div className="ce-sub">

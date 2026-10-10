@@ -14,6 +14,7 @@ import { cls } from '../lib/format';
 import { useNow } from '../lib/hooks';
 import { isApp, isLocalPath, openPath } from '../lib/platform';
 import { DocEditor } from './ProjectEditor';
+import { ask } from './Confirm';
 
 const newPinId = () => Math.random().toString(36).slice(2, 10);
 const inField = (t: EventTarget | null) => !!(t as HTMLElement | null)?.closest?.('input, textarea, select, [contenteditable]');
@@ -665,7 +666,7 @@ function ProjectPage({ p, w, now }: { p: Project; w: World; now: number }) {
           </div>
           <span className="pj-foot-r">
             <button className="pj-btn" onClick={() => up({ archived: !p.archived })}>{p.archived ? 'Unarchive' : 'Archive'}</button>
-            <button className="pj-del" onClick={() => confirm(`Delete “${p.title}” with all its threads and notes? (⌘Z undoes it.)`) && st().deleteProject(p.id)}>{Ico.trash} Delete</button>
+            <button className="pj-del" onClick={async () => (await ask({ title: `Delete “${p.title}”?`, body: 'With all its threads and notes. ⌘Z undoes it.', confirm: 'Delete project', danger: true })) && st().deleteProject(p.id)}>{Ico.trash} Delete</button>
           </span>
         </div>
       </article>
