@@ -20,11 +20,15 @@ reliable database kept in a single file — no server; the app reads and writes 
 saved atomically (all or nothing), so a crash can't leave it half-written. A snapshot of each of the last 14 days is
 kept inside it as a safety net. A new install starts empty.
 
-**Build it** (needs the `CLAUDE` conda env, which has Node and Rust):
+**Download it:** the latest `.dmg` is on the [Releases](../../releases) page.
+
+**Build it yourself** (needs [Node.js](https://nodejs.org) 22+ and [Rust](https://rustup.rs), and Apple's command-line
+tools: `xcode-select --install`):
 
 ```bash
-cd ~/Documents/Claude/Calendar/web
-/opt/anaconda3/bin/conda run -n CLAUDE --no-capture-output npm run app:package
+cd web
+npm install
+npm run app:package
 ```
 
 That builds the app and makes `web/release/Worldline-<version>.dmg` (the app itself is in
@@ -43,8 +47,8 @@ occurrences, and time zones (including Outlook's Windows zone names) are handled
 ## Run it in a browser (development)
 
 ```bash
-cd ~/Documents/Claude/Calendar/web
-/opt/anaconda3/bin/conda run -n CLAUDE --no-capture-output npm run dev
+cd web
+npm run dev
 ```
 
 Open http://localhost:5173. In a browser the data is kept in the browser's storage instead of the database.
@@ -404,8 +408,11 @@ web/                 the front end (React + TypeScript, built with Vite)
   src/components/    Toolbar, Sidebar, EventPanel, QuickAdd, Toast
 ```
 
-Tests: `npm test` · Type-check: `npm run typecheck` · Production build: `npm run build`
-(run these with the same `conda run -n CLAUDE --no-capture-output` prefix).
+Tests: `npm test` · Type-check: `npm run typecheck` · Production build: `npm run build` (all from `web/`).
+
+**Releasing a version:** bump `version` in `web/src-tauri/tauri.conf.json`, commit, then
+`git tag v0.2.0 && git push origin v0.2.0`. GitHub builds the app (Apple Silicon + Intel) and attaches the `.dmg` to a
+draft release; review it and press **Publish**.
 
 ## Roadmap
 
