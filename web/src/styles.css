@@ -2663,3 +2663,14 @@ html.in-app .sidebar .mini { top: calc(8px - env(safe-area-inset-top)); }
 @media (hover: none) and (pointer: coarse) {
   input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='color']), textarea, select, [contenteditable='true'] { font-size: max(16px, 1em) !important; }
 }
+/* Settings on a phone: a row's words get the width they need (no more one-word-per-line); a control that doesn't fit
+   beside them moves underneath, full width */
+@media (max-width: 700px) {
+  .st-row { flex-wrap: wrap; row-gap: 8px; padding: 10px 14px; }
+  .st-row:not(.stack) > .st-lab { flex: 1 1 170px; }
+  .st-lab b { font-size: 15px; }
+  .st-lab > span { font-size: 13px; line-height: 1.35; margin-top: 2px; }
+  .st-ctl { flex: 0 1 auto; max-width: 100%; flex-wrap: wrap; }
+  .st-ctl > .st-in, .st-ctl > input:not([type='checkbox']), .st-ctl > .pselect { max-width: 100%; }
+  .st-foot { font-size: 12.5px; line-height: 1.4; }
+}

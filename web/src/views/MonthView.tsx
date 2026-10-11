@@ -7,7 +7,7 @@ import { useEventsIn } from '../data/useEvents';
 import type { CalEvent } from '../data/types';
 import { MIN, TOTAL_WEEKS, atMinutes, clamp, dateAt, dayIndex, dayStart, isWeekend, weekNumber } from '../lib/dates';
 import { assignLanes } from '../lib/layout';
-import { useElementSize, useNow } from '../lib/hooks';
+import { useElementSize, useMediaQuery, useNow } from '../lib/hooks';
 import { cls, fmtTimeShort } from '../lib/format';
 import { URGENCY_COLOR, urgency } from '../lib/deadlines';
 import { taskAsEvent } from '../lib/tasks';
@@ -30,7 +30,10 @@ export function MonthView() {
   const nav = useStore((s) => s.nav);
   const selectedId = useStore((s) => s.selectedId);
   const flashId = useStore((s) => s.flashId);
-  const openDay = useStore((s) => s.openDay);
+  const goDay = useStore((s) => s.openDay);
+  // a phone's month is too small to read a day in: a tap opens it in 3 Day (that day first); elsewhere, in Day
+  const phone = useMediaQuery('(max-width: 699px)');
+  const openDay = (date: number) => goDay(date, phone ? '3day' : 'day');
   const calById = useMemo(() => new Map(calendars.map((c) => [c.id, c])), [calendars]);
   const showDeadlines = useStore((s) => s.showDeadlines);
   const now = useNow(60_000);

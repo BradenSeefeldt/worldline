@@ -20,6 +20,8 @@ import { isNewer, makeBackup, readBackup } from '../lib/backup';
 import { toIcs } from '../lib/icsExport';
 import { relayHealth } from '../data/schedSync';
 import { canUpdate, checkForUpdate, restartToUpdate } from '../lib/updates';
+import { notificationAccess, testAlert } from '../data/alerts';
+import { ALL_DAY_CHOICES, TIMED_CHOICES } from '../lib/alerts';
 import { SyncSettings } from './SyncSettings';
 
 const REPO = 'BradenSeefeldt/worldline';
@@ -30,6 +32,7 @@ const SECTIONS: { id: string; title: string; icon: string; color: string; words:
   { id: 'appearance', title: 'Appearance', icon: '◐', color: '#5e5ce6', words: 'theme light dark follow mac colour color hour height zoom event stripe filled' },
   { id: 'calendar', title: 'Calendar', icon: '▦', color: '#ff3b30', words: 'view day week month 3 day starts scroll weekends week numbers default calendar length event travelling home time tasks deadlines runway' },
   { id: 'calendars', title: 'Calendars', icon: '⟳', color: '#34a853', words: 'calendars subscriptions subscribe refresh import ics link feed google outlook' },
+  { id: 'alerts', title: 'Alerts', icon: '🔔', color: '#ff3b30', words: 'alerts reminders notifications notify remind before minutes all-day deadline test' },
   { id: 'tasks', title: 'Tasks & Deadlines', icon: '✓', color: '#0a84ff', words: 'deadline due time runway suggestions nudge overdue focus block regular meeting' },
   { id: 'habits', title: 'Habits', icon: '◔', color: '#ff9f0a', words: 'habits calendar count nudge weekly export csv' },
   { id: 'scheduling', title: 'Scheduling', icon: '◷', color: '#af52de', words: 'scheduling booking link poll length hours single use buffer notice relays' },
@@ -135,6 +138,7 @@ export function Settings() {
             {current.id === 'calendar' && <CalendarPane />}
             {current.id === 'calendars' && <CalendarsPane onNested={setNested} />}
             {current.id === 'tasks' && <TasksPane />}
+            {current.id === 'alerts' && <AlertsPane />}
             {current.id === 'habits' && <HabitsPane />}
             {current.id === 'scheduling' && <SchedulingPane />}
             {current.id === 'sync' && <SyncSettings />}
@@ -375,6 +379,41 @@ function TasksPane() {
 }
 
 // ---------------------------------------------------------------- Habits
+// ---------------------------------------------------------------- Alerts
+function AlertsPane() {
+  const [s, set] = useSettings();
+  const [access, setAccess] = useState<'granted' | 'denied' | 'default' | 'unsupported' | null>(null);
+  const [tested, setTested] = useState<string | null>(null);
+  useEffect(() => void notificationAccess().then(setAccess), []);
+  // (null is "None": selects work in strings)
+  const pick = (value: number | null, choices: [number, string][], onChange: (v: number | null) => void, label: string) => (
+    <Pick label={label} value={value === null ? 'none' : String(value)} options={[['none', 'None'], ...choices.map(([m, l]) => [String(m), l] as [string, string])]} onChange={(v) => onChange(v === 'none' ? null : Number(v))} />
+  );
+  const status = {
+    granted: isApp() ? 'Allowed — reminders appear as Mac notifications, even while the window is closed.' : 'Allowed — shown while Worldline is open.',
+    denied: isApp() ? 'Turned off for Worldline in System Settings → Notifications. Reminders still show inside the app.' : 'Blocked for this site — reminders still show inside the app while it’s open.',
+    default: 'Not allowed yet.',
+    unsupported: 'This browser can’t show notifications — reminders show inside the app while it’s open.',
+  };
+  return (
+    <>
+      <Group title="Remind me" foot="Each event can have its own (its card → Alert). Subscribed calendars remind only if you turn alerts on in the calendar’s ⋯ card.">
+        <Row title="Events" note="Before each event in your calendars">{pick(s.alertMin, TIMED_CHOICES, (v) => set({ alertMin: v }), 'Alert for events')}</Row>
+        <Row title="All-day events">{pick(s.alertAllDayMin, ALL_DAY_CHOICES, (v) => set({ alertAllDayMin: v }), 'Alert for all-day events')}</Row>
+        <Row title="Deadlines" note="Before the moment it’s due">{pick(s.alertDeadlineMin, TIMED_CHOICES, (v) => set({ alertDeadlineMin: v }), 'Alert for deadlines')}</Row>
+      </Group>
+      <Group title="Notifications" foot={isApp() ? undefined : 'On the iPhone, reminders come only while Worldline is open — a web app can’t wake itself up. Your Mac sends them on time.'}>
+        <Row title={access === 'granted' ? 'Notifications are on' : 'Notifications'} note={access ? status[access] : ' '}>
+          {access === 'default' && <button className="ce-btn primary" onClick={() => void notificationAccess(true).then(setAccess)}>Allow</button>}
+        </Row>
+        <Row title="Send a test alert" note={tested ?? 'See how a reminder looks'}>
+          <button className="ce-btn" onClick={() => void testAlert().then(() => setTested('Sent — it should appear now'), (e) => setTested(`Couldn’t send it: ${String((e as Error)?.message ?? e)}`))}>Send</button>
+        </Row>
+      </Group>
+    </>
+  );
+}
+
 function HabitsPane() {
   const [s, set] = useSettings();
   const hasHabits = useStore((x) => x.habits.length > 0);

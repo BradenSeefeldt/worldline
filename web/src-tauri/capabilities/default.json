@@ -16,6 +16,7 @@
     "autostart:default",
     "updater:default",
     "process:allow-restart",
+    "notification:default",
     "core:window:allow-hide",
     "core:window:allow-show",
     "core:window:allow-close",

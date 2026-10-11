@@ -181,6 +181,17 @@ export function CalendarEditor({ id, onClose, mode: startMode = 'new' }: { id: s
             onChange={(e) => toggleDefault(e.target.checked)}
           />
         </label>}
+        {existing && (
+          <label className="ce-row">
+            <span>Alerts for its events{existing.url ? '' : ' (Settings → Alerts)'}</span>
+            <input
+              type="checkbox"
+              className="switch"
+              checked={existing.url ? !!existing.alerts : existing.alerts !== false}
+              onChange={(e) => updateCalendar(existing.id, { alerts: e.target.checked })}
+            />
+          </label>
+        )}
         {existing && <div className="ce-meta">{count} event{count === 1 ? '' : 's'} · {existing.url ? 'subscribed (read-only)' : existing.account}</div>}
 
         {existing ? (

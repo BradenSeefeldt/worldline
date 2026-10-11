@@ -105,6 +105,22 @@ work before it (2 weeks unless you say otherwise) — not an all-day event.
 - **Suggestions:** a deadline inside its runway with nothing scheduled for it gets a focus-block
   offer (“Work on NSERC proposal tomorrow at 9am for 3h”) in a free slot.
 
+## Reminders
+
+Every event in your calendars reminds you 10 minutes before it starts, and every deadline 1 hour before it's due;
+all-day events don't, unless you choose a time (Settings → **Alerts**: "On the day, at 9 AM", "The day before, at
+5 PM"…). An event's card has its own **Alert** (Default · None · When it starts · 5, 10, 15, 30 minutes · 1, 2 hours
+· 1 day before); for a repeating event it applies to the whole series. Subscribed calendars stay quiet unless you
+turn on **Alerts for its events** in the calendar's ⋯ card; hidden calendars and done deadlines never alert.
+
+- **Mac:** reminders are Mac notifications, on time even while Worldline's window is closed (it keeps running in
+  the background); a reminder also shows inside the app. One missed by more than 5 minutes (the Mac was asleep) is
+  skipped rather than shown late.
+- **iPhone:** only while Worldline is open — a web app can't wake itself up. Your Mac sends them on time.
+
+Logic and tests: `web/src/lib/alerts.ts`, `alerts.test.ts`; delivery `web/src/data/alerts.ts` and
+`web/src-tauri/src/lib.rs`.
+
 ## Calendars
 
 Each calendar has a slim show/hide switch (clicking anywhere on the row works too); its name gets the rest of the

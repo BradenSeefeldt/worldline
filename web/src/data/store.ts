@@ -206,7 +206,8 @@ interface State {
   goTo: (date: number, smooth?: boolean) => void;
   goToday: () => void;
   step: (dir: 1 | -1) => void;
-  openDay: (date: number) => void;
+  /** Go to a day: in Day view (or, from the phone's month, 3 Day — enough room to read it). */
+  openDay: (date: number, view?: ViewMode) => void;
   setVisibleRange: (r: Range) => void;
   setSidebarOpen: (open: boolean) => void;
   /** The phone's week strip opened into the whole month (components/PhoneBars.tsx). */
@@ -374,7 +375,7 @@ export const useStore = create<State>()(
           if (view === 'month') goTo(addMonths(startOfMonth(base), dir).getTime());
           else goTo(addDays(base, dir * DAYS_IN_VIEW[view]).getTime());
         },
-        openDay: (date) => set((s) => ({ view: 'day', nav: { date, seq: s.nav.seq + 1, smooth: false } })),
+        openDay: (date, view = 'day') => set((s) => ({ view, nav: { date, seq: s.nav.seq + 1, smooth: false } })),
         setVisibleRange: (r) => {
           const cur = get().visibleRange;
           if (cur.start !== r.start || cur.end !== r.end) set({ visibleRange: r });

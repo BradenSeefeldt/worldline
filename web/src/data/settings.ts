@@ -32,6 +32,10 @@ export interface AppSettings {
   suggest: Record<SuggestionKey, boolean>; // each kind of quick-add suggestion on / off
   // Habits
   habitsFromCalendar: boolean;
+  // Alerts (reminders): the defaults, minutes before (null = none) — lib/alerts.ts
+  alertMin: number | null;
+  alertAllDayMin: number | null;
+  alertDeadlineMin: number | null;
   // Scheduling: what a new link starts with
   linkDefaults: { durationMin: number; windowStart: number; windowEnd: number; singleUse: boolean; bufferMin: number; noticeMin: number };
 }
@@ -55,6 +59,9 @@ export const DEFAULT_SETTINGS: AppSettings = {
   leadDays: 14,
   suggest: { stale: true, focus: true, add: true, habit: true },
   habitsFromCalendar: true,
+  alertMin: 10,
+  alertAllDayMin: null,
+  alertDeadlineMin: 60,
   linkDefaults: { durationMin: 60, windowStart: 9 * 60, windowEnd: 17 * 60, singleUse: true, bufferMin: 0, noticeMin: 0 },
 };
 
@@ -63,6 +70,7 @@ const DARK = new Set(THEMES.filter((t) => t.dark === true).map((t) => t.id));
 const VIEWS: ViewMode[] = ['day', '3day', 'week', 'month'];
 const num = (x: unknown, lo: number, hi: number, d: number) => (typeof x === 'number' && Number.isFinite(x) && x >= lo && x <= hi ? x : d);
 const bool = (x: unknown, d: boolean) => (typeof x === 'boolean' ? x : d);
+const minOrNone = (x: unknown, lo: number, hi: number, d: number | null) => (x === null ? null : num(x, lo, hi, d as number) ?? d);
 
 /** Saved settings (any shape) → complete, valid settings. */
 export function normalizeSettings(raw: unknown): AppSettings {
@@ -91,6 +99,9 @@ export function normalizeSettings(raw: unknown): AppSettings {
     leadDays: num(r.leadDays, 1, 365, d.leadDays),
     suggest: { stale: bool(sg.stale, true), focus: bool(sg.focus, true), add: bool(sg.add, true), habit: bool(sg.habit, true) },
     habitsFromCalendar: bool(r.habitsFromCalendar, d.habitsFromCalendar),
+    alertMin: 'alertMin' in r ? minOrNone(r.alertMin, 0, 7 * 1440, d.alertMin) : d.alertMin,
+    alertAllDayMin: 'alertAllDayMin' in r ? minOrNone(r.alertAllDayMin, -1440, 7 * 1440, d.alertAllDayMin) : d.alertAllDayMin,
+    alertDeadlineMin: 'alertDeadlineMin' in r ? minOrNone(r.alertDeadlineMin, 0, 7 * 1440, d.alertDeadlineMin) : d.alertDeadlineMin,
     linkDefaults: {
       durationMin: num(ld.durationMin, 5, 480, d.linkDefaults.durationMin),
       windowStart: windowStart < windowEnd ? windowStart : d.linkDefaults.windowStart,

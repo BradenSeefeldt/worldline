@@ -11,6 +11,7 @@ search box), the chosen section's settings beside them.
 | **Appearance** | Every theme as a tile. **Follow the Mac's light / dark setting**: pick one light and one dark theme and Worldline switches with your Mac; off: pick any one theme. Hour height; events **filled** or as a coloured **stripe** |
 | **Calendar** | Default view, where a day scrolls to, **show weekends** (off: a Monday–Friday week), **week numbers** (mini month, month view), default calendar, **default event length**, the home-time column, tasks and deadline runways on the calendar |
 | **Calendars** | Every calendar and subscription with its status (“Couldn't update: …”), Refresh / Edit, how often subscriptions refresh, + New / Subscribe / Import |
+| **Alerts** | Reminders: the default for events (10 minutes before), all-day events (none) and deadlines (1 hour before); whether notifications are allowed; send a test alert |
 | **Tasks & Deadlines** | A deadline's time and runway when none is given; each kind of quick-add suggestion on or off |
 | **Habits** | Whether calendar events count towards habits; the weekly nudge; export CSV |
 | **Scheduling** | What new links start with (length, hours, single-use, buffer, earliest booking); the relays and which are connected |

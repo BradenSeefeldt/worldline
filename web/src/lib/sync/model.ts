@@ -11,7 +11,7 @@ import * as Y from 'yjs';
 export const COLLECTIONS = ['calendars', 'events', 'tasks', 'habits', 'projects', 'threads', 'projectLog', 'links'] as const;
 export const NESTED = ['habitLog', 'habitNotes'] as const;
 export const PROFILE = ['myName', 'homeZone', 'defaultCalendarId', 'skipped', 'dismissed'] as const;
-export const SETTINGS = ['weekStartsOn', 'hour24', 'defaultEventMin', 'dueMinutes', 'leadDays', 'suggest', 'habitsFromCalendar', 'linkDefaults', 'dayStartHour', 'hideWeekends', 'weekNumbers', 'subsRefreshMin'] as const;
+export const SETTINGS = ['weekStartsOn', 'hour24', 'defaultEventMin', 'dueMinutes', 'leadDays', 'suggest', 'habitsFromCalendar', 'linkDefaults', 'dayStartHour', 'hideWeekends', 'weekNumbers', 'subsRefreshMin', 'alertMin', 'alertAllDayMin', 'alertDeadlineMin'] as const;
 
 /** The synced data's format. Bump it when a synced record changes shape in a way an older copy would get wrong (and
  *  convert old records when reading). A device finding a newer format in the document stops syncing and asks to be

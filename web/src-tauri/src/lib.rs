@@ -1,13 +1,78 @@
 // The native side of the app: a window showing the web app, plus plugins — sql (the SQLite database the app saves
 // to), http (fetching calendar links), opener (links → browser, folders → Finder), dialog (the Save panel for backups
 // and exports), autostart (Settings → Open at login), updater + process (download a signed new version, restart into it).
+// Reminders: the web app sends the alerts due in the next day (set_alerts, again whenever something changes); a thread
+// here shows each one at its time as a Mac notification — native, so they arrive on time even while the window is
+// hidden and its web page is throttled. Each alert shows once; one more than 5 minutes late (the Mac was asleep) is
+// skipped rather than shown late.
 // Quitting (⌘Q, or Worldline → Quit): the web app is asked to save first (the built-in Quit would end the app before
 // the last keystrokes reached the database), then it quits; if it doesn't answer within 3 s it quits anyway.
 // Closing the window: the web app decides (Settings → General → Keep running): by default it hides the window and the
 // app keeps running (like Calendar or Mail), so scheduling links stay live; ⌘Q quits; the Dock icon brings it back.
+use std::collections::HashSet;
+use std::sync::{Arc, Condvar, Mutex};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tauri::menu::{Menu, MenuItem, MenuItemKind};
 use tauri::{Emitter, Manager};
 use tauri_plugin_dialog::DialogExt;
+use tauri_plugin_notification::NotificationExt;
+
+#[derive(serde::Deserialize, Clone)]
+struct Alert {
+  key: String,
+  at: i64, // epoch ms
+  title: String,
+  body: String,
+}
+#[derive(Default)]
+struct Alerts {
+  list: Vec<Alert>,
+  fired: HashSet<String>,
+}
+#[derive(Clone, Default)]
+struct AlertState(Arc<(Mutex<Alerts>, Condvar)>);
+
+const LATE_MS: i64 = 5 * 60_000;
+fn now_ms() -> i64 {
+  SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis() as i64).unwrap_or(0)
+}
+
+/// The alerts due soon (replaces the previous list).
+#[tauri::command]
+fn set_alerts(state: tauri::State<AlertState>, alerts: Vec<Alert>) {
+  let (m, c) = &*state.0;
+  let mut a = m.lock().unwrap_or_else(|e| e.into_inner());
+  a.list = alerts;
+  c.notify_all();
+}
+
+/// Settings → Alerts → Send a test alert.
+#[tauri::command]
+fn test_alert(app: tauri::AppHandle, title: String, body: String) -> Result<(), String> {
+  app.notification().builder().title(title).body(body).show().map_err(|e| e.to_string())
+}
+
+fn run_alerts(app: tauri::AppHandle, state: AlertState) {
+  std::thread::spawn(move || {
+    let (m, c) = &*state.0;
+    let mut a = m.lock().unwrap_or_else(|e| e.into_inner());
+    loop {
+      let now = now_ms();
+      let due: Vec<Alert> = a.list.iter().filter(|x| x.at <= now && x.at > now - LATE_MS && !a.fired.contains(&x.key)).cloned().collect();
+      for d in due {
+        let _ = app.notification().builder().title(&d.title).body(&d.body).show();
+        let _ = app.emit("alert", (&d.title, &d.body)); // shown inside the app too (in case notifications are off)
+        a.fired.insert(d.key);
+      }
+      // forget alerts no longer listed (and long past), so the set stays small
+      let keep: HashSet<String> = a.list.iter().filter(|x| x.at > now - 2 * LATE_MS).map(|x| x.key.clone()).collect();
+      a.fired.retain(|k| keep.contains(k));
+      let next = a.list.iter().filter(|x| x.at > now).map(|x| x.at).min();
+      let wait = next.map_or(60_000, |t| (t - now).clamp(50, 60_000)) as u64;
+      a = c.wait_timeout(a, Duration::from_millis(wait)).unwrap_or_else(|e| e.into_inner()).0;
+    }
+  });
+}
 
 /// Save a backup / export: show the Save panel and write to the file the person chooses there. The panel lives here,
 /// not in the web page, so the page can only ever write a file the person picked (never a path of its own choosing).
@@ -116,7 +181,9 @@ pub fn run() {
     .plugin(tauri_plugin_autostart::init(tauri_plugin_autostart::MacosLauncher::LaunchAgent, None))
     .plugin(tauri_plugin_updater::Builder::new().build())
     .plugin(tauri_plugin_process::init())
-    .invoke_handler(tauri::generate_handler![save_file, quit_now, uninstall])
+    .plugin(tauri_plugin_notification::init())
+    .manage(AlertState::default())
+    .invoke_handler(tauri::generate_handler![save_file, quit_now, uninstall, set_alerts, test_alert])
     .on_menu_event(|app, ev| {
       if ev.id() == "quit" {
         request_quit(app);
@@ -124,6 +191,7 @@ pub fn run() {
     })
     .setup(|app| {
       app.set_menu(menu(app.handle())?)?;
+      run_alerts(app.handle().clone(), app.state::<AlertState>().inner().clone());
       if cfg!(debug_assertions) {
         app.handle().plugin(
           tauri_plugin_log::Builder::default()

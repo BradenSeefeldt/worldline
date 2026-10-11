@@ -9,6 +9,7 @@ import { isApp, routeLinksToBrowser } from './lib/platform';
 import { runScheduling } from './data/schedSync';
 import './styles.css';
 import { flushSync, resumeSync } from './data/syncEngine';
+import { runAlerts } from './data/alerts';
 
 // In the Mac app the saved data comes from a database (asynchronously): show the app once it's loaded, so it never
 // flashes the starting data first. A new install (nothing saved yet) starts empty, not with the demo.
@@ -107,6 +108,7 @@ void Promise.all([loaded, ownTab()]).then(([, mine]) => {
   // the iPhone / web version shows and copies them. Development runs it too, for testing.
   if (isApp() || import.meta.env.DEV) void runScheduling(); // data/schedSync.ts
   void resumeSync(); // syncing between your devices, if this one is set up (data/syncEngine.ts)
+  runAlerts(); // reminders (data/alerts.ts)
   createRoot(document.getElementById('root')!).render(
     <StrictMode>
       <CrashScreen>

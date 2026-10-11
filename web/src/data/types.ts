@@ -12,6 +12,7 @@ export interface CalendarSource {
   lastSync?: number; // last successful refresh
   syncError?: string; // why the last refresh failed
   autoName?: boolean; // named from the feed (until you rename it)
+  alerts?: boolean; // reminders for its events: on unless false; a subscribed calendar's are off unless true (lib/alerts.ts)
 }
 
 /**
@@ -41,6 +42,7 @@ export interface CalEvent {
   done?: boolean;
   linkedTo?: string; // a block of time made for a task or deadline (dragged from the sidebar)
   bookedVia?: string; // made by someone booking through one of your scheduling links
+  alert?: number | null; // reminder, minutes before the start (all-day: before the day starts); null = none; unset = the default
 }
 
 export type Freq = 'daily' | 'weekly' | 'monthly' | 'yearly';

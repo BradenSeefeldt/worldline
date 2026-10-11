@@ -4,6 +4,7 @@ import { addDays, format, startOfDay } from 'date-fns';
 import { isLocked, newEventCalendarId, useStore } from '../data/store';
 import type { CalEvent, Recurrence } from '../data/types';
 import { MIN } from '../lib/dates';
+import { ALL_DAY_CHOICES, TIMED_CHOICES, alertFor, describeAlert } from '../lib/alerts';
 import { decodeEvent, describeRecurrence, isOccurrenceId, resolveEvent } from '../lib/recurrence';
 import type { Scope } from '../lib/mutate';
 import { cls, fmtTimeRange } from '../lib/format';
@@ -288,6 +289,29 @@ export function EventPanel() {
               {choiceOf(master?.recurrence) === 'custom' && <option value="custom">{describeRecurrence(master!.recurrence!, master!.start)}</option>}
             </select>
           )}
+        </div>
+        <div className="prow">
+          <span>Alert</span>
+          {(() => {
+            const st = useStore.getState();
+            const d = { alertMin: st.settings.alertMin, alertAllDayMin: st.settings.alertAllDayMin, alertDeadlineMin: st.settings.alertDeadlineMin };
+            const own = master?.alert !== undefined ? master.alert : ev.alert;
+            const fallback = alertFor({ ...ev, alert: undefined }, cal, d);
+            const choices = ev.allDay && ev.kind !== 'deadline' ? ALL_DAY_CHOICES : TIMED_CHOICES;
+            const value = own === undefined ? 'default' : own === null ? 'none' : String(own);
+            const set = (v: string) => {
+              const alert = v === 'default' ? undefined : v === 'none' ? null : Number(v);
+              updateEvent(ev.id, { alert }, false, occurrence ? 'all' : 'this'); // a series' alert is the series'
+            };
+            return (
+              <select className="pselect" value={value} onChange={(e) => set(e.target.value)} aria-label="Alert">
+                <option value="default">Default · {describeAlert(fallback, ev.allDay && ev.kind !== 'deadline').replace('minutes', 'min').replace(/^(\w)/, (c) => c.toLowerCase())}</option>
+                <option value="none">None</option>
+                {choices.map(([m, l]) => <option key={m} value={String(m)}>{l}</option>)}
+                {typeof own === 'number' && !choices.some(([m]) => m === own) && <option value={String(own)}>{describeAlert(own, ev.allDay)}</option>}
+              </select>
+            );
+          })()}
         </div>
       </div>
 
