@@ -86,3 +86,9 @@ export const autostart = {
 
 /** The app's version (from package.json, at build time). */
 export const APP_VERSION: string = __APP_VERSION__;
+
+/** Uninstall (the Mac app): quits, then the app and all its data go to one folder in the Trash (lib.rs → uninstall). */
+export async function uninstallApp() {
+  const { invoke } = await import('@tauri-apps/api/core');
+  await invoke('uninstall');
+}

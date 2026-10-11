@@ -35,6 +35,16 @@ npm run app:package
 That builds the app and makes `web/release/Worldline-<version>.dmg` (the app itself is in
 `web/src-tauri/target/release/bundle/macos/`). `npm run app` runs it in development mode (live reload).
 
+### Uninstalling
+
+**⚙ Settings → Data & Backups → Uninstall Worldline…** Worldline quits, then the app and everything it stored go to
+one folder in the Trash, `Worldline (removed <date>)` — recoverable until you empty the Trash. Open scheduling links
+close first (guests see "closed"), and the login item is removed. Backups and exports you saved yourself are left alone.
+
+If you already deleted the app by dragging it to the Trash, these are the leftovers to remove (all named after the app's
+id, `io.github.bradenseefeldt.worldline`): in `~/Library/` — `Application Support/…` (your data), `Caches/…`,
+`WebKit/…`, `Preferences/….plist`, and `LaunchAgents/Worldline.plist` if you turned on Open at login.
+
 ### Subscribing to calendars
 
 Sidebar → **Calendars → +** → **Subscribe to a link**, and paste the calendar's link: a department or seminar

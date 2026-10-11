@@ -14,7 +14,7 @@ import { downloadHabitsCsv } from './Habits';
 import { ask } from './Confirm';
 import { THEMES, resolveTheme, type ThemeId } from '../lib/theme';
 import { cls, fmtTime } from '../lib/format';
-import { APP_VERSION, autostart, fetchText, isApp, openExternal, saveFile } from '../lib/platform';
+import { APP_VERSION, autostart, fetchText, isApp, openExternal, saveFile, uninstallApp } from '../lib/platform';
 import { beforeRestore, listSnapshots, replaceSaved, snapshotValue } from '../data/persist';
 import { isNewer, makeBackup, readBackup } from '../lib/backup';
 import { toIcs } from '../lib/icsExport';
@@ -478,6 +478,21 @@ function DataPane() {
     await replaceSaved(STORE_KEY, value);
     window.location.reload();
   };
+  const uninstall = async () => {
+    const ok = await ask({
+      title: 'Uninstall Worldline?',
+      body: 'Worldline quits, and the app and everything it stored — your calendars, tasks, habits, projects, settings and caches — go to one folder in the Trash (you can still get them back until you empty it). Backups and exports you saved yourself are left where they are. Open scheduling links close. Save a backup first if you might want your data later.',
+      confirm: 'Uninstall',
+      danger: true,
+    });
+    if (!ok) return;
+    setMsg({ text: 'Uninstalling…' });
+    await autostart.set(false).catch(() => undefined); // remove the login item properly
+    // close open scheduling links so guests see "closed" (data/schedSync.ts publishes the notice), then go
+    for (const l of st.links) st.deleteLink(l.id);
+    await new Promise((r) => setTimeout(r, 2500));
+    await uninstallApp();
+  };
   const exportIcs = async () => {
     const c = calendars.find((x) => x.id === cal);
     if (!c) return;
@@ -525,6 +540,11 @@ function DataPane() {
         {!isApp() && (
           <Row title="Load the demo data" note="Development: replace everything with sample data">
             <button className="ce-btn subtle-danger" onClick={async () => (await ask({ title: 'Replace everything with the demo data?', body: 'Your own events, habits and projects will be gone.', confirm: 'Load demo data', danger: true })) && st.resetDemo()}>Load demo data</button>
+          </Row>
+        )}
+        {isApp() && (
+          <Row title="Uninstall Worldline" note="Quits, and moves the app and all of its data to the Trash — nothing is left behind">
+            <button className="ce-btn subtle-danger" onClick={() => void uninstall()}>Uninstall…</button>
           </Row>
         )}
         <Row title="Erase everything" note="Events, tasks, habits, projects and notes">
