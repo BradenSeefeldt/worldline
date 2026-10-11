@@ -1825,12 +1825,6 @@ body.dragging-block, body.dragging-block * { cursor: grabbing !important; user-s
 @media (max-width: 480px) { .dp-months { grid-template-columns: 1fr; } }
 .side-settings { display: flex; align-items: center; gap: 7px; align-self: flex-start; padding: 6px 8px; border-radius: 8px; font-size: 12.5px; font-weight: 600; color: var(--text-2); }
 .side-settings:hover { background: var(--bg-hover); color: var(--text); }
-.settings { gap: 18px; }
-.set-sec { display: flex; flex-direction: column; gap: 8px; }
-.set-sec h3 { margin: 0; font-size: 11px; font-weight: 700; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.05em; }
-.set-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 13.5px; }
-.set-in { flex: 1; max-width: 220px; padding: 7px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg-hover); outline: none; }
-.set-in:focus { border-color: var(--focus); }
 .set-note { margin: -2px 0 0; font-size: 12px; color: var(--text-3); }
 
 /* pop-up windows (calendar editor, link editor, settings): rows keep their height; the window scrolls */
@@ -2066,11 +2060,7 @@ body.dragging-block, body.dragging-block * { cursor: grabbing !important; user-s
 
 /* ---------- Settings → Appearance: a little window per theme ---------- */
 .themes { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
-.sl-modal.settings { width: min(580px, 100%); }
 @media (max-width: 520px) { .themes { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-.theme-group { display: flex; flex-direction: column; gap: 6px; }
-.theme-group + .theme-group { margin-top: 6px; }
-.theme-label { font-size: 11px; font-weight: 600; color: var(--text-3); }
 .theme { display: flex; flex-direction: column; gap: 2px; padding: 6px 6px 8px; border-radius: 12px; border: 1px solid var(--line); text-align: left; transition: border-color 0.15s, box-shadow 0.15s; }
 .theme:hover { border-color: var(--text-3); }
 .theme.on { border-color: var(--focus); box-shadow: 0 0 0 2px color-mix(in srgb, var(--focus) 35%, transparent); }
@@ -2085,7 +2075,6 @@ body.dragging-block, body.dragging-block * { cursor: grabbing !important; user-s
 .pv-line.short { width: 50%; background: color-mix(in srgb, var(--pt) 28%, transparent); }
 .pv-pill { margin-top: auto; height: 8px; width: 42%; border-radius: 4px; background: var(--pa); }
 .theme-pv.split .pv-line { background: #8e8e93; }
-.set-row .ce-btn { flex: none; white-space: nowrap; }
 
 /* ---------- Projects: a board of project columns (home) and one wide page beside it ----------
    Separation comes from surfaces, not lines: the board sits on the side colour, each project is a softly tinted band,
@@ -2559,3 +2548,15 @@ body.side-dragging, body.side-dragging * { cursor: grabbing !important; user-sel
   .st-search { width: 100%; }
   .st-row { flex-wrap: wrap; }
 }
+/* the recovery screen (saved data couldn't be loaded) and the crash screen */
+.rc { min-height: 100dvh; display: grid; place-items: center; padding: 24px 16px; background: var(--bg-side); }
+.rc-card { width: min(560px, 100%); display: flex; flex-direction: column; gap: 12px; padding: 24px; border-radius: 16px; background: var(--panel); border: 1px solid var(--line); box-shadow: var(--shadow); }
+.rc-card h1 { margin: 0; font-size: 20px; }
+.rc-card p { margin: 0; color: var(--text-2); line-height: 1.45; }
+.rc-row { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding-top: 10px; border-top: 1px solid var(--line-soft); }
+.rc-row > span { flex: 1 1 200px; font-size: 13px; }
+.rc-msg { color: var(--danger) !important; font-size: 13px; }
+.rc-err { margin: 0; padding: 10px; border-radius: 8px; background: var(--bg-hover); font-size: 12px; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 160px; overflow: auto; }
+.rc-actions { display: flex; gap: 8px; }
+.side-update { align-self: stretch; padding: 7px 10px; border-radius: 9px; font-size: 12.5px; font-weight: 600; text-align: left; color: var(--on-focus); background: var(--focus); }
+.side-update:hover { filter: brightness(1.08); }

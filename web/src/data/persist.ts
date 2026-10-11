@@ -1,6 +1,13 @@
 // Where the app keeps your data. In the Mac app: a SQLite database — one file, worldline.db, in the app's own folder
 // (~/Library/Application Support/<app id>/), written atomically, with a snapshot of each day's data kept for two
 // weeks as a safety net. In a browser (development): the browser's localStorage, as before.
+//
+// Safeguards:
+//   · Saved data that can't be read (damaged, or the database won't open) is never written over: saving stops, the
+//     app opens a recovery screen (components/Recovery.tsx) offering a snapshot or a backup, and the unreadable copy
+//     is kept aside.
+//   · A save that fails is kept and tried again (every few seconds, and on the next change); the app is told, once.
+//   · Restoring (a snapshot or a backup file) first keeps what it replaces, so the restore can be undone.
 import type { StateStorage } from 'zustand/middleware';
 import { isApp } from '../lib/platform';
 
@@ -13,27 +20,128 @@ const open = () =>
     await d.execute('CREATE TABLE IF NOT EXISTS kv (key TEXT PRIMARY KEY, value TEXT NOT NULL, updated INTEGER NOT NULL)');
     await d.execute('CREATE TABLE IF NOT EXISTS snapshots (day TEXT PRIMARY KEY, value TEXT NOT NULL)');
     return d;
-  })());
+  })().catch((e) => {
+    db = null; // try opening again next time
+    throw e;
+  }));
+
+const BEFORE_RESTORE = '-before-restore'; // key suffix: what the last restore replaced
+const UNREADABLE = '-unreadable'; // key suffix: saved data that couldn't be read, kept aside
 
 /** Set when the app starts with nothing saved yet (a new install): it starts empty rather than with demo data. */
 export let firstRun = false;
 
+/** Why the saved data couldn't be loaded (null: it loaded fine). While set, nothing is saved. */
+export let loadProblem: string | null = null;
+
+/** Is this what the app saves (JSON with a `state` object)? */
+export function readable(value: string): boolean {
+  try {
+    const v = JSON.parse(value) as { state?: unknown };
+    return !!v && typeof v === 'object' && !!v.state && typeof v.state === 'object';
+  } catch {
+    return false;
+  }
+}
+
+// ---- the two places data can live: the database (the app) or localStorage (a browser)
+const kv = {
+  get: async (key: string): Promise<string | null> => {
+    if (!isApp()) return localStorage.getItem(key);
+    const d = await open();
+    return (await d.select<{ value: string }[]>('SELECT value FROM kv WHERE key = $1', [key]))[0]?.value ?? null;
+  },
+  set: async (key: string, value: string, snapshot = false) => {
+    if (!isApp()) return localStorage.setItem(key, value);
+    const d = await open();
+    await d.execute('INSERT INTO kv (key, value, updated) VALUES ($1, $2, $3) ON CONFLICT(key) DO UPDATE SET value = $2, updated = $3', [key, value, Date.now()]);
+    if (!snapshot) return;
+    // the day's first save also keeps a snapshot; the newest 14 days are kept
+    const day = new Date().toISOString().slice(0, 10);
+    await d.execute('INSERT OR IGNORE INTO snapshots (day, value) VALUES ($1, $2)', [day, value]);
+    await d.execute('DELETE FROM snapshots WHERE day NOT IN (SELECT day FROM snapshots ORDER BY day DESC LIMIT 14)');
+  },
+  del: async (key: string) => {
+    if (!isApp()) return localStorage.removeItem(key);
+    const d = await open();
+    await d.execute('DELETE FROM kv WHERE key = $1', [key]);
+  },
+};
+
+// ---- saving: batched (typing fires many changes), retried if it fails
 let pending: { key: string; value: string } | null = null;
 let timer = 0;
+let failing = false;
+const troubleListeners = new Set<(ok: boolean) => void>();
+/** Hear when saving starts failing (false) and when it works again (true). */
+export const onSaveTrouble = (fn: (ok: boolean) => void) => (troubleListeners.add(fn), () => void troubleListeners.delete(fn));
+
 async function write() {
   clearTimeout(timer);
   const p = pending;
   pending = null;
-  if (!p) return;
-  const d = await open();
-  await d.execute('INSERT INTO kv (key, value, updated) VALUES ($1, $2, $3) ON CONFLICT(key) DO UPDATE SET value = $2, updated = $3', [p.key, p.value, Date.now()]);
-  // the day's first save also keeps a snapshot; the newest 14 days are kept
-  const day = new Date().toISOString().slice(0, 10);
-  await d.execute('INSERT OR IGNORE INTO snapshots (day, value) VALUES ($1, $2)', [day, p.value]);
-  await d.execute('DELETE FROM snapshots WHERE day NOT IN (SELECT day FROM snapshots ORDER BY day DESC LIMIT 14)');
+  if (!p || loadProblem) return;
+  try {
+    await kv.set(p.key, p.value, true);
+    if (failing) {
+      failing = false;
+      troubleListeners.forEach((fn) => fn(true));
+    }
+  } catch (e) {
+    console.error('Saving failed; will try again', e);
+    pending ??= p; // keep it (unless something newer is already waiting)
+    if (!failing) {
+      failing = true;
+      troubleListeners.forEach((fn) => fn(false));
+    }
+    timer = window.setTimeout(() => void write(), 5000);
+  }
 }
-/** Write anything not yet saved (called when the window hides or closes). */
+/** Write anything not yet saved (called when the window hides or closes, and before a restart). */
 export const flush = () => write();
+
+const storage: StateStorage = {
+  getItem: async (key) => {
+    let value: string | null;
+    try {
+      value = await kv.get(key);
+    } catch (e) {
+      loadProblem = `The database couldn’t be opened (${String((e as Error)?.message ?? e).slice(0, 160)}).`;
+      return null;
+    }
+    if (value === null) {
+      firstRun = true;
+      return null;
+    }
+    if (!readable(value)) {
+      loadProblem = 'Your saved data couldn’t be read — it may have been damaged.';
+      await kv.set(key + UNREADABLE, value).catch(() => undefined); // keep it aside, untouched
+      return null;
+    }
+    return value;
+  },
+  setItem: (key, value) => {
+    if (loadProblem) return; // never write over data we couldn't read
+    pending = { key, value };
+    clearTimeout(timer);
+    timer = window.setTimeout(() => void write(), isApp() ? 300 : 0);
+  },
+  removeItem: (key) => kv.del(key),
+};
+
+/** The storage the app's state is saved to. */
+export const appStorage = (): StateStorage => storage;
+
+/** The hydration itself failed (e.g. a migration threw): treat it like unreadable data. */
+const problemListeners = new Set<() => void>();
+export function markLoadProblem(reason: string) {
+  loadProblem ??= reason;
+  problemListeners.forEach((fn) => fn());
+}
+/** Hear when loading fails outright (the app then shows the recovery screen instead of waiting forever). */
+export const onLoadProblem = (fn: () => void) => void problemListeners.add(fn);
+
+// ---- snapshots and restoring
 
 /** The daily snapshots kept in the database (newest first). The Mac app only. */
 export async function listSnapshots(): Promise<string[]> {
@@ -42,43 +150,32 @@ export async function listSnapshots(): Promise<string[]> {
   return (await d.select<{ day: string }[]>('SELECT day FROM snapshots ORDER BY day DESC')).map((r) => r.day);
 }
 
-/** Replace everything with what was saved: a snapshot's day, or a backup's saved state (a JSON string as stored).
- *  The caller reloads the app afterwards. */
-export async function replaceSaved(key: string, value: string) {
-  pending = null;
-  clearTimeout(timer);
-  if (!isApp()) return localStorage.setItem(key, value);
-  const d = await open();
-  await d.execute('INSERT INTO kv (key, value, updated) VALUES ($1, $2, $3) ON CONFLICT(key) DO UPDATE SET value = $2, updated = $3', [key, value, Date.now()]);
-}
-
 /** A snapshot's saved state, as stored. */
 export async function snapshotValue(day: string): Promise<string | null> {
   const d = await open();
   return (await d.select<{ value: string }[]>('SELECT value FROM snapshots WHERE day = $1', [day]))[0]?.value ?? null;
 }
 
-const sqlite: StateStorage = {
-  getItem: async (key) => {
-    const d = await open();
-    const rows = await d.select<{ value: string }[]>('SELECT value FROM kv WHERE key = $1', [key]);
-    if (!rows.length) firstRun = true;
-    return rows[0]?.value ?? null;
-  },
-  // Saves are batched: typing fires many changes, and the database is written a moment after they stop.
-  setItem: (key, value) => {
-    pending = { key, value };
-    clearTimeout(timer);
-    timer = window.setTimeout(() => void write(), 300);
-  },
-  removeItem: async (key) => {
-    const d = await open();
-    await d.execute('DELETE FROM kv WHERE key = $1', [key]);
-  },
-};
+/** Replace everything with what was saved (a snapshot, a backup's state, or an undo), keeping what it replaces so the
+ *  restore can be undone. The caller reloads the app afterwards. */
+export async function replaceSaved(key: string, value: string) {
+  if (!readable(value)) throw new Error('That isn’t data Worldline can load.');
+  pending = null;
+  clearTimeout(timer);
+  const current = await kv.get(key).catch(() => null);
+  if (current && readable(current)) await kv.set(key + BEFORE_RESTORE, current);
+  await kv.set(key, value);
+  loadProblem = null;
+}
 
-/** The storage the app's state is saved to. */
-export const appStorage = (): StateStorage => (isApp() ? sqlite : localStorage);
+/** What the last restore replaced (to undo it), if anything. */
+export const beforeRestore = (key: string) => kv.get(key + BEFORE_RESTORE).then((v) => (v && readable(v) ? v : null)).catch(() => null);
+
+/** Start over from the recovery screen: an empty calendar; the unreadable data stays kept aside. */
+export async function startOverKeepingUnreadable(key: string) {
+  await kv.del(key).catch(() => undefined);
+  loadProblem = null;
+}
 
 if (isApp()) {
   // don't lose the last few keystrokes when the window goes away

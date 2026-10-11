@@ -13,6 +13,7 @@ export interface AppSettings {
   hour24: boolean;
   startPage: StartPage;
   keepRunning: boolean; // closing the window keeps the app running (the Mac app)
+  autoUpdate: boolean; // check for (and download) new versions once a day (the Mac app)
   // Appearance (the theme itself stays `theme`: 'system' = follow the Mac, using these two)
   themeLight: ThemeId;
   themeDark: ThemeId;
@@ -40,6 +41,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   hour24: false,
   startPage: 'last',
   keepRunning: true,
+  autoUpdate: true,
   themeLight: 'light',
   themeDark: 'dark',
   eventStyle: 'filled',
@@ -75,6 +77,7 @@ export function normalizeSettings(raw: unknown): AppSettings {
     hour24: bool(r.hour24, d.hour24),
     startPage: (['last', 'calendar', 'habits', 'projects'] as const).includes(r.startPage as StartPage) ? (r.startPage as StartPage) : d.startPage,
     keepRunning: bool(r.keepRunning, d.keepRunning),
+    autoUpdate: bool(r.autoUpdate, d.autoUpdate),
     themeLight: LIGHT.has(r.themeLight as ThemeId) ? (r.themeLight as ThemeId) : d.themeLight,
     themeDark: DARK.has(r.themeDark as ThemeId) ? (r.themeDark as ThemeId) : d.themeDark,
     eventStyle: r.eventStyle === 'stripe' ? 'stripe' : 'filled',

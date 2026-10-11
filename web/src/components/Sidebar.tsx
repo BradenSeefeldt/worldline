@@ -13,6 +13,7 @@ import { TasksBody, useTaskSummary } from './TasksSection';
 import { justDragged, startBlockDrag } from './BlockDrag';
 import { SchedulingBody } from './Scheduling';
 import { landingIndex, moveTo, orderedIds, shiftFor } from '../lib/reorder';
+import { restartToUpdate } from '../lib/updates';
 
 function MiniMonth() {
   const range = useStore((s) => s.visibleRange);
@@ -504,6 +505,17 @@ function useCardDrag(order: string[]) {
   return { box, slot };
 }
 
+/** A new version has been downloaded: one quiet button to restart into it. */
+function UpdateReady() {
+  const u = useStore((s) => s.update);
+  if (u.state !== 'ready') return null;
+  return (
+    <button className="side-update" onClick={() => void restartToUpdate()} title="Everything is saved first">
+      ↻ Update to {u.version} · Restart
+    </button>
+  );
+}
+
 export function Sidebar() {
   const saved = useStore((s) => s.sideOrder);
   const order = useMemo(() => orderedIds(saved, CARD_IDS), [saved]);
@@ -518,6 +530,7 @@ export function Sidebar() {
           {CARDS[id]()}
         </div>
       ))}
+      <UpdateReady />
       <button className="side-settings" onClick={() => useStore.getState().openSettings('general')} title="Settings (⌘,)">
         <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden>
           <circle cx="8" cy="8" r="2.2" />

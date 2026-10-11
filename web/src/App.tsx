@@ -16,6 +16,9 @@ import { useMediaQuery } from './lib/hooks';
 import { cls } from './lib/format';
 import { applyTheme } from './lib/theme';
 import { localZone, zoneAbbr, zoneCity } from './lib/zone';
+import { onSaveTrouble } from './data/persist';
+import { checkForUpdate } from './lib/updates';
+import { isApp } from './lib/platform';
 
 // The Projects tab brings a document editor with it: load it the first time it's opened.
 const ProjectsPage = lazy(() => import('./components/Projects').then((m) => ({ default: m.ProjectsPage })));
@@ -49,6 +52,25 @@ export default function App() {
   const phone = useMediaQuery('(max-width: 699px)');
   const navSeq = useStore((s) => s.nav.seq);
   const zone = useStore((s) => s.zone);
+
+  // Automatic updates (the Mac app): a first look a minute after launch, then once a day.
+  const autoUpdate = useStore((s) => s.settings.autoUpdate);
+  useEffect(() => {
+    if (!isApp() || !autoUpdate) return;
+    const look = () => void checkForUpdate(useStore.getState().setUpdate);
+    const first = setTimeout(look, 60_000);
+    const daily = setInterval(look, 24 * 3_600_000);
+    return () => {
+      clearTimeout(first);
+      clearInterval(daily);
+    };
+  }, [autoUpdate]);
+
+  // Saving failed (disk full, database locked…): say so once; it keeps trying and says when it works again.
+  useEffect(
+    () => onSaveTrouble((ok) => useStore.getState().showToast(ok ? 'Saving works again — everything is saved' : 'Couldn’t save your latest changes — trying again…', false)),
+    [],
+  );
 
   // Notice when this computer's time zone changes (you landed somewhere): check every 30 s
   // and whenever the app comes back to the foreground.

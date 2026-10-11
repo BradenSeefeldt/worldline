@@ -1,6 +1,6 @@
 // The native side of the app: a window showing the web app, plus plugins — sql (the SQLite database the app saves
 // to), http (fetching calendar links), opener (links → browser, folders → Finder), dialog (the Save panel for backups
-// and exports), autostart (Settings → Open at login).
+// and exports), autostart (Settings → Open at login), updater + process (download a signed new version, restart into it).
 // Closing the window: the web app decides (Settings → General → Keep running): by default it hides the window and the
 // app keeps running (like Calendar or Mail), so scheduling links stay live; ⌘Q quits; the Dock icon brings it back.
 use tauri::Manager;
@@ -19,6 +19,8 @@ pub fn run() {
     .plugin(tauri_plugin_opener::init())
     .plugin(tauri_plugin_dialog::init())
     .plugin(tauri_plugin_autostart::init(tauri_plugin_autostart::MacosLauncher::LaunchAgent, None))
+    .plugin(tauri_plugin_updater::Builder::new().build())
+    .plugin(tauri_plugin_process::init())
     .invoke_handler(tauri::generate_handler![save_text])
     .setup(|app| {
       if cfg!(debug_assertions) {

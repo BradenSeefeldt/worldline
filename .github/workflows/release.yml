@@ -2,6 +2,9 @@
 # Runs when a version tag is pushed (git tag v0.1.0 && git push origin v0.1.0), or by hand from the Actions tab.
 # The app is built for both Apple Silicon and Intel Macs (a "universal" app). It isn't signed with a paid Apple
 # Developer ID, so on first launch users choose Open Anyway (System Settings → Privacy & Security) — see the README.
+# Automatic updates: the build is also packed as Worldline.app.tar.gz, signed with the update key (the
+# TAURI_SIGNING_PRIVATE_KEY secret; its public half is in tauri.conf.json), and described in latest.json. Installed
+# apps read latest.json from the newest *published* release, so publishing the draft is what ships an update.
 name: Release
 
 on:
@@ -45,6 +48,8 @@ jobs:
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           projectPath: web
           tagName: ${{ github.ref_name }}
@@ -54,6 +59,10 @@ jobs:
 
             First launch: macOS says it can't verify the app (it isn't signed with a paid Apple Developer ID).
             Open **System Settings → Privacy & Security**, scroll down, and click **Open Anyway** — once.
+
+            Already have Worldline? It updates itself: within a day you'll see **Update ready · Restart** in the sidebar
+            (or Settings → About → Check for updates).
           releaseDraft: true
           prerelease: false
-          args: --target universal-apple-darwin --bundles app,dmg
+          includeUpdaterJson: true
+          args: --target universal-apple-darwin --bundles app,dmg --config '{"bundle":{"createUpdaterArtifacts":true}}'

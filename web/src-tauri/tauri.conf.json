@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "Worldline",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "identifier": "io.github.bradenseefeldt.worldline",
   "build": {
     "frontendDist": "../dist",
@@ -21,7 +21,10 @@
         "resizable": true,
         "titleBarStyle": "Overlay",
         "hiddenTitle": true,
-        "trafficLightPosition": { "x": 18, "y": 22 },
+        "trafficLightPosition": {
+          "x": 18,
+          "y": 22
+        },
         "dragDropEnabled": false
       }
     ],
@@ -31,14 +34,31 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["app", "dmg"],
+    "targets": [
+      "app",
+      "dmg"
+    ],
     "category": "Productivity",
-    "shortDescription": "Your calendar, habits and research projects — on your Mac, offline",
+    "shortDescription": "Your calendar, habits and research projects \u2014 on your Mac, offline",
     "copyright": "Free to use",
-    "icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.icns", "icons/icon.png"],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.png"
+    ],
     "macOS": {
       "minimumSystemVersion": "11.0",
       "signingIdentity": "-"
+    }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDNCRjAyRTBEM0JGOThEQkEKUldTNmpmazdEUzd3Ty9iYzhjSU1Jc3JnTXFKL1czaXZyY3JlN2ltN2NDMjlTUTFtN3RTNHBJeWMK",
+      "endpoints": [
+        "https://github.com/BradenSeefeldt/worldline/releases/latest/download/latest.json"
+      ]
     }
   }
 }

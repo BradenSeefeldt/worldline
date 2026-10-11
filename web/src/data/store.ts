@@ -19,8 +19,10 @@ import { newLinkKeys, type Accept, type Decision } from '../lib/schedwire';
 import { endSeries, removeEvent, updateEvent, type Scope } from '../lib/mutate';
 import { normalizeFeedUrl, parseIcs } from '../lib/ics';
 import { fetchText, isApp } from '../lib/platform';
-import { appStorage } from './persist';
+import { appStorage, markLoadProblem } from './persist';
 import { fmtWhen } from '../lib/format';
+import { STORE_VERSION } from './storeVersion';
+import type { UpdateStatus } from '../lib/updates';
 
 export const DRAFT_ID = '__draft__';
 export const DAYS_IN_VIEW: Record<Exclude<ViewMode, 'month'>, number> = { day: 1, '3day': 3, week: 7 };
@@ -157,6 +159,8 @@ interface State {
   settings: AppSettings; // everything else in Settings (data/settings.ts)
   setSettings: (patch: Partial<AppSettings>) => void;
   settingsOpen: string | null; // which Settings section is open (null = closed)
+  update: UpdateStatus; // automatic updates (lib/updates.ts; not saved)
+  setUpdate: (u: UpdateStatus) => void;
   openSettings: (section: string | null) => void;
   setTheme: (t: ThemeId) => void;
   setPage: (p: 'calendar' | 'habits' | 'projects') => void;
@@ -339,6 +343,7 @@ export const useStore = create<State>()(
         sideOrder: [],
         settings: DEFAULT_SETTINGS,
         settingsOpen: null,
+        update: { state: 'idle' },
         past: [],
         future: [],
         pendingId: null,
@@ -759,6 +764,7 @@ export const useStore = create<State>()(
         setTheme: (theme) => set({ theme }),
         setSettings: (patch) => set((x) => ({ settings: normalizeSettings({ ...x.settings, ...patch }) })),
         openSettings: (settingsOpen) => set({ settingsOpen }),
+        setUpdate: (update) => set({ update }),
         addHabit: (h) => {
           record();
           const id = newId();
@@ -896,7 +902,7 @@ export const useStore = create<State>()(
     {
       name: 'calendar-v1',
       storage: createJSONStorage(appStorage), // the Mac app: a SQLite file; a browser: localStorage (data/persist.ts)
-      version: 2,
+      version: STORE_VERSION,
       // v1: the demo habits gained years of history (only swapped while they're the untouched demo set).
       // v2: Projects became pages you write in (About, steps, waiting-on and notes folded into editor documents).
       //     The untouched demo projects are swapped for the new demo; anything else is converted, losing nothing.
@@ -909,6 +915,10 @@ export const useStore = create<State>()(
           Object.assign(p, demoOnly ? makeDemoProjects() : migrateV1(v1));
         }
         return p as State;
+      },
+      // the saved data couldn't be loaded (a migration failed): the recovery screen takes over, nothing is saved
+      onRehydrateStorage: () => (_state, error) => {
+        if (error) markLoadProblem(`Your saved data couldn’t be loaded (${String((error as Error)?.message ?? error).slice(0, 160)}).`);
       },
       // settings saved by an older version (or none): fill in the rest from the defaults
       merge: (persisted, current) => {

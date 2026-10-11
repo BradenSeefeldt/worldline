@@ -15,10 +15,11 @@ import { ask } from './Confirm';
 import { THEMES, resolveTheme, type ThemeId } from '../lib/theme';
 import { cls, fmtTime } from '../lib/format';
 import { APP_VERSION, autostart, fetchText, isApp, openExternal, saveFile } from '../lib/platform';
-import { listSnapshots, replaceSaved, snapshotValue } from '../data/persist';
+import { beforeRestore, listSnapshots, replaceSaved, snapshotValue } from '../data/persist';
 import { isNewer, makeBackup, readBackup } from '../lib/backup';
 import { toIcs } from '../lib/icsExport';
 import { relayHealth } from '../data/schedSync';
+import { checkForUpdate, restartToUpdate } from '../lib/updates';
 
 const REPO = 'BradenSeefeldt/worldline';
 const STORE_KEY = 'calendar-v1';
@@ -446,6 +447,14 @@ function DataPane() {
   const [msg, setMsg] = useState<{ text: string; bad?: boolean } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   useEffect(() => void listSnapshots().then((d) => { setDays(d); setDay(d[0] ?? ''); }), []);
+  const [undoable, setUndoable] = useState(false);
+  useEffect(() => void beforeRestore(STORE_KEY).then((v) => setUndoable(!!v)), []);
+  const undoRestore = async () => {
+    const v = await beforeRestore(STORE_KEY);
+    if (!v || !(await ask({ title: 'Undo the last restore?', body: 'Everything goes back to how it was just before you restored.', confirm: 'Undo restore' }))) return;
+    await replaceSaved(STORE_KEY, v);
+    window.location.reload();
+  };
   const opts = useStore.persist.getOptions();
   const storeVersion = opts.version ?? 0;
   const replaceAndReload = async (state: unknown) => {
@@ -493,6 +502,11 @@ function DataPane() {
             ) : <span className="st-muted">None yet</span>}
           </Row>
         )}
+        {undoable && (
+          <Row title="Undo the last restore" note="Go back to how things were just before your last restore">
+            <button className="ce-btn" onClick={() => void undoRestore()}>Undo restore…</button>
+          </Row>
+        )}
         <Row title="Back up everything to a file" note="One .json file you can keep anywhere (a USB stick, iCloud Drive), and restore from">
           <button className="ce-btn" onClick={() => void backup()}>Save backup…</button>
           <button className="ce-btn" onClick={() => fileRef.current?.click()}>Restore from file…</button>
@@ -529,8 +543,11 @@ async function showDataFolder() {
 
 // ---------------------------------------------------------------- About
 function About() {
+  const [s, set] = useSettings();
+  const update = useStore((x) => x.update);
   const [check, setCheck] = useState<{ state: 'idle' | 'checking' | 'current' | 'newer' | 'failed'; latest?: string }>({ state: 'idle' });
   const releases = `https://github.com/${REPO}/releases/latest`;
+  // In a browser (development) there's nothing to install: just say whether a newer release exists.
   const run = async () => {
     setCheck({ state: 'checking' });
     try {
@@ -540,6 +557,15 @@ function About() {
       setCheck({ state: 'failed' });
     }
   };
+  const appNote = {
+    idle: 'Calendar, habits and research projects · free, no account, no server',
+    checking: 'Checking…',
+    current: '✓ This is the newest version.',
+    downloading: `Downloading ${'version' in update ? update.version : ''}…`,
+    ready: `Version ${'version' in update ? update.version : ''} is downloaded — restart to use it.`,
+    failed: `Couldn’t check: ${'error' in update ? update.error : ''}`,
+  }[update.state];
+  const browserNote = check.state === 'current' ? '✓ This is the newest version.' : check.state === 'newer' ? `Version ${check.latest?.replace(/^v/, '')} is available.` : check.state === 'failed' ? 'Couldn’t check (no network?).' : 'Calendar, habits and research projects · free, no account, no server';
   const keys: [string, string[]][] = [
     ['Quick add', ['⌘', 'K']], ['Day / 3 Day / Week / Month', ['D', '3', 'W', 'M']], ['Today · back · forward', ['T', '←', '→']],
     ['Habits · Projects', ['H', 'P']], ['Search projects', ['/']], ['Settings', ['⌘', ',']], ['Undo · redo', ['⌘Z', '⇧⌘Z']],
@@ -548,16 +574,30 @@ function About() {
   return (
     <>
       <Group>
-        <Row
-          title={<span className="st-big">Worldline {APP_VERSION}</span>}
-          note={check.state === 'current' ? '✓ This is the newest version.' : check.state === 'newer' ? `Version ${check.latest?.replace(/^v/, '')} is available.` : check.state === 'failed' ? 'Couldn’t check (no network?).' : 'Calendar, habits and research projects · free, no account, no server'}
-        >
-          {check.state === 'newer' ? (
-            <button className="ce-btn primary" onClick={() => void openExternal(releases)}>Download</button>
-          ) : (
-            <button className="ce-btn primary" disabled={check.state === 'checking'} onClick={() => void run()}>{check.state === 'checking' ? 'Checking…' : 'Check for updates'}</button>
-          )}
-        </Row>
+        {isApp() ? (
+          <>
+            <Row title={<span className="st-big">Worldline {APP_VERSION}</span>} note={appNote}>
+              {update.state === 'ready' ? (
+                <button className="ce-btn primary" onClick={() => void restartToUpdate()}>Restart to update</button>
+              ) : (
+                <button className="ce-btn primary" disabled={update.state === 'checking' || update.state === 'downloading'} onClick={() => void checkForUpdate(useStore.getState().setUpdate)}>
+                  {update.state === 'checking' ? 'Checking…' : update.state === 'downloading' ? 'Downloading…' : 'Check for updates'}
+                </button>
+              )}
+            </Row>
+            <Row title="Check for updates automatically" note="Once a day; a new version downloads in the background and waits for you to restart">
+              <Toggle label="Check for updates automatically" on={s.autoUpdate} onChange={(v) => set({ autoUpdate: v })} />
+            </Row>
+          </>
+        ) : (
+          <Row title={<span className="st-big">Worldline {APP_VERSION}</span>} note={browserNote}>
+            {check.state === 'newer' ? (
+              <button className="ce-btn primary" onClick={() => void openExternal(releases)}>Download</button>
+            ) : (
+              <button className="ce-btn primary" disabled={check.state === 'checking'} onClick={() => void run()}>{check.state === 'checking' ? 'Checking…' : 'Check for updates'}</button>
+            )}
+          </Row>
+        )}
         <Row title="Source code" note={`github.com/${REPO} · MIT licence`}><button className="ce-btn" onClick={() => void openExternal(`https://github.com/${REPO}`)}>Open</button></Row>
       </Group>
       <Group title="Keyboard shortcuts">

@@ -487,9 +487,17 @@ web/                 the front end (React + TypeScript, built with Vite)
 
 Tests: `npm test` · Type-check: `npm run typecheck` · Production build: `npm run build` (all from `web/`).
 
-**Releasing a version:** bump `version` in `web/src-tauri/tauri.conf.json`, commit, then
-`git tag v0.2.0 && git push origin v0.2.0`. GitHub builds the app (Apple Silicon + Intel) and attaches the `.dmg` to a
-draft release; review it and press **Publish**.
+**Releasing a version:** bump `version` in `web/package.json`, `web/src-tauri/tauri.conf.json` and
+`web/src-tauri/Cargo.toml`, commit, then `git tag vX.Y.Z && git push origin vX.Y.Z`. GitHub builds the app (Apple
+Silicon + Intel) and attaches the `.dmg`, the signed update (`Worldline.app.tar.gz` + `.sig`) and `latest.json` to a
+draft release; review it and press **Publish** — installed apps pick the update up within a day.
+
+**Automatic updates:** the app checks the newest published release a minute after launch and then daily, downloads a
+newer version in the background, and shows **Update ready · Restart** in the sidebar (Settings → About to check now or
+turn it off). Updates are signed: the private key is in `~/.tauri/worldline.key` (password beside it) on the
+maintainer's Mac and in the repo's `TAURI_SIGNING_PRIVATE_KEY` / `_PASSWORD` secrets; the app only accepts updates
+signed with it (public key in `tauri.conf.json`). **Keep a copy of that key** — without it, installed apps can't be
+updated (they'd need a manual reinstall).
 
 ## Roadmap
 
