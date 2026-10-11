@@ -13,13 +13,14 @@ import { Close } from './Icons';
 import { downloadHabitsCsv } from './Habits';
 import { ask } from './Confirm';
 import { THEMES, resolveTheme, type ThemeId } from '../lib/theme';
-import { cls, fmtTime } from '../lib/format';
+import { cls, fmtTime, fmtWhen } from '../lib/format';
 import { APP_VERSION, autostart, fetchText, isApp, openExternal, saveFile, uninstallApp } from '../lib/platform';
 import { beforeRestore, listSnapshots, replaceSaved, snapshotValue } from '../data/persist';
 import { isNewer, makeBackup, readBackup } from '../lib/backup';
 import { toIcs } from '../lib/icsExport';
 import { relayHealth } from '../data/schedSync';
 import { checkForUpdate, restartToUpdate } from '../lib/updates';
+import { SyncSettings } from './SyncSettings';
 
 const REPO = 'BradenSeefeldt/worldline';
 const STORE_KEY = 'calendar-v1';
@@ -32,6 +33,7 @@ const SECTIONS: { id: string; title: string; icon: string; color: string; words:
   { id: 'tasks', title: 'Tasks & Deadlines', icon: '✓', color: '#0a84ff', words: 'deadline due time runway suggestions nudge overdue focus block regular meeting' },
   { id: 'habits', title: 'Habits', icon: '◔', color: '#ff9f0a', words: 'habits calendar count nudge weekly export csv' },
   { id: 'scheduling', title: 'Scheduling', icon: '◷', color: '#af52de', words: 'scheduling booking link poll length hours single use buffer notice relays' },
+  { id: 'sync', title: 'Sync', icon: '⇄', color: '#00a3a3', words: 'sync iphone phone devices pair pairing qr code join mac' },
   { id: 'data', title: 'Data & Backups', icon: '⛁', color: '#636366', words: 'data backup restore snapshot export ics csv finder erase demo' },
   { id: 'about', title: 'About', icon: 'ⓘ', color: '#30b0c7', words: 'about version update source code licence keyboard shortcuts' },
 ];
@@ -135,6 +137,7 @@ export function Settings() {
             {current.id === 'tasks' && <TasksPane />}
             {current.id === 'habits' && <HabitsPane />}
             {current.id === 'scheduling' && <SchedulingPane />}
+            {current.id === 'sync' && <SyncSettings />}
             {current.id === 'data' && <DataPane />}
             {current.id === 'about' && <About />}
           </div>
@@ -468,7 +471,7 @@ function DataPane() {
   const restoreFile = async (f: File) => {
     const r = readBackup(await f.text(), storeVersion);
     if (!r.ok) return setMsg({ text: r.reason, bad: true });
-    if (!(await ask({ title: 'Restore this backup?', body: `Everything is replaced with the backup from ${new Date(r.backup.savedAt).toLocaleString()}. Save a backup of what you have now first if you might want it.`, confirm: 'Restore', danger: true }))) return;
+    if (!(await ask({ title: 'Restore this backup?', body: `Everything is replaced with the backup from ${fmtWhen(new Date(r.backup.savedAt).getTime())}. Save a backup of what you have now first if you might want it.`, confirm: 'Restore', danger: true }))) return;
     await replaceAndReload(r.backup.state);
   };
   const restoreSnapshot = async () => {

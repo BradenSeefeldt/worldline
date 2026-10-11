@@ -192,7 +192,7 @@ export function QuickAdd() {
     reveal(start, recurrence ? undefined : id);
     st().showToast(
       deadline
-        ? `Added deadline “${title}” · due ${format(start, 'EEE MMM d, h:mm a')}`
+        ? `Added deadline “${title}” · due ${`${format(start, 'EEE MMM d')}, ${fmtTime(start)}`}`
         : recurrence ? `Added “${title}” · ${describeRecurrence(recurrence, start)}` : `Added “${title}” · ${format(start, 'EEE MMM d')}`,
       true,
       recurrence ? undefined : id,
@@ -248,7 +248,7 @@ export function QuickAdd() {
       return;
     }
     reveal(first.start, one && !one.seriesId ? one.id : undefined);
-    const when = first.allDay ? format(first.start, 'EEE MMM d') : format(first.start, 'EEE MMM d, h:mm a');
+    const when = first.allDay ? format(first.start, 'EEE MMM d') : `${format(first.start, 'EEE MMM d')}, ${fmtTime(first.start)}`;
     st().showToast(
       cmd.kind === 'move' ? `Moved ${name} → ${when}` : cmd.kind === 'shift' ? `Shifted ${name} ${cmd.summary}` : `Made ${name} ${cmd.summary}`,
       true,
@@ -421,7 +421,7 @@ export function QuickAdd() {
                       </span>
                       <span className="qa-when">
                         <span className={cls(change || cmd.kind === 'delete' ? 'qa-old' : undefined)}>
-                          {ev.kind === 'deadline' ? `⚑ due ${format(ev.start, 'EEE MMM d, h:mm a')} · ${countdown(ev)}` : old}
+                          {ev.kind === 'deadline' ? `⚑ due ${`${format(ev.start, 'EEE MMM d')}, ${fmtTime(ev.start)}`} · ${countdown(ev)}` : old}
                         </span>
                         {next && (
                           <>

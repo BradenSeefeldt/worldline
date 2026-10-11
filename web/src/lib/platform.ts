@@ -92,3 +92,8 @@ export async function uninstallApp() {
   const { invoke } = await import('@tauri-apps/api/core');
   await invoke('uninstall');
 }
+
+/** Can this copy fetch calendar links (.ics) itself? The Mac app can (and development, through the dev server); the
+ *  web / iPhone version can't — browsers can't read other sites' feeds — so its subscribed calendars come from the Mac
+ *  through sync. */
+export const canFetchFeeds = () => isApp() || import.meta.env.DEV;

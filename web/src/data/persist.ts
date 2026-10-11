@@ -1,6 +1,7 @@
 // Where the app keeps your data. In the Mac app: a SQLite database — one file, worldline.db, in the app's own folder
 // (~/Library/Application Support/<app id>/), written atomically, with a snapshot of each day's data kept for two
-// weeks as a safety net. In a browser (development): the browser's localStorage, as before.
+// weeks as a safety net. In a browser (the iPhone / web version, and development): the browser's IndexedDB (no 5 MB
+// cap like localStorage; anything saved in localStorage by an older version is moved over once).
 //
 // Safeguards:
 //   · Saved data that can't be read (damaged, or the database won't open) is never written over: saving stops, the
@@ -9,7 +10,24 @@
 //   · A save that fails is kept and tried again (every few seconds, and on the next change); the app is told, once.
 //   · Restoring (a snapshot or a backup file) first keeps what it replaces, so the restore can be undone.
 import type { StateStorage } from 'zustand/middleware';
+import { get as idbGet, set as idbSet, del as idbDel } from 'idb-keyval';
 import { isApp } from '../lib/platform';
+
+// The browser's database (IndexedDB). Tests and very old browsers without it fall back to localStorage.
+const hasIdb = typeof indexedDB !== 'undefined';
+const browserGet = async (key: string): Promise<string | null> => {
+  if (!hasIdb) return localStorage.getItem(key);
+  const v = await idbGet<string>(key);
+  if (v !== undefined) return v;
+  const old = localStorage.getItem(key); // saved by an older version: move it over
+  if (old !== null) {
+    await idbSet(key, old);
+    localStorage.removeItem(key);
+  }
+  return old;
+};
+const browserSet = (key: string, value: string) => (hasIdb ? idbSet(key, value) : Promise.resolve(localStorage.setItem(key, value)));
+const browserDel = (key: string) => (hasIdb ? idbDel(key) : Promise.resolve(localStorage.removeItem(key)));
 
 type Db = { execute: (sql: string, args?: unknown[]) => Promise<unknown>; select: <T>(sql: string, args?: unknown[]) => Promise<T> };
 let db: Promise<Db> | null = null;
@@ -47,12 +65,12 @@ export function readable(value: string): boolean {
 // ---- the two places data can live: the database (the app) or localStorage (a browser)
 const kv = {
   get: async (key: string): Promise<string | null> => {
-    if (!isApp()) return localStorage.getItem(key);
+    if (!isApp()) return browserGet(key);
     const d = await open();
     return (await d.select<{ value: string }[]>('SELECT value FROM kv WHERE key = $1', [key]))[0]?.value ?? null;
   },
   set: async (key: string, value: string, snapshot = false) => {
-    if (!isApp()) return localStorage.setItem(key, value);
+    if (!isApp()) return browserSet(key, value);
     const d = await open();
     await d.execute('INSERT INTO kv (key, value, updated) VALUES ($1, $2, $3) ON CONFLICT(key) DO UPDATE SET value = $2, updated = $3', [key, value, Date.now()]);
     if (!snapshot) return;
@@ -62,7 +80,7 @@ const kv = {
     await d.execute('DELETE FROM snapshots WHERE day NOT IN (SELECT day FROM snapshots ORDER BY day DESC LIMIT 14)');
   },
   del: async (key: string) => {
-    if (!isApp()) return localStorage.removeItem(key);
+    if (!isApp()) return browserDel(key);
     const d = await open();
     await d.execute('DELETE FROM kv WHERE key = $1', [key]);
   },
@@ -128,6 +146,9 @@ const storage: StateStorage = {
   },
   removeItem: (key) => kv.del(key),
 };
+
+/** Other things kept beside the app's state, never in it (so never in a backup): the sync key, the sync document. */
+export const sideStore = { get: kv.get, set: (key: string, value: string) => kv.set(key, value), del: kv.del };
 
 /** The storage the app's state is saved to. */
 export const appStorage = (): StateStorage => storage;

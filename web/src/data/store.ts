@@ -18,11 +18,13 @@ import { isFinished, newLink, type BookingLink, type LinkMode, type PollResponse
 import { newLinkKeys, type Accept, type Decision } from '../lib/schedwire';
 import { endSeries, removeEvent, updateEvent, type Scope } from '../lib/mutate';
 import { normalizeFeedUrl, parseIcs } from '../lib/ics';
-import { fetchText, isApp } from '../lib/platform';
+import { fetchText, canFetchFeeds } from '../lib/platform';
 import { appStorage, markLoadProblem } from './persist';
 import { fmtWhen } from '../lib/format';
 import { STORE_VERSION } from './storeVersion';
 import type { UpdateStatus } from '../lib/updates';
+import { rebaseList, rebaseNested } from '../lib/sync/rebase';
+import type { SyncStatus } from '../lib/sync/status';
 
 export const DRAFT_ID = '__draft__';
 export const DAYS_IN_VIEW: Record<Exclude<ViewMode, 'month'>, number> = { day: 1, '3day': 3, week: 7 };
@@ -160,6 +162,10 @@ interface State {
   setSettings: (patch: Partial<AppSettings>) => void;
   settingsOpen: string | null; // which Settings section is open (null = closed)
   update: UpdateStatus; // automatic updates (lib/updates.ts; not saved)
+  sync: SyncStatus; // syncing between your devices (data/syncEngine.ts; not saved)
+  setSync: (s: Partial<SyncStatus>) => void;
+  /** Changes from another device: replace those parts of the state, and move the undo history onto them. */
+  applySynced: (patch: Partial<Record<string, unknown>>) => void;
   setUpdate: (u: UpdateStatus) => void;
   openSettings: (section: string | null) => void;
   setTheme: (t: ThemeId) => void;
@@ -344,6 +350,7 @@ export const useStore = create<State>()(
         settings: DEFAULT_SETTINGS,
         settingsOpen: null,
         update: { state: 'idle' },
+        sync: { on: false, state: 'off', devices: {}, lastIn: 0, lastOut: 0 },
         past: [],
         future: [],
         pendingId: null,
@@ -387,7 +394,7 @@ export const useStore = create<State>()(
         },
         refreshCalendar: async (id) => {
           const cal = get().calendars.find((c) => c.id === id);
-          if (!cal?.url) return;
+          if (!cal?.url || !canFetchFeeds()) return; // the iPhone / web version: your Mac keeps it up to date, through sync
           const patch = (p: Partial<CalendarSource>) => set((s) => ({ calendars: s.calendars.map((c) => (c.id === id ? { ...c, ...p } : c)) }));
           try {
             const text = await fetchText(cal.url);
@@ -765,6 +772,25 @@ export const useStore = create<State>()(
         setSettings: (patch) => set((x) => ({ settings: normalizeSettings({ ...x.settings, ...patch }) })),
         openSettings: (settingsOpen) => set({ settingsOpen }),
         setUpdate: (update) => set({ update }),
+        setSync: (patch) => set((x) => ({ sync: { ...x.sync, ...patch } })),
+        applySynced: (patch) => {
+          const x = get();
+          const lists = ['events', 'calendars', 'tasks', 'habits', 'projects', 'threads', 'projectLog'] as const;
+          const maps = ['habitLog', 'habitNotes'] as const;
+          const move = (snap: Snapshot): Snapshot => {
+            const out = { ...snap } as Record<string, unknown>;
+            for (const k of lists) if (patch[k]) out[k] = rebaseList(snap[k] as { id: string }[], x[k] as { id: string }[], patch[k] as { id: string }[]);
+            for (const k of maps) if (patch[k]) out[k] = rebaseNested(snap[k] as Record<string, unknown>, x[k] as Record<string, unknown>, patch[k] as Record<string, unknown>);
+            return out as unknown as Snapshot;
+          };
+          const { settings, ...rest } = patch as { settings?: Partial<AppSettings> } & Record<string, unknown>;
+          set({
+            ...(rest as Partial<State>),
+            ...(settings ? { settings: normalizeSettings({ ...x.settings, ...settings }) } : {}),
+            past: x.past.map(move),
+            future: x.future.map(move),
+          });
+        },
         addHabit: (h) => {
           record();
           const id = newId();
@@ -955,12 +981,6 @@ export const useStore = create<State>()(
     },
   ),
 );
-
-// Another tab changed the saved data (development: the app open in two tabs): reload it here.
-if (typeof window !== 'undefined' && !isApp())
-  window.addEventListener('storage', (e) => {
-    if (e.key === 'calendar-v1') void useStore.persist.rehydrate();
-  });
 
 // The settings plain helpers need (week start, 24-hour time, parser defaults) — copied over whenever they change.
 const applyPrefs = (s: AppSettings) =>
