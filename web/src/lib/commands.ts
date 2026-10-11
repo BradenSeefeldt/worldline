@@ -10,7 +10,7 @@
 import { addDays, startOfDay, startOfWeek } from 'date-fns';
 import type { CalEvent, CalendarSource, Recurrence } from '../data/types';
 import { parseQuick } from './quickparse';
-import { MIN, minutesOfDay } from './dates';
+import { MIN, minutesOfDay, weekStart } from './dates';
 import { typoDistance } from './fuzzy';
 
 export type CommandKind = 'delete' | 'move' | 'shift' | 'resize' | 'done';
@@ -86,7 +86,7 @@ function analyze(phrase: string, calendars: CalendarSource[], now: Date): Analys
 
   let scope: [number, number] | undefined;
   t = t.replace(/\b(this|next|last)\s+week(?:['’]s)?\b/i, (_, which: string) => {
-    const base = addDays(startOfWeek(now, { weekStartsOn: 1 }), which === 'next' ? 7 : which === 'last' ? -7 : 0);
+    const base = addDays(startOfWeek(now, { weekStartsOn: weekStart() }), which === 'next' ? 7 : which === 'last' ? -7 : 0);
     scope = [base.getTime(), addDays(base, 7).getTime()];
     return ' ';
   });

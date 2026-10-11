@@ -3,6 +3,7 @@
 // the picker opens.
 import { fmtOffset, zoneAbbr, zoneCity, zoneOffset } from './zone';
 import { typoDistance } from './fuzzy';
+import { prefs } from './prefs';
 
 export interface City {
   city: string;
@@ -164,4 +165,4 @@ export function describeZone(tz: string, t = Date.now()) {
 }
 
 /** Local time there right now: "7:42 PM" */
-export const timeIn = (tz: string, t = Date.now()) => new Intl.DateTimeFormat('en-US', { timeZone: tz, hour: 'numeric', minute: '2-digit' }).format(t);
+export const timeIn = (tz: string, t = Date.now()) => new Intl.DateTimeFormat('en-US', { timeZone: tz, hour: 'numeric', minute: '2-digit', hour12: !prefs.hour24 }).format(t);

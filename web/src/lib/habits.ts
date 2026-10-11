@@ -7,6 +7,7 @@
 // met while you stay at or under the limit — a clean day is a success without touching anything).
 import type { CalEvent } from '../data/types';
 import { epochDay, fromEpochDay } from './zone';
+import { prefs } from './prefs';
 
 export interface Habit {
   id: string;
@@ -58,7 +59,7 @@ export const canMatch = (h: Pick<Habit, 'kind' | 'unit'>) => h.kind === 'check' 
 export function calendarCredit(h: Habit, events: CalEvent[], now = Date.now()): Credit {
   const out: Credit = new Map();
   const q = (h.match ?? '').trim().toLowerCase();
-  if (!q || !canMatch(h)) return out;
+  if (!q || !canMatch(h) || !prefs.habitsFromCalendar) return out; // off in Settings → Habits
   const per = timeUnit(h.unit);
   for (const e of events) {
     if (e.kind === 'deadline' || e.kind === 'task' || e.allDay || e.end > now || !e.title.toLowerCase().includes(q)) continue;

@@ -8,6 +8,8 @@ import { DEFAULT_CALENDARS, DEMO_HABIT_IDS, makeDemoEvents, makeDemoHabits, make
 import { appendItem, docOf, emptyDoc, isEmptyDoc, migrateV1, removeAt, setAttrsAt, textToDoc, todaysNote, todoNode, type DocNode, type IdeaRow, type LogEntry, type Project, type Source, type Thread } from '../lib/projects';
 import type { Habit, HabitLog, HabitNotes } from '../lib/habits';
 import type { ThemeId } from '../lib/theme';
+import { DEFAULT_SETTINGS, normalizeSettings, type AppSettings } from './settings';
+import { setPrefs } from '../lib/prefs';
 import { seriesKey, type Skip } from '../lib/suggest';
 import { encodeEvent, resolveEvent } from '../lib/recurrence';
 import { encodeDay, localZone } from '../lib/zone';
@@ -18,6 +20,7 @@ import { endSeries, removeEvent, updateEvent, type Scope } from '../lib/mutate';
 import { normalizeFeedUrl, parseIcs } from '../lib/ics';
 import { fetchText, isApp } from '../lib/platform';
 import { appStorage } from './persist';
+import { fmtWhen } from '../lib/format';
 
 export const DRAFT_ID = '__draft__';
 export const DAYS_IN_VIEW: Record<Exclude<ViewMode, 'month'>, number> = { day: 1, '3day': 3, week: 7 };
@@ -150,7 +153,11 @@ interface State {
   removeIdea: (projectId: string, ideaId: string) => void;
   /** Start working on an idea: it becomes a thread (and leaves the ideas). Returns the thread's id. */
   startIdea: (projectId: string, row: IdeaRow) => string;
-  theme: ThemeId; // Settings → Appearance
+  theme: ThemeId; // Settings → Appearance ('system' = follow the Mac, with settings.themeLight / themeDark)
+  settings: AppSettings; // everything else in Settings (data/settings.ts)
+  setSettings: (patch: Partial<AppSettings>) => void;
+  settingsOpen: string | null; // which Settings section is open (null = closed)
+  openSettings: (section: string | null) => void;
   setTheme: (t: ThemeId) => void;
   setPage: (p: 'calendar' | 'habits' | 'projects') => void;
   addHabit: (h: Omit<Habit, 'id' | 'createdAt'>) => string;
@@ -330,6 +337,8 @@ export const useStore = create<State>()(
         showTasks: true,
         collapsed: {},
         sideOrder: [],
+        settings: DEFAULT_SETTINGS,
+        settingsOpen: null,
         past: [],
         future: [],
         pendingId: null,
@@ -441,7 +450,13 @@ export const useStore = create<State>()(
         createLink: (mode) => {
           const s = get();
           const id = Math.random().toString(36).slice(2, 10);
-          const link = { ...newLink({ id, mode, hostName: '', calendars: s.calendars, calendarId: newEventCalendarId(s), timeZone: s.homeZone }), nostr: newLinkKeys() }; // name comes from Settings
+          const d = s.settings.linkDefaults; // Settings → Scheduling
+          const link = {
+            ...newLink({ id, mode, hostName: '', calendars: s.calendars, calendarId: newEventCalendarId(s), timeZone: s.homeZone }), // name comes from Settings
+            durationMin: d.durationMin, windowStart: d.windowStart, windowEnd: d.windowEnd, bufferMin: d.bufferMin, noticeMin: d.noticeMin,
+            singleUse: mode === 'book' && d.singleUse,
+            nostr: newLinkKeys(),
+          };
           set((x) => ({ links: [link, ...x.links] }));
           return id;
         },
@@ -513,7 +528,7 @@ export const useStore = create<State>()(
           set((x) => ({ events: [...x.events, ev], links: x.links.map((l) => (l.id === linkId ? { ...l, closed: true, finalStart: start } : l)) }));
           get().flash(id);
           get().goTo(start);
-          get().showToast(`Scheduled “${link.title}” · ${new Date(start).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}`, true, id);
+          get().showToast(`Scheduled “${link.title}” · ${fmtWhen(start)}`, true, id);
         },
         addTask: ({ title, due, parentId }) => {
           record();
@@ -742,6 +757,8 @@ export const useStore = create<State>()(
           return id;
         },
         setTheme: (theme) => set({ theme }),
+        setSettings: (patch) => set((x) => ({ settings: normalizeSettings({ ...x.settings, ...patch }) })),
+        openSettings: (settingsOpen) => set({ settingsOpen }),
         addHabit: (h) => {
           record();
           const id = newId();
@@ -893,6 +910,11 @@ export const useStore = create<State>()(
         }
         return p as State;
       },
+      // settings saved by an older version (or none): fill in the rest from the defaults
+      merge: (persisted, current) => {
+        const p = (persisted ?? {}) as Partial<State>;
+        return { ...current, ...p, settings: normalizeSettings(p.settings) };
+      },
       partialize: (s) => ({
         calendars: s.calendars,
         events: s.events,
@@ -907,6 +929,7 @@ export const useStore = create<State>()(
         showTasks: s.showTasks,
         collapsed: s.collapsed,
         sideOrder: s.sideOrder,
+        settings: s.settings,
         tasks: s.tasks,
         habits: s.habits,
         habitLog: s.habitLog,
@@ -928,3 +951,9 @@ if (typeof window !== 'undefined' && !isApp())
   window.addEventListener('storage', (e) => {
     if (e.key === 'calendar-v1') void useStore.persist.rehydrate();
   });
+
+// The settings plain helpers need (week start, 24-hour time, parser defaults) — copied over whenever they change.
+const applyPrefs = (s: AppSettings) =>
+  setPrefs({ weekStartsOn: s.weekStartsOn, hour24: s.hour24, defaultEventMin: s.defaultEventMin, dueMinutes: s.dueMinutes, leadDays: s.leadDays, habitsFromCalendar: s.habitsFromCalendar });
+applyPrefs(useStore.getState().settings);
+useStore.subscribe((s, p) => s.settings !== p.settings && applyPrefs(s.settings));

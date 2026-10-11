@@ -8,12 +8,12 @@ import { CALENDAR_COLORS, useStore } from '../data/store';
 import { cls } from '../lib/format';
 import { Close, Trash } from './Icons';
 
-export function CalendarEditor({ id, onClose }: { id: string | 'new'; onClose: () => void }) {
+export function CalendarEditor({ id, onClose, mode: startMode = 'new' }: { id: string | 'new'; onClose: () => void; mode?: 'new' | 'subscribe' | 'import' }) {
   const calendars = useStore((s) => s.calendars);
   const events = useStore((s) => s.events);
   const defaultId = useStore((s) => s.defaultCalendarId);
   const { addCalendar, updateCalendar, deleteCalendar, setDefaultCalendar, subscribeCalendar, refreshCalendar, importIcs, showToast } = useStore.getState();
-  const [mode, setMode] = useState<'new' | 'subscribe' | 'import'>('new');
+  const [mode, setMode] = useState<'new' | 'subscribe' | 'import'>(startMode);
   const [url, setUrl] = useState('');
   const [busy, setBusy] = useState(false);
   const [dragOver, setDragOver] = useState(false); // an .ics file is being dragged over the drop area

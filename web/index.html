@@ -9,10 +9,11 @@
     <script>
       // Paint the saved theme from the first frame (no flash of the wrong colours); App keeps it up to date.
       (function () {
-        var id = 'system';
-        try { id = (JSON.parse(localStorage.getItem('calendar-v1') || '{}').state || {}).theme || 'system'; } catch (e) {}
+        var id = 'system', st = {};
+        try { st = JSON.parse(localStorage.getItem('calendar-v1') || '{}').state || {}; id = st.theme || 'system'; } catch (e) {}
         var dark = window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches;
-        var theme = id === 'system' ? (dark ? 'dark' : 'light') : id;
+        var pair = st.settings || {}; // System follows the Mac with your chosen light / dark themes (Settings → Appearance)
+        var theme = id === 'system' ? (dark ? pair.themeDark || 'dark' : pair.themeLight || 'light') : id;
         document.documentElement.dataset.theme = theme;
         document.documentElement.dataset.mode = ['dark', 'midnight', 'obsidian', 'bumblebee', 'graphite', 'navy', 'abyss', 'cobalt', 'fjord', 'lagoon', 'evergreen', 'espresso', 'bordeaux', 'aubergine'].indexOf(theme) >= 0 ? 'dark' : 'light'; // = DARK_THEMES in src/lib/theme.ts
       })();

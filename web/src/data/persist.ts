@@ -35,6 +35,29 @@ async function write() {
 /** Write anything not yet saved (called when the window hides or closes). */
 export const flush = () => write();
 
+/** The daily snapshots kept in the database (newest first). The Mac app only. */
+export async function listSnapshots(): Promise<string[]> {
+  if (!isApp()) return [];
+  const d = await open();
+  return (await d.select<{ day: string }[]>('SELECT day FROM snapshots ORDER BY day DESC')).map((r) => r.day);
+}
+
+/** Replace everything with what was saved: a snapshot's day, or a backup's saved state (a JSON string as stored).
+ *  The caller reloads the app afterwards. */
+export async function replaceSaved(key: string, value: string) {
+  pending = null;
+  clearTimeout(timer);
+  if (!isApp()) return localStorage.setItem(key, value);
+  const d = await open();
+  await d.execute('INSERT INTO kv (key, value, updated) VALUES ($1, $2, $3) ON CONFLICT(key) DO UPDATE SET value = $2, updated = $3', [key, value, Date.now()]);
+}
+
+/** A snapshot's saved state, as stored. */
+export async function snapshotValue(day: string): Promise<string | null> {
+  const d = await open();
+  return (await d.select<{ value: string }[]>('SELECT value FROM snapshots WHERE day = $1', [day]))[0]?.value ?? null;
+}
+
 const sqlite: StateStorage = {
   getItem: async (key) => {
     const d = await open();

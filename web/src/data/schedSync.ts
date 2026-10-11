@@ -12,9 +12,10 @@ import { expand } from '../lib/recurrence';
 import { isFinished, linkSpan, publicView, type BookingLink } from '../lib/booking';
 import { KIND, derive, publishedDecisions, mergeResponses, nextCreatedAt, openGuestMsg, planBookings, refOf, sealAvail, type Decoded } from '../lib/schedwire';
 import { RELAYS, loadRelayList, relayTransport, type Transport } from '../lib/relays';
+import { fmtWhen } from '../lib/format';
 
 const HEARTBEAT = 3 * 3_600_000; // republish at least this often while the app runs
-const fmt = (t: number) => new Date(t).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+const fmt = fmtWhen;
 
 /** Links that are still taking bookings / answers (a finished one's last state is already out there). */
 const live = (l: BookingLink, now: number) => !!l.nostr && !isFinished(l, now);
@@ -174,17 +175,25 @@ const RELAY_LIST = import.meta.env.DEV ? '/relays.json' : 'https://bradenseefeld
 
 /** Start syncing on the current relay list; look at the list again every 6 hours and move to the new relays if it
  *  changed (everything is republished there; nothing to restart). */
+let current: { transport: Transport; updated: string } | null = null;
+/** For Settings → Scheduling: each relay in use and whether it's connected, and when the list was last updated. */
+export const relayHealth = () => ({ relays: current?.transport.health?.() ?? [], updated: current?.updated ?? '' });
+
 export async function runScheduling() {
-  let relays = (await loadRelayList(RELAY_LIST))?.relays ?? RELAYS;
+  const list = await loadRelayList(RELAY_LIST);
+  let relays = list?.relays ?? RELAYS;
   let t = relayTransport(relays);
+  current = { transport: t, updated: list?.updated ?? '' };
   let engine = startScheduleSync(t);
   window.setInterval(async () => {
-    const next = (await loadRelayList(RELAY_LIST))?.relays;
+    const fresh = await loadRelayList(RELAY_LIST);
+    const next = fresh?.relays;
     if (!next || next.join() === relays.join()) return;
     engine.stop();
     t.close?.();
     relays = next;
     t = relayTransport(relays);
+    current = { transport: t, updated: fresh?.updated ?? '' };
     engine = startScheduleSync(t);
   }, 6 * 3_600_000);
 }

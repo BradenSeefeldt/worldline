@@ -70,15 +70,17 @@ const BAR_COLOR: Record<Concrete, string> = {
 /** The dark ones (index.html repeats this list to paint the first frame). */
 export const DARK_THEMES = THEMES.filter((t) => t.dark).map((t) => t.id);
 
-/** The theme actually shown (System → light or dark) and whether it's dark. */
-export function resolveTheme(id: ThemeId, prefersDark: boolean): { theme: Concrete; dark: boolean } {
-  const theme: Concrete = id === 'system' ? (prefersDark ? 'dark' : 'light') : id;
+/** The theme actually shown and whether it's dark. System (follow the Mac) → your light theme or your dark theme
+ *  (Settings → Appearance; plain Light / Dark unless you picked others). */
+export function resolveTheme(id: ThemeId, prefersDark: boolean, pair: { light: ThemeId; dark: ThemeId } = { light: 'light', dark: 'dark' }): { theme: Concrete; dark: boolean } {
+  const pick = id === 'system' ? (prefersDark ? pair.dark : pair.light) : id;
+  const theme: Concrete = pick === 'system' ? (prefersDark ? 'dark' : 'light') : pick;
   return { theme, dark: DARK_THEMES.includes(theme) };
 }
 
 /** Put the theme on <html> (styles.css does the rest) and colour the phone's status bar to match. */
-export function applyTheme(id: ThemeId) {
-  const { theme, dark } = resolveTheme(id, window.matchMedia?.('(prefers-color-scheme: dark)').matches ?? false);
+export function applyTheme(id: ThemeId, pair?: { light: ThemeId; dark: ThemeId }) {
+  const { theme, dark } = resolveTheme(id, window.matchMedia?.('(prefers-color-scheme: dark)').matches ?? false, pair);
   const root = document.documentElement;
   root.dataset.theme = theme;
   root.dataset.mode = dark ? 'dark' : 'light';

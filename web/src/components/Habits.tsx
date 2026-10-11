@@ -14,6 +14,7 @@ import { epochDay } from '../lib/zone';
 import { useNow } from '../lib/hooks';
 import { cls } from '../lib/format';
 import { Close, Trash } from './Icons';
+import { saveFile } from '../lib/platform';
 
 /** Save every habit's record as a CSV file (Settings → Data, and the Habits page). */
 export function downloadHabitsCsv() {
@@ -23,11 +24,7 @@ export function downloadHabitsCsv() {
   const since = Math.min(today - 371, ...habits.map((h) => dayOf(h.createdAt)));
   const past = expand(events, dateOfDay(since).getTime(), dateOfDay(today + 1).getTime());
   const csv = habitsCsv(habits, habitLog, habitNotes, (h) => calendarCredit(h, past, now));
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
-  a.download = `habits-${format(now, 'yyyy-MM-dd')}.csv`;
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  return saveFile(`habits-${format(now, 'yyyy-MM-dd')}.csv`, csv, 'text/csv'); // the Save panel in the Mac app
 }
 
 /** Everything the screens show for each habit, worked out once. */

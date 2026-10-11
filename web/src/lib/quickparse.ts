@@ -15,6 +15,7 @@ import { addDays, addMonths, startOfDay } from 'date-fns';
 import type { CalendarSource, Recurrence } from '../data/types';
 import { MIN, dayIndex } from './dates';
 import { fixDateTypos } from './fuzzy';
+import { prefs } from './prefs';
 
 export interface Parsed {
   title: string;
@@ -307,7 +308,7 @@ export function parseQuick(input: string, calendars: CalendarSource[], now = new
       start = at(now, h * 60 + m); // time only: today, or tomorrow if it has passed
       if (start < now) start = addDays(start, 1);
     }
-    end = new Date(start.getTime() + (durMin ?? 60) * MIN);
+    end = new Date(start.getTime() + (durMin ?? prefs.defaultEventMin) * MIN);
     const e = timeRes.end;
     if (e?.isCertain('hour')) {
       hasEnd = true;
@@ -323,7 +324,7 @@ export function parseQuick(input: string, calendars: CalendarSource[], now = new
       timeFromWords = true;
       start = at(day, minutes);
       if (!dateRes && start < now) start = addDays(start, 1); // "lunch with Sam" after noon → tomorrow
-      end = new Date(start.getTime() + (durMin ?? 60) * MIN);
+      end = new Date(start.getTime() + (durMin ?? prefs.defaultEventMin) * MIN);
     } else {
       allDay = true;
       start = startOfDay(day);
@@ -333,7 +334,7 @@ export function parseQuick(input: string, calendars: CalendarSource[], now = new
   } else {
     start = new Date(now); // nothing said about when: the next full hour
     start.setHours(start.getHours() + 1, 0, 0, 0);
-    end = new Date(start.getTime() + (durMin ?? 60) * MIN);
+    end = new Date(start.getTime() + (durMin ?? prefs.defaultEventMin) * MIN);
     if (forceAllDay) {
       allDay = true;
       start = startOfDay(now);
@@ -400,7 +401,7 @@ export function parseQuick(input: string, calendars: CalendarSource[], now = new
   if (isDeadline) {
     const timed = !!timeRes || timeFromWords;
     if (!timed) {
-      start = at(start, 17 * 60);
+      start = at(start, prefs.dueMinutes); // 5 PM unless Settings says otherwise
       if (!dateRes && !recurrence && start < now) start = addDays(start, 1);
     }
     end = new Date(start);

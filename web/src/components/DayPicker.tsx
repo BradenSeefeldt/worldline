@@ -4,6 +4,7 @@ import { format } from 'date-fns';
 import { epochDay, fromEpochDay, wallClock } from '../lib/zone';
 import { cls } from '../lib/format';
 import { Chevron } from './Icons';
+import { weekStart } from '../lib/dates';
 
 const weekdayOf = (e: number) => {
   const { y, m, d } = fromEpochDay(e);
@@ -18,13 +19,14 @@ function Month({ y, m, today, selected, onDown }: {
   onDown: (day: number) => void;
 }) {
   const first = epochDay(y, m, 1);
-  const lead = (weekdayOf(first) + 6) % 7; // Monday first
+  const ws = weekStart();
+  const lead = (weekdayOf(first) - ws + 7) % 7; // blanks before the 1st, from the week's first day
   const count = new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
   return (
     <div className="dp-month">
       <div className="dp-title">{format(new Date(y, m, 1), 'MMMM yyyy')}</div>
       <div className="dp-grid">
-        {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((d, k) => <span key={k} className="dp-dow">{d}</span>)}
+        {Array.from({ length: 7 }, (_, k) => 'SMTWTFS'[(k + ws) % 7]).map((d, k) => <span key={k} className="dp-dow">{d}</span>)}
         {Array.from({ length: lead }, (_, k) => <span key={'x' + k} />)}
         {Array.from({ length: count }, (_, k) => {
           const day = first + k;

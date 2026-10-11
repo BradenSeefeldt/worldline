@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { format, formatDistanceToNowStrict } from 'date-fns';
 import { heat, icsFor, meetingAt, type PublicView } from '../lib/booking';
 import { fromEpochDay, localZone, zoneAbbr, zoneCity } from '../lib/zone';
-import { cls, fmtTimeRange } from '../lib/format';
+import { cls, fmtTimeRange, fmtTime, fmtTimeBare } from '../lib/format';
 
 const MIN = 60_000;
 
@@ -55,8 +55,8 @@ const why: Record<string, string> = {
 /** What to tell a guest whose booking isn't going ahead. */
 const notGoing = (b: MyBooking, host: string, closedByOther = false) =>
   b.status === 'cancelled'
-    ? `Your meeting on ${format(b.start, 'EEE MMM d')} at ${format(b.start, 'h:mm a')} was cancelled by ${host || 'the host'}.`
-    : `Sorry — your booking for ${format(b.start, 'EEE MMM d')} at ${format(b.start, 'h:mm a')} didn’t go through: ${closedByOther ? 'someone else booked this link just before you' : why[b.status]}.`;
+    ? `Your meeting on ${format(b.start, 'EEE MMM d')} at ${fmtTime(b.start)} was cancelled by ${host || 'the host'}.`
+    : `Sorry — your booking for ${format(b.start, 'EEE MMM d')} at ${fmtTime(b.start)} didn’t go through: ${closedByOther ? 'someone else booked this link just before you' : why[b.status]}.`;
 
 // ---------------------------------------------------------------- one person books a slot
 export function BookView({ v, mine, updatedAt, onConfirm }: {
@@ -150,7 +150,7 @@ export function BookView({ v, mine, updatedAt, onConfirm }: {
           <div className="gp-slots">
             {current?.slots.map((s) => (
               <button key={s} className={cls('gp-slot', s === slot && 'on')} onClick={() => { setSlot(s); setError(''); }}>
-                {format(s, 'h:mm a')}
+                {fmtTime(s)}
               </button>
             ))}
           </div>
@@ -391,7 +391,7 @@ export function PollGrid({ v, mine, onChange, readOnly, extra, pick }: {
             const hour = new Date(t0).getMinutes() === 0;
             return (
               <div key={r} className={cls('pg-time', hour ? 'hour' : 'half', hover?.row === r && 'on')} style={{ gridColumn: 1, gridRow: r + 2 }}>
-                {hour ? format(t0, 'h a') : format(t0, 'h:mm')}
+                {hour ? fmtTime(t0) : fmtTimeBare(t0)}
               </div>
             );
           })}

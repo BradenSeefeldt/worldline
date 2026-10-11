@@ -26,6 +26,8 @@ export interface Transport {
   size?: number;
   /** Disconnect from everything (when switching to a new relay list). */
   close?: () => void;
+  /** Which relays are connected right now (Settings → Scheduling). */
+  health?: () => { url: string; ok: boolean }[];
 }
 
 /** The current relay list: fetched (and remembered for next time), else the last one remembered, else built in.
@@ -60,6 +62,12 @@ export function relayTransport(relays = RELAYS): Transport {
   return {
     size: relays.length,
     close: () => pool.destroy(),
+    health: () => {
+      const st = pool.listConnectionStatus();
+      const norm = (u: string) => u.replace(/\/+$/, '');
+      const live = new Map([...st].map(([u, ok]) => [norm(u), ok]));
+      return relays.map((url) => ({ url, ok: !!live.get(norm(url)) }));
+    },
     publish: async (ev) => (await Promise.allSettled(pool.publish(relays, ev, { maxWait: 8000 }))).filter((r) => r.status === 'fulfilled').length,
     send: (ev) => Promise.any(pool.publish(relays, ev, { maxWait: 8000 })).then(() => true, () => false),
     query: (filter) => pool.querySync(relays, filter, { maxWait: 7000 }),

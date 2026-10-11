@@ -3,10 +3,11 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { format, isSameDay, addDays, startOfDay } from 'date-fns';
 import { useStore } from '../data/store';
 import { useNow } from '../lib/hooks';
-import { cls } from '../lib/format';
+import { cls, fmtTime } from '../lib/format';
 import { bucketTasks, doneStats, dueOf, overdueDays, stripTaskPrefix, taskFromParsed, type Task } from '../lib/tasks';
 import { parseQuick } from '../lib/quickparse';
 import { justDragged, startBlockDrag } from './BlockDrag';
+import { weekStart } from '../lib/dates';
 
 const ANYTIME_SHOWN = 6;
 const UPCOMING_DAYS = 7; // Upcoming shows everything due this coming week; later ones fold under "N later"
@@ -68,7 +69,7 @@ export function TaskRow({ t, now, leaving, parentTitle, block, onTick }: {
                 }}
               >
                 🕑 {isSameDay(block.start, now) ? 'Today' : isSameDay(block.start, addDays(now, 1)) ? 'Tomorrow' : format(block.start, 'EEE MMM d')}{' '}
-                {format(block.start, 'h:mm a').replace(':00', '')}
+                {fmtTime(block.start)}
               </button>
             )}
             {parentTitle && <span className="tk-parent">⚑ {parentTitle}</span>}
@@ -192,13 +193,13 @@ export function TasksBody() {
             ✓ {stats.today} today
           </button>
           <span className="tk-week">· {stats.week} this week</span>
-          <span className="tk-spark" title="Finished per day, Monday to Sunday">
+          <span className="tk-spark" title="Finished per day this week">
             {stats.perDay.map((n, k) => (
               <i
                 key={k}
                 className={cls(k === stats.todayIndex && 'today', k > stats.todayIndex && 'future')}
                 style={{ height: `${n ? 3 + (n / Math.max(...stats.perDay)) * 11 : 2}px` }}
-                title={`${['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][k]}: ${n} done`}
+                title={`${['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][(k + weekStart()) % 7]}: ${n} done`}
               />
             ))}
           </span>

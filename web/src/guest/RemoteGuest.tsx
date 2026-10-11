@@ -9,6 +9,7 @@ import { KIND, derive, latestPerGuest, openAvail, openGuestMsg, parseFragment, r
 import type { Transport } from '../lib/relays';
 import { useNow } from '../lib/hooks';
 import { format } from 'date-fns';
+import { fmtTime } from '../lib/format';
 
 /** What this browser remembers about a link: its own bookings (the signed events, to send again if a relay lost
  *  them) and its poll key + answer. Only in this browser's storage. */
@@ -109,7 +110,7 @@ export function RemoteGuest({ transport, hash }: { transport: Transport; hash: s
     const off = saved.bookings.filter((b) => !b.lost && b.start > now);
     return (
       <Card title={off.length ? 'This meeting was cancelled' : 'This link is closed'}>
-        {off.map((b) => <p key={b.ev.id} className="gp-error">Your meeting on {format(b.start, 'EEEE, MMMM d')} at {format(b.start, 'h:mm a')} is cancelled{view.hostName ? ` — ${view.hostName} deleted this link` : ''}.</p>)}
+        {off.map((b) => <p key={b.ev.id} className="gp-error">Your meeting on {format(b.start, 'EEEE, MMMM d')} at {fmtTime(b.start)} is cancelled{view.hostName ? ` — ${view.hostName} deleted this link` : ''}.</p>)}
         <p className="gp-empty">{off.length ? 'Ask for a new link if you’d like another time.' : 'It was deleted or replaced. Ask for a new one.'}</p>
       </Card>
     );

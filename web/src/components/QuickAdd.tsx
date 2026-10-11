@@ -14,7 +14,7 @@ import { parseHabitLog } from '../lib/habitlog';
 import { amountOn, calendarCredit, periodProgress } from '../lib/habits';
 import { decodeEvent, describeRecurrence, expand } from '../lib/recurrence';
 import { cls, fmtTime, fmtTimeRange } from '../lib/format';
-import { countdown, DEFAULT_LEAD_DAYS } from '../lib/deadlines';
+import { countdown, defaultLeadDays } from '../lib/deadlines';
 import { dueOf, guessKind, hasTaskPrefix, stripTaskPrefix, taskFromParsed, tasksForCommands, type ItemKind } from '../lib/tasks';
 import { startOfDay } from 'date-fns';
 
@@ -24,6 +24,7 @@ const KINDS: { id: ItemKind; label: string }[] = [
   { id: 'deadline', label: 'Deadline' },
 ];
 import { Sparkle } from './Icons';
+import { prefs } from '../lib/prefs';
 
 const DAY = 86_400_000;
 const EXAMPLES = [
@@ -109,9 +110,13 @@ export function QuickAdd() {
   const kind: ItemKind = kindOverride ?? (parsed ? guessKind(text, parsed) : 'event');
   const taskPreview = parsed ? taskFromParsed(parsed) : null;
   // A deadline's due moment: the parsed time, or 5 PM on the day if none was given.
-  const dlStart = !parsed ? 0 : parsed.deadline || parsed.hasTime || parsed.timeFromWords ? parsed.start : startOfDay(parsed.start).getTime() + 17 * 3_600_000;
-  const lead = parsed?.deadline?.leadDays ?? DEFAULT_LEAD_DAYS;
-  const weekAhead = useMemo(() => suggest(events, calendars, { skipped, dismissed, tasks, habits, habitLog }), [events, calendars, skipped, dismissed, tasks, habits, habitLog]);
+  const dlStart = !parsed ? 0 : parsed.deadline || parsed.hasTime || parsed.timeFromWords ? parsed.start : startOfDay(parsed.start).getTime() + prefs.dueMinutes * 60_000;
+  const lead = parsed?.deadline?.leadDays ?? defaultLeadDays();
+  const suggestOn = useStore((s) => s.settings.suggest); // Settings → Tasks & Deadlines / Habits: each kind on or off
+  const weekAhead = useMemo(
+    () => suggest(events, calendars, { skipped, dismissed, tasks, habits, habitLog }).filter((x) => !(x.kind in suggestOn) || suggestOn[x.kind as keyof typeof suggestOn]),
+    [events, calendars, skipped, dismissed, tasks, habits, habitLog, suggestOn],
+  );
   // Logging a habit ("did gym", "read 20 pages") — a strict, separate reader; when it says no, nothing below changes.
   const habitPlan = useMemo(() => (typing && !hasTaskPrefix(text) ? parseHabitLog(text, habits) : null), [typing, text, habits]);
   const asYouType = useMemo(
@@ -169,7 +174,7 @@ export function QuickAdd() {
     const title = parsed.title || (kind === 'deadline' ? 'New deadline' : 'New Event');
     const { location, recurrence } = parsed;
     let { start, end, allDay } = parsed;
-    const deadline = kind === 'deadline' ? parsed.deadline ?? { leadDays: DEFAULT_LEAD_DAYS } : undefined;
+    const deadline = kind === 'deadline' ? parsed.deadline ?? { leadDays: defaultLeadDays() } : undefined;
     if (deadline && !parsed.deadline) {
       // switched to "deadline" by hand: due at 5 PM on that day unless a time was given
       if (!parsed.hasTime && !parsed.timeFromWords) start = startOfDay(start).getTime() + 17 * 3_600_000;
@@ -463,7 +468,7 @@ export function QuickAdd() {
                 <>
                   <span className="qa-title"><span className="qa-flag">⚑ </span>{parsed.title || 'New deadline'}</span>
                   <span className="qa-deadline">
-                    Due {format(dlStart, 'EEE, MMM d')} at {format(dlStart, 'h:mm a')} · {countdown({ ...parsed, start: dlStart, end: dlStart, id: '', calendarId: '' })} · work starts{' '}
+                    Due {format(dlStart, 'EEE, MMM d')} at {fmtTime(dlStart)} · {countdown({ ...parsed, start: dlStart, end: dlStart, id: '', calendarId: '' })} · work starts{' '}
                     {lead % 7 === 0 ? `${lead / 7} week${lead === 7 ? '' : 's'}` : `${lead} days`} before
                   </span>
                 </>

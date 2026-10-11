@@ -6,9 +6,9 @@ import type { CalEvent, Recurrence } from '../data/types';
 import { MIN } from '../lib/dates';
 import { decodeEvent, describeRecurrence, isOccurrenceId, resolveEvent } from '../lib/recurrence';
 import type { Scope } from '../lib/mutate';
-import { cls } from '../lib/format';
+import { cls, fmtTimeRange } from '../lib/format';
 import { wallClock, zoneAbbr, zoneCity } from '../lib/zone';
-import { DEFAULT_LEAD_DAYS, URGENCY_COLOR, countdown, urgency } from '../lib/deadlines';
+import { defaultLeadDays, URGENCY_COLOR, countdown, urgency } from '../lib/deadlines';
 
 const LEAD_CHOICES: [number, string][] = [
   [3, '3 days before'], [7, '1 week before'], [14, '2 weeks before'], [21, '3 weeks before'],
@@ -147,7 +147,7 @@ export function EventPanel() {
   const toggleDeadline = (on: boolean) => {
     if (on) {
       const t = ev.allDay ? withTime(ev.start, '17:00') : ev.end; // an event's end is when it's "due"
-      up({ kind: 'deadline', calendarId: '', allDay: false, start: t, end: t, leadDays: ev.leadDays ?? DEFAULT_LEAD_DAYS });
+      up({ kind: 'deadline', calendarId: '', allDay: false, start: t, end: t, leadDays: ev.leadDays ?? defaultLeadDays() });
     } else up({ kind: undefined, done: undefined, calendarId: newEventCalendarId(useStore.getState()), end: ev.start + 60 * MIN });
   };
 
@@ -232,8 +232,8 @@ export function EventPanel() {
             </div>
             <div className="prow">
               <span>Work starts</span>
-              <select className="pselect" value={ev.leadDays ?? DEFAULT_LEAD_DAYS} onChange={(e) => up({ leadDays: +e.target.value })}>
-                {[...LEAD_CHOICES, ...(LEAD_CHOICES.some(([d]) => d === (ev.leadDays ?? DEFAULT_LEAD_DAYS)) ? [] : [[ev.leadDays!, `${ev.leadDays} days before`] as [number, string]])].map(([d, label]) => (
+              <select className="pselect" value={ev.leadDays ?? defaultLeadDays()} onChange={(e) => up({ leadDays: +e.target.value })}>
+                {[...LEAD_CHOICES, ...(LEAD_CHOICES.some(([d]) => d === (ev.leadDays ?? defaultLeadDays())) ? [] : [[ev.leadDays!, `${ev.leadDays} days before`] as [number, string]])].map(([d, label]) => (
                   <option key={d} value={d}>{label}</option>
                 ))}
               </select>
@@ -344,7 +344,7 @@ function SubscribedEvent({ ev }: { ev: CalEvent }) {
     ? ev.end - ev.start > 86_400_000
       ? `${format(ev.start, 'EEE, MMM d')} – ${format(ev.end - 1, 'EEE, MMM d')}`
       : format(ev.start, 'EEEE, MMMM d')
-    : `${format(ev.start, 'EEEE, MMMM d')} · ${format(ev.start, 'h:mm a')} – ${format(ev.end, 'h:mm a')}`;
+    : `${format(ev.start, 'EEEE, MMMM d')} · ${fmtTimeRange(ev.start, ev.end)}`;
   return (
     <aside className="panel panel-ro" style={{ '--c': cal?.color } as CSSProperties}>
       <div className="panel-top">

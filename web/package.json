@@ -1,7 +1,7 @@
 {
   "name": "worldline",
   "private": true,
-  "version": "0.2.2",
+  "version": "0.3.0",
   "type": "module",
   "scripts": {
     "tauri": "tauri",
@@ -19,6 +19,8 @@
     "@date-fns/tz": "^1.5.0",
     "@noble/hashes": "2.0.1",
     "@tauri-apps/api": "2.12.2",
+    "@tauri-apps/plugin-autostart": "2.6.0",
+    "@tauri-apps/plugin-dialog": "2.8.0",
     "@tauri-apps/plugin-http": "2.8.1",
     "@tauri-apps/plugin-opener": "2.7.0",
     "@tauri-apps/plugin-sql": "2.5.0",

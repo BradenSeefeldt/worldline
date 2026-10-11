@@ -9,6 +9,7 @@ import { QuickAdd } from './components/QuickAdd';
 import { HabitsPage } from './components/Habits';
 import { Toast } from './components/Toast';
 import { ConfirmHost } from './components/Confirm';
+import { Settings } from './components/Settings';
 import { TimeGrid } from './views/TimeGrid';
 import { MonthView } from './views/MonthView';
 import { useMediaQuery } from './lib/hooks';
@@ -28,14 +29,23 @@ export default function App() {
   const quickAddOpen = useStore((s) => s.quickAddOpen);
   const page = useStore((s) => s.page);
   const theme = useStore((s) => s.theme);
-  // The chosen theme; "System" also follows the computer switching between light and dark.
+  const themeLight = useStore((s) => s.settings.themeLight);
+  const themeDark = useStore((s) => s.settings.themeDark);
+  // The chosen theme; "System" follows the Mac switching between your light theme and your dark theme.
   useEffect(() => {
-    applyTheme(theme);
+    const pair = { light: themeLight, dark: themeDark };
+    applyTheme(theme, pair);
     const mq = window.matchMedia('(prefers-color-scheme: dark)');
-    const on = () => applyTheme(theme);
+    const on = () => applyTheme(theme, pair);
     mq.addEventListener('change', on);
     return () => mq.removeEventListener('change', on);
-  }, [theme]);
+  }, [theme, themeLight, themeDark]);
+  // Settings the whole calendar is drawn with: when one changes, the views redraw from scratch (like a zone change).
+  const weekStartsOn = useStore((s) => s.settings.weekStartsOn);
+  const hour24 = useStore((s) => s.settings.hour24);
+  const hideWeekends = useStore((s) => s.settings.hideWeekends);
+  const eventStyle = useStore((s) => s.settings.eventStyle);
+  const subsEvery = useStore((s) => s.settings.subsRefreshMin) * 60_000;
   const phone = useMediaQuery('(max-width: 699px)');
   const navSeq = useStore((s) => s.nav.seq);
   const zone = useStore((s) => s.zone);
@@ -64,16 +74,16 @@ export default function App() {
   // Subscribed calendars (department, team, …): refresh now, every 30 min, and on coming back to the app if it's been a while.
   useEffect(() => {
     const st = () => useStore.getState();
-    const stale = () => st().calendars.some((c) => c.url && Date.now() - (c.lastSync ?? 0) > 30 * 60_000);
+    const stale = () => st().calendars.some((c) => c.url && Date.now() - (c.lastSync ?? 0) > subsEvery);
     void st().refreshSubscriptions();
-    const id = setInterval(() => void st().refreshSubscriptions(), 30 * 60_000);
+    const id = setInterval(() => void st().refreshSubscriptions(), subsEvery); // Settings → Calendars
     const onFocus = () => stale() && void st().refreshSubscriptions();
     window.addEventListener('focus', onFocus);
     return () => {
       clearInterval(id);
       window.removeEventListener('focus', onFocus);
     };
-  }, []);
+  }, [subsEvery]);
 
   // On a phone the sidebar is a drawer: close it on narrow screens and after picking a date.
   useEffect(() => {
@@ -87,6 +97,10 @@ export default function App() {
       if (e.key === 'Escape') {
         (e.target as HTMLElement).blur?.();
         return st.select(null);
+      }
+      if (mod && e.key === ',') {
+        e.preventDefault();
+        return st.openSettings(st.settingsOpen ? null : 'general');
       }
       if (mod && e.key.toLowerCase() === 'k') {
         e.preventDefault();
@@ -124,12 +138,12 @@ export default function App() {
   }, []);
 
   return (
-    <div className={cls('app', sidebarOpen && 'sidebar-open', phone && 'phone')}>
+    <div className={cls('app', sidebarOpen && 'sidebar-open', phone && 'phone')} data-events={eventStyle}>
       <Sidebar />
       {phone && sidebarOpen && <div className="scrim" onClick={() => useStore.getState().setSidebarOpen(false)} />}
       <main className="main">
         <Toolbar />
-        <div className="view" key={zone /* redraw everything in the new zone */}>
+        <div className="view" key={`${zone}|${weekStartsOn}|${hour24}|${hideWeekends}` /* redraw everything in the new zone / week / clock */}>
           {page === 'habits' ? (
             <HabitsPage />
           ) : page === 'projects' ? (
@@ -138,7 +152,7 @@ export default function App() {
             </Suspense>
           ) : (
             <>
-              {view === 'month' ? <MonthView /> : <TimeGrid key={view} days={DAYS_IN_VIEW[view]} />}
+              {view === 'month' ? <MonthView /> : <TimeGrid key={view} days={view === 'week' && hideWeekends ? 5 : DAYS_IN_VIEW[view]} />}
               {hasSelection && <EventPanel />}
               {hasSelection && <TaskPanel />}
             </>
@@ -147,6 +161,7 @@ export default function App() {
       </main>
       {quickAddOpen && <QuickAdd />}
       <Toast />
+      <Settings />
       <ConfirmHost />
       <DragGhost />
     </div>

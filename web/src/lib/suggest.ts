@@ -13,6 +13,7 @@ import { parseCommand, words } from './commands';
 import { MIN, minutesOfDay } from './dates';
 import { overdueDays, tasksForCommands, type Task } from './tasks';
 import { calendarCredit, dayOf, periodProgress, weekStart, type Habit, type HabitLog } from './habits';
+import { fmtTime } from './format';
 
 const DAY = 86_400_000;
 const HISTORY_DAYS = 70; // look back 10 weeks for patterns
@@ -295,7 +296,7 @@ export function suggest(
     if (dismissed.has(id) || skips.some((x) => x.phrase === phrase)) continue;
     const c = parseCommand(phrase, events, calendars, now);
     if (c?.kind !== 'delete' || c.matches[0]?.id !== e.id) continue;
-    skips.push({ id, kind: 'skip', phrase, reason: `${s.period === 7 ? 'Weekly' : 'Every other week'} · next one ${format(e.start, 'EEE h:mm a')}` });
+    skips.push({ id, kind: 'skip', phrase, reason: `${s.period === 7 ? 'Weekly' : 'Every other week'} · next one ${format(e.start, 'EEE')} ${fmtTime(e.start)}` });
   }
   out.push(...skips);
 

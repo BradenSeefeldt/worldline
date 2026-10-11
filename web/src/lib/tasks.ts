@@ -4,6 +4,7 @@ import { addDays, differenceInCalendarDays, startOfDay, startOfWeek } from 'date
 import type { CalEvent } from '../data/types';
 import type { Parsed } from './quickparse';
 import { decodeDay } from './zone';
+import { weekStart } from './dates';
 
 export interface Task {
   id: string;
@@ -47,10 +48,10 @@ export function bucketTasks(tasks: Task[], now = Date.now(), scheduled: Map<stri
   };
 }
 
-/** Tasks finished today, this week (Mon–Sun), and per day of this week (Mon first). */
+/** Tasks finished today, this week, and per day of this week (from the week's first day — Settings → General). */
 export function doneStats(tasks: Task[], now = Date.now()) {
   const today0 = startOfDay(now).getTime();
-  const monday = startOfWeek(now, { weekStartsOn: 1 }).getTime();
+  const monday = startOfWeek(now, { weekStartsOn: weekStart() }).getTime(); // the week's first day
   const perDay = [0, 0, 0, 0, 0, 0, 0];
   let today = 0;
   let week = 0;

@@ -1,13 +1,15 @@
 // Deadlines: zero-width moments with a "runway" of work before them. The runway is what the
 // calendar draws ahead of time, so a due date is visible in the weeks you should be working on it.
-import { addDays, differenceInCalendarDays, format, isSameDay, startOfDay } from 'date-fns';
+import { addDays, differenceInCalendarDays, isSameDay, startOfDay } from 'date-fns';
 import type { CalEvent } from '../data/types';
+import { fmtTime } from './format';
+import { prefs } from './prefs';
 
-export const DEFAULT_LEAD_DAYS = 14;
-export const DEFAULT_DUE_MINUTES = 17 * 60; // 5 PM unless a time is given
+/** A deadline's runway when it doesn't set its own (Settings → Tasks & Deadlines; 2 weeks to start with). */
+export const defaultLeadDays = () => prefs.leadDays;
 
 export const isDeadline = (e: CalEvent) => e.kind === 'deadline';
-export const leadDays = (e: CalEvent) => e.leadDays ?? DEFAULT_LEAD_DAYS;
+export const leadDays = (e: CalEvent) => e.leadDays ?? defaultLeadDays();
 /** First day of the runway (local midnight). */
 export const runwayStart = (e: CalEvent) => startOfDay(addDays(e.start, -leadDays(e))).getTime();
 
@@ -40,7 +42,7 @@ export function countdown(e: CalEvent, now = Date.now()) {
     return late === 0 ? `Overdue · ${Math.max(1, Math.round(-ms / 3_600_000))} h` : `Overdue · ${late} day${late === 1 ? '' : 's'}`;
   }
   if (ms < 6 * 3_600_000) return ms < 3_600_000 ? `in ${Math.max(1, Math.round(ms / 60_000))} min` : `in ${Math.round(ms / 3_600_000)} h`;
-  if (isSameDay(e.start, now)) return `Today ${format(e.start, 'h:mm a').replace(':00', '')}`;
+  if (isSameDay(e.start, now)) return `Today ${fmtTime(e.start)}`;
   const d = daysLeft(e, now);
   return d === 1 ? 'Tomorrow' : `${d} days`;
 }

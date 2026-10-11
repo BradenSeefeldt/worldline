@@ -2,9 +2,9 @@ import { useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type Re
 import { addDays, addMonths, format, isSameDay, isSameMonth, startOfDay, startOfMonth, startOfWeek } from 'date-fns';
 import { useStore } from '../data/store';
 import { useEventsIn } from '../data/useEvents';
-import { WEEK_STARTS_ON } from '../lib/dates';
+import { weekNumber, weekStart } from '../lib/dates';
 import { useNow } from '../lib/hooks';
-import { cls } from '../lib/format';
+import { cls, fmtTime } from '../lib/format';
 import { URGENCY_COLOR, countdown, urgency, workingDays, type Urgency } from '../lib/deadlines';
 import { Chevron } from './Icons';
 import { HabitEditor, HabitsBadge, HabitsCardBody } from './Habits';
@@ -12,7 +12,6 @@ import { CalendarEditor } from './CalendarEditor';
 import { TasksBody, useTaskSummary } from './TasksSection';
 import { justDragged, startBlockDrag } from './BlockDrag';
 import { SchedulingBody } from './Scheduling';
-import { Settings } from './Settings';
 import { landingIndex, moveTo, orderedIds, shiftFor } from '../lib/reorder';
 
 function MiniMonth() {
@@ -29,7 +28,8 @@ function MiniMonth() {
   const setMonth = (m: number) => setBrowse({ base: followed, delta: delta + (m > month ? 1 : -1) });
 
   const today = new Date();
-  const gridStart = startOfWeek(month, { weekStartsOn: WEEK_STARTS_ON });
+  const weekNums = useStore((s) => s.settings.weekNumbers);
+  const gridStart = startOfWeek(month, { weekStartsOn: weekStart() });
   const days = Array.from({ length: 42 }, (_, k) => addDays(gridStart, k));
   const events = useEventsIn(gridStart.getTime(), addDays(gridStart, 42).getTime());
 
@@ -57,17 +57,19 @@ function MiniMonth() {
           <Chevron dir="right" />
         </button>
       </div>
-      <div className="mini-grid">
+      <div className={cls('mini-grid', weekNums && 'with-wk')}>
+        {weekNums && <span className="mini-dow mini-wk" title="Week number">W</span>}
         {days.slice(0, 7).map((d) => (
           <span key={'h' + d.getDay()} className="mini-dow">{format(d, 'EEEEE')}</span>
         ))}
-        {days.map((d, i) => {
+        {days.flatMap((d, i) => {
           const t = d.getTime();
           const inRange = onCalendar && t >= range.start && t < range.end; // the Habits page shows no range
           // The shown days are one rounded band per row: round its two ends.
           const startsBand = inRange && (i % 7 === 0 || t === range.start);
           const endsBand = inRange && (i % 7 === 6 || addDays(d, 1).getTime() >= range.end);
-          return (
+          const wk = weekNums && i % 7 === 0 ? [<span key={'w' + t} className="mini-wk">{weekNumber(d)}</span>] : [];
+          return [...wk, (
             <button
               key={t}
               className={cls(
@@ -83,7 +85,7 @@ function MiniMonth() {
             >
               <span className="mini-num">{d.getDate()}</span>
             </button>
-          );
+          )];
         })}
       </div>
     </div>
@@ -289,7 +291,7 @@ function Deadlines() {
         <span className="dl-body">
           <span className="dl-title">{e.title}</span>
           <span className="dl-date">
-            {format(e.start, 'EEE MMM d')} · {format(e.start, 'h:mm a').replace(':00', '')}
+            {format(e.start, 'EEE MMM d')} · {fmtTime(e.start)}
             {progress.get(e.id) && <span className="dl-steps"> · ✓ {progress.get(e.id)!.done}/{progress.get(e.id)!.total}</span>}
           </span>
         </span>
@@ -503,7 +505,6 @@ function useCardDrag(order: string[]) {
 }
 
 export function Sidebar() {
-  const [settings, setSettings] = useState(false);
   const saved = useStore((s) => s.sideOrder);
   const order = useMemo(() => orderedIds(saved, CARD_IDS), [saved]);
   const { box, slot } = useCardDrag(order);
@@ -517,14 +518,13 @@ export function Sidebar() {
           {CARDS[id]()}
         </div>
       ))}
-      <button className="side-settings" onClick={() => setSettings(true)}>
+      <button className="side-settings" onClick={() => useStore.getState().openSettings('general')} title="Settings (⌘,)">
         <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden>
           <circle cx="8" cy="8" r="2.2" />
           <path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.4 3.4l1.4 1.4M11.2 11.2l1.4 1.4M3.4 12.6l1.4-1.4M11.2 4.8l1.4-1.4" strokeLinecap="round" />
         </svg>
         Settings
       </button>
-      {settings && <Settings onClose={() => setSettings(false)} />}
     </aside>
   );
 }

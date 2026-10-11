@@ -8,6 +8,7 @@ import { typoDistance } from './fuzzy';
 import { describeRecurrence } from './recurrence';
 import type { Suggestion } from './suggest';
 import { guessKind, hasTaskPrefix, stripTaskPrefix } from './tasks';
+import { fmtTime } from './format';
 
 const DAY = 86_400_000;
 
@@ -89,7 +90,7 @@ export function typeahead(
       .sort((a, b) => a.start - b.start);
     for (const e of upcoming) {
       if (out.length >= 4) break;
-      const when = `${format(e.start, 'EEE MMM d')}${e.allDay ? '' : `, ${format(e.start, 'h:mm a')}`}`;
+      const when = `${format(e.start, 'EEE MMM d')}${e.allDay ? '' : `, ${fmtTime(e.start)}`}`;
       const day = dayWord(e.start, now);
       if (verb === 'done') push({ phrase: `${Verb} ${e.title}`, reason: e.kind === 'task' ? 'Task' : `⚑ due ${format(e.start, 'EEE MMM d')}` });
       else if (verb === 'delete') push({ phrase: e.kind === 'task' ? `${Verb} ${e.title}` : `${Verb} ${e.title} ${day}`, reason: e.kind === 'task' ? 'Task' : when });

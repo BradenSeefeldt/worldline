@@ -6,9 +6,9 @@ import { addDays, format, startOfWeek } from 'date-fns';
 import { DRAFT_ID, HOUR_H_RANGE, isLocked, newEventCalendarId, useStore } from '../data/store';
 import { useEventsIn } from '../data/useEvents';
 import type { CalEvent } from '../data/types';
-import {
-  MIN, TOTAL_DAYS, WEEK_STARTS_ON, atMinutes, clamp, dateAt, dayIndex, dayStart, isWeekend, minutesOfDay, todayIndex,
-} from '../lib/dates';
+import * as D from '../lib/dates';
+import { MIN, clamp, minutesOfDay } from '../lib/dates';
+import { allDays, weekdaysOnly, type Slots } from '../lib/slots';
 import { assignLanes, layoutDay } from '../lib/layout';
 import { useElementSize, useNow } from '../lib/hooks';
 import { cls, fmtHour, fmtTime, fmtTimeRange } from '../lib/format';
@@ -16,6 +16,7 @@ import { wallClock, zoneAbbr, zoneCity } from '../lib/zone';
 import { URGENCY_COLOR, countdown, runwayStart, urgency } from '../lib/deadlines';
 import { taskAsEvent } from '../lib/tasks';
 import { registerDropTarget } from '../components/BlockDrag';
+import { prefs } from '../lib/prefs';
 
 const DAY_HEAD_H = 50;
 const RIB_H = 22; // one deadline ribbon
@@ -45,6 +46,18 @@ interface Drag {
 
 const snap = (m: number) => Math.round(m / SNAP) * SNAP;
 
+// Columns ↔ days (lib/slots.ts). Every position here is a column index; with weekends hidden (Settings → Calendar)
+// only Monday–Friday have columns. These helpers convert, so the rest of the grid never needs to know.
+let S: Slots = allDays(D.TOTAL_DAYS);
+const dateAt = (i: number) => D.dateAt(S.toDay(i));
+const dayStart = (i: number) => D.dayStart(S.toDay(i));
+const dayEnd = (i: number) => D.dayStart(S.toDay(i) + 1); // the midnight after column i's day
+const atMinutes = (i: number, m: number) => D.atMinutes(S.toDay(i), m);
+const isWeekend = (i: number) => D.isWeekend(S.toDay(i));
+const dayIndex = (t: Date | number) => S.toSlot(D.dayIndex(t), 'ceil'); // the column of t's day, or the next one
+const lastIndex = (t: Date | number) => S.toSlot(D.dayIndex(t), 'floor'); // …or the one before (for ends)
+const exactIndex = (t: Date | number) => S.toSlot(D.dayIndex(t), 'exact'); // -1 for a hidden day
+
 export function TimeGrid({ days }: { days: number }) {
   const scrollerRef = useRef<HTMLDivElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
@@ -56,6 +69,10 @@ export function TimeGrid({ days }: { days: number }) {
   const HOME_W = 40;
   const gutterW = (width && width < 600 ? 46 : 58) + (showHome ? HOME_W : 0);
   const colW = width ? (width - gutterW) / days : 0;
+  const hideWeekends = useStore((s) => s.settings.hideWeekends) && days > 1;
+  S = hideWeekends ? weekdaysOnly(D.TOTAL_DAYS, D.ORIGIN.getDay()) : allDays(D.TOTAL_DAYS);
+  const TOTAL_DAYS = S.total; // columns
+  const dayStartHour = useStore((s) => s.settings.dayStartHour);
 
   const calendars = useStore((s) => s.calendars);
   const nav = useStore((s) => s.nav);
@@ -92,7 +109,7 @@ export function TimeGrid({ days }: { days: number }) {
     setPreviewState(p);
   };
   const now = useNow();
-  const todayIdx = dayIndex(now);
+  const todayIdx = exactIndex(now);
 
   // ---- which day columns to draw --------------------------------------------------
   const first = colW ? clamp(Math.floor(scrollLeft / colW + 0.01), 0, TOTAL_DAYS - days) : 0;
@@ -121,10 +138,11 @@ export function TimeGrid({ days }: { days: number }) {
     for (const ev of shown) {
       if (ev.allDay || ev.kind === 'deadline') continue; // deadlines get flags, not boxes
       const a = Math.max(from, dayIndex(ev.start));
-      const b = Math.min(to - 1, dayIndex(Math.max(ev.start, ev.end - 1)));
+      const b = Math.min(to - 1, lastIndex(Math.max(ev.start, ev.end - 1)));
       for (let i = a; i <= b; i++) {
         const ds = dayStart(i);
-        const de = dayStart(i + 1);
+        const de = dayEnd(i);
+        if (ev.end <= ds || ev.start >= de) continue; // (a day with no column in between)
         const seg: Seg = {
           ev,
           start: ev.start <= ds ? 0 : minutesOfDay(ev.start),
@@ -144,7 +162,8 @@ export function TimeGrid({ days }: { days: number }) {
       .filter((e) => e.allDay && e.kind !== 'deadline')
       // events first (they occupy the day), then tasks; within each, by date and length
       .sort((x, y) => Number(x.kind === 'task') - Number(y.kind === 'task') || x.start - y.start || y.end - y.start - (x.end - x.start))
-      .map((e) => ({ ev: e, a: Math.max(from, dayIndex(e.start)), b: Math.min(to - 1, dayIndex(e.end - 1)) }));
+      .map((e) => ({ ev: e, a: Math.max(from, dayIndex(e.start)), b: Math.min(to - 1, lastIndex(e.end - 1)) }))
+      .filter((x) => x.a <= x.b); // only on hidden days
     return assignLanes(items);
   }, [shown, from, to]);
   const lanesInView = allDayBars.reduce(
@@ -156,7 +175,8 @@ export function TimeGrid({ days }: { days: number }) {
   const ribbons = useMemo(() => {
     const items = ahead
       .filter((e) => e.kind === 'deadline' && !e.done && showDeadlines)
-      .map((e) => ({ ev: e, run: dayIndex(runwayStart(e)), due: dayIndex(e.start) }))
+      .map((e) => ({ ev: e, run: dayIndex(runwayStart(e)), due: lastIndex(e.start) }))
+      .filter((x) => x.run <= x.due)
       .filter((x) => x.run < to && x.due >= from)
       .sort((x, y) => x.ev.start - y.ev.start)
       .map((x) => ({ ...x, a: Math.max(from, x.run), b: Math.min(to - 1, x.due) }));
@@ -179,7 +199,7 @@ export function TimeGrid({ days }: { days: number }) {
     if (!colW) return;
     const i = Math.round(el.scrollLeft / colW);
     anchorIdx.current = i;
-    useStore.getState().setVisibleRange({ start: dayStart(i), end: dayStart(i + days) });
+    useStore.getState().setVisibleRange({ start: dayStart(i), end: dayEnd(i + days - 1) });
   };
 
   const onScroll = () => {
@@ -212,12 +232,13 @@ export function TimeGrid({ days }: { days: number }) {
     }
     const initial = lastSeq.current === -1;
     lastSeq.current = nav.seq;
-    const idx = days === 7 ? dayIndex(startOfWeek(nav.date, { weekStartsOn: WEEK_STARTS_ON })) : dayIndex(nav.date);
+    const idx = days >= 5 ? dayIndex(startOfWeek(nav.date, { weekStartsOn: D.weekStart() })) : dayIndex(nav.date); // a week view starts on the week's first day
     const left = clamp(idx, 0, TOTAL_DAYS - days) * colW;
     if (initial) {
       jumpTo(el, left);
-      const showsToday = todayIndex() >= idx && todayIndex() < idx + days;
-      el.scrollTop = (showsToday ? Math.max(0, minutesOfDay(Date.now()) / 60 - 2) : 7.5) * hourH;
+      const today = exactIndex(Date.now());
+      const showsToday = today >= idx && today < idx + days;
+      el.scrollTop = (showsToday ? Math.max(0, minutesOfDay(Date.now()) / 60 - 2) : dayStartHour) * hourH;
     } else if (nav.smooth && Math.abs(idx - anchorIdx.current) <= 45) {
       el.scrollTo({ left, behavior: 'smooth' });
     } else jumpTo(el, left);
@@ -474,7 +495,7 @@ export function TimeGrid({ days }: { days: number }) {
     const { day, min } = slotAt(e.clientX, e.clientY);
     const start = atMinutes(day, Math.floor(min / 30) * 30);
     const st = useStore.getState();
-    st.startDraft({ calendarId: defaultCal, title: '', start, end: start + 60 * MIN, allDay: false });
+    st.startDraft({ calendarId: defaultCal, title: '', start, end: start + prefs.defaultEventMin * MIN, allDay: false });
   };
 
   // ---- render --------------------------------------------------------------------
@@ -549,7 +570,7 @@ export function TimeGrid({ days }: { days: number }) {
                   <span className="rb-count">· {countdown(ev, now)}{due >= first + days ? ` · ${format(ev.start, 'EEE MMM d')}` : ''}</span>
                 </span>
                 {due < to ? (
-                  <span className="rb-flag">⚑ {format(ev.start, 'h:mm a').replace(':00', '')}</span>
+                  <span className="rb-flag">⚑ {fmtTime(ev.start)}</span>
                 ) : (
                   <span className="rb-end">→ {format(ev.start, 'MMM d')}</span>
                 )}
@@ -578,7 +599,7 @@ export function TimeGrid({ days }: { days: number }) {
             ) : lane < MAX_ALLDAY_LANES ? (
               <div
                 key={ev.id}
-                className={cls('ad-bar', ev.id === selectedId && 'selected', ev.end <= now && 'past', ev.id === flashId && 'flash', ev.start < dayStart(a) && 'cont-l', ev.end > dayStart(b + 1) && 'cont-r')}
+                className={cls('ad-bar', ev.id === selectedId && 'selected', ev.end <= now && 'past', ev.id === flashId && 'flash', ev.start < dayStart(a) && 'cont-l', ev.end > dayEnd(b) && 'cont-r')}
                 style={{
                   left: colLeft(a) + 2,
                   width: (b - a + 1) * colW - 4,
@@ -593,7 +614,7 @@ export function TimeGrid({ days }: { days: number }) {
                 {Math.round((ev.end - ev.start) / 86_400_000) > 1 && (
                   <span className="ad-len">{Math.round((ev.end - ev.start) / 86_400_000)} days</span>
                 )}
-                {ev.end > dayStart(b + 1) && <span className="ad-arrow">›</span>}
+                {ev.end > dayEnd(b) && <span className="ad-arrow">›</span>}
               </div>
             ) : null,
           )}
@@ -678,14 +699,14 @@ export function TimeGrid({ days }: { days: number }) {
                 );
               })}
               {shown
-                .filter((e) => e.kind === 'deadline' && dayIndex(e.start) === i)
+                .filter((e) => e.kind === 'deadline' && exactIndex(e.start) === i)
                 .map((e) => (
                   <div
                     key={'dl' + e.id}
                     data-ev={e.id}
                     className={cls('dl-flag', e.done && 'done', urgency(e, now), e.id === selectedId && 'selected', (e.id === preview?.id) && 'dragging')}
                     style={{ top: (minutesOfDay(e.start) / 60) * hourH, '--c': URGENCY_COLOR[urgency(e, now)] } as CSSProperties}
-                    title={`${e.title} · due ${format(e.start, 'h:mm a')}`}
+                    title={`${e.title} · due ${fmtTime(e.start)}`}
                   >
                     <span className="dl-flag-label">⚑ {e.title}{e.done ? ' ✓' : ''}</span>
                   </div>

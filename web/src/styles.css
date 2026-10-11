@@ -2493,3 +2493,69 @@ html.in-app :is(input, textarea, [contenteditable], .pj-doc, .ro-notes, .panel) 
 .side-slot.lifted { z-index: 5; transition: none; }
 .side-slot.lifted > .side-section { box-shadow: var(--shadow); scale: 1.02; transition: scale 0.12s; }
 body.side-dragging, body.side-dragging * { cursor: grabbing !important; user-select: none; }
+/* Settings → Appearance → Event colours: "Stripe" — the calendar's colour only at the event's edge */
+[data-events='stripe'] .ev:not(.selected) { background: var(--panel); color: var(--text); box-shadow: inset 4px 0 0 var(--c), 0 0 0 1px var(--line); }
+[data-events='stripe'] .ev:not(.selected) .ev-time, [data-events='stripe'] .ev:not(.selected) .ev-loc { color: var(--text-2); opacity: 1; }
+/* week numbers (Settings → Calendar) */
+.mini-grid.with-wk { grid-template-columns: 18px repeat(7, 1fr); }
+.mini-wk { display: grid; place-items: center; font-size: 9.5px; color: var(--text-3); font-variant-numeric: tabular-nums; }
+.mv-wk { position: absolute; left: 6px; top: 5px; font-size: 10px; font-weight: 600; color: var(--text-3); pointer-events: none; }
+
+/* ---------- Settings (components/Settings.tsx): sections on the left, the chosen one's settings beside them ---------- */
+.st-scrim { z-index: 80; }
+.st { width: min(920px, 100%); height: min(660px, calc(100dvh - 32px)); display: grid; grid-template-columns: 220px 1fr; grid-template-rows: minmax(0, 1fr); border-radius: 14px; overflow: hidden; background: var(--panel); border: 1px solid var(--line); box-shadow: var(--shadow); animation: pop 0.15s ease-out; }
+.st-side { display: flex; flex-direction: column; gap: 2px; padding: 12px 10px; background: var(--bg-side); border-right: 1px solid var(--line); overflow-y: auto; }
+.st-search { display: flex; align-items: center; gap: 7px; margin: 0 2px 10px; padding: 6px 9px; border-radius: 8px; background: var(--bg-hover); color: var(--text-3); }
+.st-search input { flex: 1; min-width: 0; border: 0; outline: 0; background: none; color: var(--text); font: inherit; font-size: 13px; }
+.st-item { width: 100%; display: flex; align-items: center; gap: 9px; padding: 6px 8px; border-radius: 8px; font-weight: 500; text-align: left; color: var(--text); }
+.st-item:hover { background: var(--bg-hover); }
+.st-item.on { background: var(--focus); color: var(--on-focus); }
+.st-ico { flex: none; width: 22px; height: 22px; border-radius: 6px; display: grid; place-items: center; color: #fff; font-size: 12px; background: var(--c); }
+.st-gap-after { margin-bottom: 10px; }
+.st-none { margin: 4px 8px; font-size: 12px; color: var(--text-3); }
+.st-main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.st-head { display: flex; align-items: center; gap: 10px; padding: 14px 16px 10px 20px; border-bottom: 1px solid var(--line-soft); }
+.st-head h2 { margin: 0; flex: 1; font-size: 17px; }
+.st-body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 16px 20px 28px; display: flex; flex-direction: column; gap: 20px; }
+.st-grp { display: flex; flex-direction: column; gap: 6px; }
+.st-grp h3 { margin: 0 0 0 4px; font-size: 11px; font-weight: 700; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.05em; }
+.st-box { border-radius: 10px; border: 1px solid var(--line); background: color-mix(in srgb, var(--bg-hover) 50%, var(--panel)); }
+.st-row { display: flex; align-items: center; gap: 14px; min-height: 42px; padding: 7px 12px; }
+.st-row + .st-row { border-top: 1px solid var(--line-soft); }
+.st-row.stack { flex-direction: column; align-items: stretch; gap: 8px; }
+.st-lab { flex: 1; min-width: 0; }
+.st-lab b { display: flex; align-items: center; gap: 7px; font-weight: 500; }
+.st-lab > span { display: block; font-size: 11.5px; color: var(--text-3); margin-top: 1px; }
+.st-ctl { flex: none; display: flex; align-items: center; gap: 8px; }
+.st-foot { margin: 0 4px; font-size: 11.5px; color: var(--text-3); }
+.st-in { width: 210px; padding: 5px 9px; border-radius: 7px; border: 1px solid var(--line); background: var(--panel); color: var(--text); font: inherit; outline: none; }
+.st-in:focus { border-color: var(--focus); }
+.st-seg { display: inline-flex; padding: 2px; border-radius: 8px; background: var(--bg-hover); }
+.st-seg button { padding: 3px 10px; border-radius: 6px; color: var(--text-2); font-weight: 600; white-space: nowrap; }
+.st-seg button.on { background: var(--seg-on); color: var(--text); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15); }
+.st-tog { position: relative; width: 34px; height: 20px; flex: none; border-radius: 10px; background: var(--line); transition: background 0.15s; }
+.st-tog::after { content: ''; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3); transition: transform 0.15s; }
+.st-tog.on { background: var(--ok); }
+.st-tog.on::after { transform: translateX(14px); }
+.st-range { width: 180px; accent-color: var(--focus); }
+.st-themes { padding: 10px; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); }
+.st-dot { flex: none; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--text-3); }
+.st-dot.ok { background: var(--ok); }
+.st-dot.off { background: var(--danger); }
+.st-err { color: var(--danger) !important; }
+.st-btns { display: flex; flex-wrap: wrap; gap: 8px; padding: 0 2px; }
+.st-relays { display: flex; flex-direction: column; gap: 4px; font: 12px ui-monospace, Menlo, monospace; }
+.st-relays span { display: flex; align-items: center; gap: 7px; }
+.st-relays em { font-style: normal; color: var(--text-3); }
+.st-relay-sum { flex-direction: column; align-items: flex-end; gap: 2px; font-size: 12px; color: var(--text-2); }
+.st-muted { font-size: 12px; color: var(--text-3); }
+.st-msg { margin: -8px 4px 0; font-size: 12.5px; color: var(--ok); }
+.st-msg.bad { color: var(--danger); }
+.st-big { font-size: 15px; font-weight: 700; }
+.st-kbd { display: inline-block; min-width: 20px; padding: 1px 6px; border-radius: 5px; border: 1px solid var(--line); background: var(--panel); font-size: 11.5px; text-align: center; font-family: inherit; }
+@media (max-width: 700px) {
+  .st { grid-template-columns: 1fr; grid-template-rows: auto minmax(0, 1fr); height: calc(100dvh - 32px); }
+  .st-side { flex-direction: row; flex-wrap: wrap; border-right: 0; border-bottom: 1px solid var(--line); max-height: 150px; }
+  .st-search { width: 100%; }
+  .st-row { flex-wrap: wrap; }
+}

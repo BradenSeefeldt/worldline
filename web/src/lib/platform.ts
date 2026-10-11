@@ -55,3 +55,34 @@ export function routeLinksToBrowser() {
     return null;
   }) as typeof window.open;
 }
+
+/** Save text to a file the person chooses: the Mac's Save panel in the app (a browser download in a browser).
+ *  Resolves false if they cancelled. */
+export async function saveFile(name: string, text: string, mime = 'text/plain'): Promise<boolean> {
+  if (isApp()) {
+    const [{ save }, { invoke }] = await Promise.all([import('@tauri-apps/plugin-dialog'), import('@tauri-apps/api/core')]);
+    const path = await save({ defaultPath: name });
+    if (!path) return false;
+    await invoke('save_text', { path, contents: text });
+    return true;
+  }
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([text], { type: mime }));
+  a.download = name;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  return true;
+}
+
+/** Open at login (the Mac app; a browser can't). */
+export const autostart = {
+  get: async () => (isApp() ? (await import('@tauri-apps/plugin-autostart')).isEnabled() : false),
+  set: async (on: boolean) => {
+    if (!isApp()) return;
+    const a = await import('@tauri-apps/plugin-autostart');
+    await (on ? a.enable() : a.disable());
+  },
+};
+
+/** The app's version (from package.json, at build time). */
+export const APP_VERSION: string = __APP_VERSION__;

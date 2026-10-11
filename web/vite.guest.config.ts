@@ -3,6 +3,7 @@
 import { renameSync } from 'node:fs';
 import { defineConfig, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
+import pkg from './package.json' with { type: 'json' };
 
 // The built page may load only its own files and talk only to relays (wss:). Added at build time: the dev server
 // needs inline scripts for live reload.
@@ -15,6 +16,7 @@ const guestPage: Plugin = {
 
 export default defineConfig({
   plugins: [react(), guestPage],
+  define: { __APP_VERSION__: JSON.stringify(pkg.version) },
   base: './',
   build: { outDir: 'dist-guest', emptyOutDir: true, rollupOptions: { input: 'book.html' } },
 });

@@ -5,12 +5,13 @@ import { addDays, addMonths, format, startOfMonth } from 'date-fns';
 import { newEventCalendarId, useStore } from '../data/store';
 import { useEventsIn } from '../data/useEvents';
 import type { CalEvent } from '../data/types';
-import { MIN, TOTAL_WEEKS, atMinutes, clamp, dateAt, dayIndex, dayStart, isWeekend } from '../lib/dates';
+import { MIN, TOTAL_WEEKS, atMinutes, clamp, dateAt, dayIndex, dayStart, isWeekend, weekNumber } from '../lib/dates';
 import { assignLanes } from '../lib/layout';
 import { useElementSize, useNow } from '../lib/hooks';
 import { cls, fmtTimeShort } from '../lib/format';
 import { URGENCY_COLOR, urgency } from '../lib/deadlines';
 import { taskAsEvent } from '../lib/tasks';
+import { prefs } from '../lib/prefs';
 
 interface Item { ev: CalEvent; a: number; b: number; bar: boolean; lane: number }
 
@@ -18,6 +19,7 @@ export function MonthView() {
   const ref = useRef<HTMLDivElement>(null);
   const { width, height } = useElementSize(ref);
   const narrow = width > 0 && width < 600;
+  const weekNums = useStore((s) => s.settings.weekNumbers);
   const rowH = height ? Math.max(narrow ? 76 : 96, Math.floor(height / 5.4)) : 100;
   const colW = width / 7;
   const laneH = narrow ? 16 : 19;
@@ -133,7 +135,7 @@ export function MonthView() {
     const st = useStore.getState();
     const start = atMinutes(dayIdx, 9 * 60);
     const cal = newEventCalendarId(st);
-    st.startDraft({ calendarId: cal, title: '', start, end: start + 60 * MIN, allDay: false });
+    st.startDraft({ calendarId: cal, title: '', start, end: start + prefs.defaultEventMin * MIN, allDay: false });
   };
 
   const weekdays = Array.from({ length: 7 }, (_, k) => format(dateAt(k), narrow ? 'EEEEE' : 'EEE'));
@@ -163,6 +165,7 @@ export function MonthView() {
                     <button className="mv-daynum" onClick={() => openDay(date.getTime())}>
                       <span className={cls('mv-mon', date.getDate() === 1 && 'first')}>{format(date, 'MMM')}</span> {date.getDate()}
                     </button>
+                    {weekNums && k === 0 && <span className="mv-wk" title="Week number">W{weekNumber(date)}</span>}
                   </div>
                 );
               })}

@@ -1,0 +1,46 @@
+// Writing a calendar as an .ics file (Settings → Data & Backups → Export), for Apple Calendar, Google, Outlook.
+// Repeating events stay one series (RRULE, with skipped days as EXDATE and moved ones as their own RECURRENCE-ID
+// event), on the wall clock of their zone, so a weekly 3 PM Toronto meeting is still 3 PM Toronto wherever it's opened.
+import type { CalEvent } from '../data/types';
+import { decodeEvent } from './recurrence';
+import { wallClock } from './zone';
+
+const DAY_CODES = ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'];
+const pad = (n: number, w = 2) => String(n).padStart(w, '0');
+const utc = (t: number) => new Date(t).toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
+const date = (t: number) => { const d = new Date(t); return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}`; };
+const local = (t: number, tz: string) => { const w = wallClock(t, tz); return `${w.y}${pad(w.m + 1)}${pad(w.d)}T${pad(w.h)}${pad(w.min)}00`; };
+const esc = (s: string) => s.replace(/\\/g, '\\\\').replace(/\n/g, '\\n').replace(/([,;])/g, '\\$1');
+/** Lines over 75 characters continue on the next line, indented (RFC 5545). */
+const fold = (line: string) => line.length <= 75 ? line : line.match(/.{1,74}/g)!.map((p, i) => (i ? ' ' + p : p)).join('\r\n');
+
+function stamp(e: CalEvent, prop: 'DTSTART' | 'DTEND' | 'RECURRENCE-ID' | 'EXDATE', t: number, tz?: string) {
+  if (e.allDay) return `${prop};VALUE=DATE:${date(t)}`;
+  if (tz) return `${prop};TZID=${tz}:${local(t, tz)}`;
+  return `${prop}:${utc(t)}`;
+}
+
+/** `events`: as stored (all-day ones as dates). Tasks, deadlines and generated occurrences are left out. */
+export function toIcs(name: string, events: CalEvent[], color?: string): string {
+  const list = events.map(decodeEvent).filter((e) => !e.kind && !(e.seriesId && e.originalStart === undefined));
+  const zoneOf = (e: CalEvent) => (e.recurrence || e.seriesId) && !e.allDay ? e.timeZone ?? list.find((m) => m.id === e.seriesId)?.timeZone : undefined;
+  const out = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Worldline//Calendar//EN', 'CALSCALE:GREGORIAN', `X-WR-CALNAME:${esc(name)}`, ...(color ? [`X-APPLE-CALENDAR-COLOR:${color}`] : [])];
+  for (const e of list) {
+    const tz = zoneOf(e);
+    const uid = `${e.seriesId ?? e.id}@worldline`;
+    out.push('BEGIN:VEVENT', `UID:${uid}`, `DTSTAMP:${utc(e.createdAt ?? Date.now())}`, stamp(e, 'DTSTART', e.start, tz), stamp(e, 'DTEND', e.end, tz), `SUMMARY:${esc(e.title || 'Untitled')}`);
+    if (e.location) out.push(`LOCATION:${esc(e.location)}`);
+    if (e.notes) out.push(`DESCRIPTION:${esc(e.notes)}`);
+    if (e.url) out.push(`URL:${e.url}`);
+    if (e.recurrence) {
+      const r = e.recurrence;
+      const parts = [`FREQ=${r.freq.toUpperCase()}`, ...(r.interval > 1 ? [`INTERVAL=${r.interval}`] : []), ...(r.byDay?.length ? [`BYDAY=${r.byDay.map((d) => DAY_CODES[d]).join(',')}`] : []), ...(r.until ? [`UNTIL=${utc(r.until)}`] : [])];
+      out.push(`RRULE:${parts.join(';')}`);
+      for (const x of e.exdates ?? []) out.push(stamp(e, 'EXDATE', x, tz));
+    }
+    if (e.seriesId && e.originalStart !== undefined) out.push(stamp(e, 'RECURRENCE-ID', e.originalStart, tz));
+    out.push('END:VEVENT');
+  }
+  out.push('END:VCALENDAR');
+  return out.map(fold).join('\r\n') + '\r\n';
+}

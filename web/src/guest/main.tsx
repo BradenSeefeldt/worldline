@@ -3,6 +3,10 @@ import { StrictMode, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { RemoteGuest } from './RemoteGuest';
 import { guestRelays, loadRelayList, relayTransport, type Transport } from '../lib/relays';
+import { localeUses24h, setPrefs } from '../lib/prefs';
+
+// Times on this page follow the guest's own clock style (24-hour in most of the world).
+setPrefs({ hour24: localeUses24h() });
 import '../styles.css';
 
 const mq = window.matchMedia('(prefers-color-scheme: dark)');
