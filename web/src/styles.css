@@ -2560,3 +2560,8 @@ body.side-dragging, body.side-dragging * { cursor: grabbing !important; user-sel
 .rc-actions { display: flex; gap: 8px; }
 .side-update { align-self: stretch; padding: 7px 10px; border-radius: 9px; font-size: 12.5px; font-weight: 600; text-align: left; color: var(--on-focus); background: var(--focus); }
 .side-update:hover { filter: brightness(1.08); }
+/* The Mac app: the window's red / yellow / green buttons sit over the top of the sidebar. When the sidebar scrolls, the
+   empty strip under them stays put (and keeps the sidebar's colour, and still drags the window), and the pinned mini
+   month stops just below it — so nothing ever slides under the buttons. */
+html.in-app .win-strip { position: sticky; top: calc(-14px - env(safe-area-inset-top)); z-index: 4; background: var(--bg-side); }
+html.in-app .sidebar .mini { top: calc(8px - env(safe-area-inset-top)); }
