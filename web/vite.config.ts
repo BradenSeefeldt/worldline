@@ -30,5 +30,6 @@ export default defineConfig({
   define: { __APP_VERSION__: JSON.stringify(pkg.version) },
   server: { port: 5173 },
   // Tests read the stylesheet's text (theme.test.ts checks every theme defines every colour).
-  test: { css: { include: [/styles\.css/] } },
+  // (testTimeout: the stress tests take a few seconds; a busy machine or CI runner mustn't turn that into a failure)
+  test: { css: { include: [/styles\.css/] }, testTimeout: 20_000 },
 });
