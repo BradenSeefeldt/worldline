@@ -2,6 +2,7 @@
 node_modules/
 web/dist/
 web/dist-guest/
+web/dist-web/
 web/release/
 web/src-tauri/target/
 web/src-tauri/gen/

@@ -45,6 +45,35 @@ If you already deleted the app by dragging it to the Trash, these are the leftov
 id, `io.github.bradenseefeldt.worldline`): in `~/Library/` — `Application Support/…` (your data), `Caches/…`,
 `WebKit/…`, `Preferences/….plist`, and `LaunchAgents/Worldline.plist` if you turned on Open at login.
 
+## On your iPhone (free, works offline)
+
+Open **https://bradenseefeldt.github.io/worldline/app/** in Safari → Share → **Add to Home Screen**. It opens like an
+app, works with no internet (the whole app is kept on the phone), and keeps its data on the phone. Then pair it with
+your Mac (below) so both have the same calendar. No App Store, no Apple account, nothing to pay.
+
+What it can't do that the Mac app does: read calendar subscriptions itself (a browser can't read other sites'
+feeds — your Mac does, and sync brings the events), answer scheduling links (your Mac does), or show notifications.
+
+## Syncing your Mac and iPhone
+
+**⚙ Settings → Sync → Turn on sync** on the Mac; it shows a QR code. On the iPhone: Settings → Sync → **Join…** →
+scan it (or paste the code — copy it on the Mac; with the same Apple ID it's on the iPhone's clipboard). Joining
+replaces the iPhone's own data with your synced calendar.
+
+- **Every device keeps a full copy** and works offline; changes merge when they reach each other. Two devices
+  editing different things always merge, and so do different fields of one item (a title on the phone, a time on the
+  Mac); the same field edited on both keeps the later edit.
+- **End-to-end encrypted**, through the same public Nostr relays as scheduling links (kept current weekly). Relays
+  see random-looking tags and ciphertext. The pairing code is the key — share it only with your own devices.
+- Changes go out a moment after you stop typing (kept by relays for 30 days); each device also republishes a snapshot
+  of everything (after starting, and every 6 hours if anything changed), so a device that was off for months catches
+  up. Undo never takes back what another device did.
+- What syncs: calendars, events, tasks, habits and their history, projects, scheduling links, your name and home
+  zone, and the settings about you (week start, time format, defaults). Each device keeps its own theme, view and
+  window settings.
+- Code: `web/src/lib/sync/` (the document model, the wire format) and `web/src/data/syncEngine.ts`; tests run the
+  engine end to end against a simulated second device.
+
 ### Subscribing to calendars
 
 Sidebar → **Calendars → +** → **Subscribe to a link**, and paste the calendar's link: a department or seminar

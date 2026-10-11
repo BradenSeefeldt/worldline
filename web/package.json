@@ -1,7 +1,7 @@
 {
   "name": "worldline",
   "private": true,
-  "version": "0.3.4",
+  "version": "0.4.0",
   "type": "module",
   "scripts": {
     "tauri": "tauri",
@@ -13,7 +13,9 @@
     "app": "tauri dev",
     "app:build": "tauri build --bundles app",
     "app:package": "tauri build --bundles app && bash scripts/make-dmg.sh",
-    "build:guest": "vite build --config vite.guest.config.ts"
+    "build:guest": "vite build --config vite.guest.config.ts",
+    "build:web": "vite build --config vite.web.config.ts",
+    "preview:web": "vite preview --config vite.web.config.ts --port 4174 --strictPort --host"
   },
   "dependencies": {
     "@date-fns/tz": "^1.5.0",

@@ -7,6 +7,7 @@ import { Chevron, Plus, SidebarIcon, ProjectGlyph } from './Icons';
 import { ZonePill } from './ZonePill';
 import { HabitGlyph } from './Habits';
 import { ProjectsBar } from './ProjectsBar';
+import { useMediaQuery } from '../lib/hooks';
 
 const MAC = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
 
@@ -17,10 +18,10 @@ const VIEWS: { id: ViewMode; label: string; short: string; key: string }[] = [
   { id: 'month', label: 'Month', short: 'M', key: 'M' },
 ];
 
-function title(r: Range): [string, string] {
+function title(r: Range, short = false): [string, string] {
   const a = new Date(r.start);
   const b = new Date(r.end - 1);
-  if (isSameMonth(a, b)) return [format(a, 'MMMM'), format(a, 'yyyy')];
+  if (isSameMonth(a, b)) return [format(a, short ? 'MMM' : 'MMMM'), format(a, 'yyyy')]; // a phone: "Oct"
   if (isSameYear(a, b)) return [`${format(a, 'MMM')} – ${format(b, 'MMM')}`, format(a, 'yyyy')];
   return [`${format(a, 'MMM yyyy')} – ${format(b, 'MMM')}`, format(b, 'yyyy')];
 }
@@ -70,7 +71,8 @@ export function Toolbar() {
   const sidebarOpen = useStore((s) => s.sidebarOpen);
   const page = useStore((s) => s.page);
   const setPage = useStore((s) => s.setPage);
-  const [main, sub] = title(range);
+  const narrow = useMediaQuery('(max-width: 430px)'); // an iPhone: everything must fit in one row
+  const [main, sub] = title(range, narrow);
   const habits = page === 'habits';
   const projects = page === 'projects';
   const calendar = page === 'calendar';

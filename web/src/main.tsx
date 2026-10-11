@@ -24,8 +24,11 @@ void loaded.then(() => {
     createRoot(document.getElementById('root')!).render(<Recovery reason={loadProblem} />);
     return;
   }
+  // A new install starts empty (the Mac app, and the web / iPhone version); development keeps the demo data.
+  if (firstRun && (isApp() || !import.meta.env.DEV)) useStore.getState().startFresh();
+  // The web / iPhone version: keep every file on the device so it opens without internet (sw.js, vite.web.config.ts).
+  if (!isApp() && !import.meta.env.DEV && 'serviceWorker' in navigator) void navigator.serviceWorker.register('./sw.js').catch(() => undefined);
   if (isApp()) {
-    if (firstRun) useStore.getState().startFresh();
     routeLinksToBrowser();
     // Closing the window: hide it and keep running (Settings → General, on by default) so scheduling links stay
     // live — or really quit. Either way, anything not yet saved is written first.
