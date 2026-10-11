@@ -18,7 +18,7 @@ import { cls } from './lib/format';
 import { applyTheme } from './lib/theme';
 import { localZone, zoneAbbr, zoneCity } from './lib/zone';
 import { onSaveTrouble } from './data/persist';
-import { checkForUpdate } from './lib/updates';
+import { canUpdate, checkForUpdate } from './lib/updates';
 import { isApp } from './lib/platform';
 
 // The Projects tab brings a document editor with it: load it the first time it's opened.
@@ -58,13 +58,17 @@ export default function App() {
   // Automatic updates (the Mac app): a first look a minute after launch, then once a day.
   const autoUpdate = useStore((s) => s.settings.autoUpdate);
   useEffect(() => {
-    if (!isApp() || !autoUpdate) return;
-    const look = () => void checkForUpdate(useStore.getState().setUpdate);
-    const first = setTimeout(look, 60_000);
+    if (!canUpdate() || !autoUpdate) return;
+    const look = () => useStore.getState().update.state !== 'ready' && void checkForUpdate(useStore.getState().setUpdate);
+    const first = setTimeout(look, isApp() ? 60_000 : 5_000);
     const daily = setInterval(look, 24 * 3_600_000);
+    // the iPhone keeps a Home Screen app paused in the background for days: look again whenever it comes back
+    const back = () => !isApp() && document.visibilityState === 'visible' && look();
+    document.addEventListener('visibilitychange', back);
     return () => {
       clearTimeout(first);
       clearInterval(daily);
+      document.removeEventListener('visibilitychange', back);
     };
   }, [autoUpdate]);
 

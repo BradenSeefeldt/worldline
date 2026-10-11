@@ -1,6 +1,6 @@
 [package]
 name = "worldline"
-version = "0.6.2"
+version = "0.6.3"
 description = "Worldline: calendar, habits and research projects for the Mac"
 authors = ["BradenSeefeldt"]
 license = "MIT"

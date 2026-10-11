@@ -19,7 +19,7 @@ import { beforeRestore, listSnapshots, replaceSaved, snapshotValue } from '../da
 import { isNewer, makeBackup, readBackup } from '../lib/backup';
 import { toIcs } from '../lib/icsExport';
 import { relayHealth } from '../data/schedSync';
-import { checkForUpdate, restartToUpdate } from '../lib/updates';
+import { canUpdate, checkForUpdate, restartToUpdate } from '../lib/updates';
 import { SyncSettings } from './SyncSettings';
 
 const REPO = 'BradenSeefeldt/worldline';
@@ -571,7 +571,7 @@ function About() {
   const update = useStore((x) => x.update);
   const [check, setCheck] = useState<{ state: 'idle' | 'checking' | 'current' | 'newer' | 'failed'; latest?: string }>({ state: 'idle' });
   const releases = `https://github.com/${REPO}/releases/latest`;
-  // In a browser (development) there's nothing to install: just say whether a newer release exists.
+  // In development there's nothing to install: just say whether a newer release exists.
   const run = async () => {
     setCheck({ state: 'checking' });
     try {
@@ -586,7 +586,7 @@ function About() {
     checking: 'Checking…',
     current: '✓ This is the newest version.',
     downloading: `Downloading ${'version' in update ? update.version : ''}…`,
-    ready: `Version ${'version' in update ? update.version : ''} is downloaded — restart to use it.`,
+    ready: isApp() ? `Version ${'version' in update ? update.version : ''} is downloaded — restart to use it.` : `Version ${'version' in update ? update.version : ''} is available — everything is saved first.`,
     failed: `Couldn’t check: ${'error' in update ? update.error : ''}`,
   }[update.state];
   const browserNote = check.state === 'current' ? '✓ This is the newest version.' : check.state === 'newer' ? `Version ${check.latest?.replace(/^v/, '')} is available.` : check.state === 'failed' ? 'Couldn’t check (no network?).' : 'Calendar, habits and research projects · free, no account, no server';
@@ -598,18 +598,18 @@ function About() {
   return (
     <>
       <Group>
-        {isApp() ? (
+        {canUpdate() ? (
           <>
             <Row title={<span className="st-big">Worldline {APP_VERSION}</span>} note={appNote}>
               {update.state === 'ready' ? (
-                <button className="ce-btn primary" onClick={() => void restartToUpdate()}>Restart to update</button>
+                <button className="ce-btn primary" onClick={() => void restartToUpdate()}>{isApp() ? 'Restart to update' : 'Update now'}</button>
               ) : (
                 <button className="ce-btn primary" disabled={update.state === 'checking' || update.state === 'downloading'} onClick={() => void checkForUpdate(useStore.getState().setUpdate)}>
                   {update.state === 'checking' ? 'Checking…' : update.state === 'downloading' ? 'Downloading…' : 'Check for updates'}
                 </button>
               )}
             </Row>
-            <Row title="Check for updates automatically" note="Once a day; a new version downloads in the background and waits for you to restart">
+            <Row title="Check for updates automatically" note={isApp() ? 'Once a day; a new version downloads in the background and waits for you to restart' : 'When you open it, and once a day; a new version waits for you to tap Update'}>
               <Toggle label="Check for updates automatically" on={s.autoUpdate} onChange={(v) => set({ autoUpdate: v })} />
             </Row>
           </>

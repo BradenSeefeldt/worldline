@@ -67,5 +67,8 @@ month (tap it to open the whole month), the view, and today; under it, the week 
 there). The tabs at the bottom go to Calendar, Habits, Projects and Settings, and the big **+** in the bottom-right
 corner adds an event, task or deadline.
 
+Updates: it checks when you open it (and once a day) whether the site has a newer version; then the sidebar shows
+**Update to … · Reload** (or Settings → About → **Update now**). Everything is saved first.
+
 What it can't do that the Mac app does: read calendar subscriptions itself (a browser can't read other sites'
 feeds — your Mac does, and sync brings the events), answer scheduling links (your Mac does), or show notifications.

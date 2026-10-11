@@ -21,13 +21,15 @@ const webApp: Plugin = {
     return html.replace('<meta charset="UTF-8" />', `<meta charset="UTF-8" />\n    <meta http-equiv="Content-Security-Policy" content="${csp}" />`);
   },
   closeBundle() {
+    // what the app compares itself with to offer "Update now" (lib/updates.ts); never kept by the service worker
+    writeFileSync(join(OUT, 'version.json'), JSON.stringify({ version: pkg.version }) + '\n');
     const files: string[] = [];
     const walk = (d: string) => readdirSync(d).forEach((f) => (statSync(join(d, f)).isDirectory() ? walk(join(d, f)) : files.push(relative(OUT, join(d, f)))));
     walk(OUT);
     // Kept on the phone up front: everything the app needs offline — but not KaTeX's .woff / .ttf fonts (Safari uses the
     // .woff2 copies) or the city list behind the time-zone search (loaded only when that opens; kept once fetched).
     // That halves what installing it downloads (~1.9 → ~1 MB compressed).
-    const later = (f: string) => /\.(woff|ttf)$/.test(f) || /city-timezones/.test(f);
+    const later = (f: string) => /\.(woff|ttf)$/.test(f) || /city-timezones/.test(f) || f === 'version.json';
     const list = files.filter((f) => f !== 'sw.js' && !later(f)).map((f) => `./${f}`);
     const version = createHash('sha256').update(list.join('\n') + pkg.version).digest('hex').slice(0, 12);
     writeFileSync(join(OUT, 'sw.js'), `// Keeps Worldline working offline (written by vite.web.config.ts).

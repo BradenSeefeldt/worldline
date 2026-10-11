@@ -14,6 +14,7 @@ import { justDragged, startBlockDrag } from './BlockDrag';
 import { SchedulingBody } from './Scheduling';
 import { landingIndex, moveTo, orderedIds, shiftFor } from '../lib/reorder';
 import { restartToUpdate } from '../lib/updates';
+import { isApp } from '../lib/platform';
 
 function MiniMonth() {
   const range = useStore((s) => s.visibleRange);
@@ -503,7 +504,7 @@ function UpdateReady() {
   if (u.state !== 'ready') return null;
   return (
     <button className="side-update" onClick={() => void restartToUpdate()} title="Everything is saved first">
-      ↻ Update to {u.version} · Restart
+      ↻ Update to {u.version} · {isApp() ? 'Restart' : 'Reload'}
     </button>
   );
 }
