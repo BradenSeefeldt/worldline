@@ -1,5 +1,5 @@
-// The iPhone layout (screens under 700 px wide): the top holds where you are (☰, the month, the view, Today, and a
-// week strip that opens into the whole month); the bottom holds where to go (Calendar · Habits · Projects · Settings)
+// The iPhone layout (screens under 700 px wide): the top holds where you are (☰, the month — tap it for the whole
+// month —, the view, Today); the bottom holds where to go (Calendar · Habits · Projects · Settings)
 // and a big + floating bottom-right, where a thumb reaches. The sidebar is the same as on the Mac, as a drawer: ☰, or
 // drag it out from the left edge of the screen.
 import { useEffect, useMemo, useRef, type ReactNode } from 'react';
@@ -28,7 +28,7 @@ function SidebarButton() {
   );
 }
 
-/** The days of the week on screen (or, opened, the whole month), with a dot under days that have something on. */
+/** The whole month, opened from the title, with a dot under days that have something on. (`month` false: one week.) */
 function DayStrip({ month }: { month: boolean }) {
   const range = useStore((s) => s.visibleRange);
   const calendars = useStore((s) => s.calendars);
@@ -87,7 +87,6 @@ function DayStrip({ month }: { month: boolean }) {
 
 export function PhoneTopBar() {
   const page = useStore((s) => s.page);
-  const view = useStore((s) => s.view);
   const range = useStore((s) => s.visibleRange);
   const away = useStore((s) => s.zone !== s.homeZone);
   const month = useStore((s) => s.phoneMonth);
@@ -126,7 +125,7 @@ export function PhoneTopBar() {
           {format(new Date(), 'd')}
         </button>
       </div>
-      {(view !== 'month' || month) && <DayStrip month={month} />}
+      {month && <DayStrip month />}
     </header>
   );
 }
