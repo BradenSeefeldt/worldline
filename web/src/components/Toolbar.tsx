@@ -27,7 +27,7 @@ function title(r: Range, short = false): [string, string] {
 }
 
 /** The view (Day / 3 Day / Week / Month) as one compact menu; the keys D, 3, W, M still switch directly. */
-function ViewMenu() {
+export function ViewMenu() {
   const view = useStore((s) => s.view);
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);

@@ -62,5 +62,10 @@ Screen**. It opens like an app, works with no internet (the whole app is kept on
 phone. Then [pair it with your Mac](sync.md) so both have the same calendar. No App Store, no Apple account, nothing
 to pay.
 
+On the phone the top bar shows where you are: ☰ (the sidebar — or drag it out from the left edge of the screen), the
+month (tap it to open the whole month), the view, and today; under it, the week (swipe it sideways; tap a day to go
+there). The tabs at the bottom go to Calendar, Habits, Projects and Settings, and the big **+** in the bottom-right
+corner adds an event, task or deadline.
+
 What it can't do that the Mac app does: read calendar subscriptions itself (a browser can't read other sites'
 feeds — your Mac does, and sync brings the events), answer scheduling links (your Mac does), or show notifications.

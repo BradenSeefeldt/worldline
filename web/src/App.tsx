@@ -2,6 +2,7 @@ import { Suspense, lazy, useEffect } from 'react';
 import { DAYS_IN_VIEW, useStore } from './data/store';
 import { Sidebar } from './components/Sidebar';
 import { Toolbar } from './components/Toolbar';
+import { Fab, PhoneTabs, PhoneTopBar, useEdgeSwipe } from './components/PhoneBars';
 import { EventPanel } from './components/EventPanel';
 import { TaskPanel } from './components/TaskPanel';
 import { DragGhost } from './components/BlockDrag';
@@ -51,6 +52,7 @@ export default function App() {
   const subsEvery = useStore((s) => s.settings.subsRefreshMin) * 60_000;
   const phone = useMediaQuery('(max-width: 699px)');
   const navSeq = useStore((s) => s.nav.seq);
+  useEdgeSwipe(phone); // a phone: drag the sidebar out from the left edge
   const zone = useStore((s) => s.zone);
 
   // Automatic updates (the Mac app): a first look a minute after launch, then once a day.
@@ -111,6 +113,8 @@ export default function App() {
   useEffect(() => {
     if (phone) useStore.getState().setSidebarOpen(false);
   }, [phone, navSeq]);
+  // a phone: going to another page (the tabs) folds the month back into the week strip
+  useEffect(() => useStore.getState().setPhoneMonth(false), [page]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -164,7 +168,7 @@ export default function App() {
       <Sidebar />
       {phone && sidebarOpen && <div className="scrim" onClick={() => useStore.getState().setSidebarOpen(false)} />}
       <main className="main">
-        <Toolbar />
+        {phone ? <PhoneTopBar /> : <Toolbar />}
         <div className="view" key={`${zone}|${weekStartsOn}|${hour24}|${hideWeekends}` /* redraw everything in the new zone / week / clock */}>
           {page === 'habits' ? (
             <HabitsPage />
@@ -180,7 +184,9 @@ export default function App() {
             </>
           )}
         </div>
+        {phone && <PhoneTabs />}
       </main>
+      {phone && <Fab />}
       {quickAddOpen && <QuickAdd />}
       <Toast />
       <Settings />

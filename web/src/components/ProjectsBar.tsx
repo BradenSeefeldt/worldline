@@ -5,7 +5,8 @@ import { useStore, type PaneView } from '../data/store';
 import { openItems } from '../lib/projects';
 import { cls } from '../lib/format';
 
-export function ProjectsBar() {
+/** `compact` (a phone): one row — the page's name, then search and Waiting on others as icons; searching takes the row. */
+export function ProjectsBar({ compact = false }: { compact?: boolean }) {
   const projects = useStore((s) => s.projects);
   const threads = useStore((s) => s.threads);
   const projectLog = useStore((s) => s.projectLog);
@@ -43,6 +44,31 @@ export function ProjectsBar() {
     else st.openPane(v);
   };
   const live = projects.filter((p) => !p.archived);
+  const [searching, setSearching] = useState(false);
+  if (compact && !(searching || search))
+    return (
+      <>
+        <h1 className="ptb-title">Projects</h1>
+        <span className="ptb-gap" />
+        <button className="ptb-btn" onClick={() => setSearching(true)} aria-label="Search notes, pages, ideas and pins">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden><circle cx="11" cy="11" r="7" /><path d="m20 20-4-4" /></svg>
+        </button>
+        <button className={cls('ptb-btn', 'ptb-badge', view?.k === 'waiting' && 'on')} onClick={() => useStore.getState().openPane({ k: 'waiting' })} aria-label={`Waiting on others: ${owed}`}>
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden><circle cx="12" cy="8" r="4" /><path d="M4 21c1-4 4.5-6 8-6s7 2 8 6" /></svg>
+          <span className={cls('pj-badge', owed === 0 && 'clear')}>{owed}</span>
+        </button>
+      </>
+    );
+  if (compact)
+    return (
+      <>
+        <div className="pjb-search">
+          <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" aria-hidden><circle cx="7" cy="7" r="4.5" /><path d="m10.5 10.5 3 3" /></svg>
+          <input ref={input} autoFocus placeholder="Search projects" value={search?.q ?? ''} onChange={(e) => setSearch(e.target.value, scope)} />
+        </div>
+        <button className="ptb-cancel" onClick={() => { setSearching(false); if (search) useStore.getState().closePane(); }}>Cancel</button>
+      </>
+    );
   return (
     <>
       <div className="pjb-search">

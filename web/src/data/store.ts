@@ -209,6 +209,9 @@ interface State {
   openDay: (date: number) => void;
   setVisibleRange: (r: Range) => void;
   setSidebarOpen: (open: boolean) => void;
+  /** The phone's week strip opened into the whole month (components/PhoneBars.tsx). */
+  phoneMonth: boolean;
+  setPhoneMonth: (open: boolean) => void;
   setQuickAdd: (open: boolean) => void;
   setHourH: (h: number) => void;
   toggleCalendar: (id: string) => void;
@@ -377,6 +380,8 @@ export const useStore = create<State>()(
           if (cur.start !== r.start || cur.end !== r.end) set({ visibleRange: r });
         },
         setSidebarOpen: (sidebarOpen) => set({ sidebarOpen }),
+        phoneMonth: false,
+        setPhoneMonth: (phoneMonth) => set({ phoneMonth }),
         setQuickAdd: (quickAddOpen) => set({ quickAddOpen }),
         setHourH: (h) => set({ hourH: Math.min(HOUR_H_RANGE[1], Math.max(HOUR_H_RANGE[0], h)) }),
         addCalendar: (name, color) => {

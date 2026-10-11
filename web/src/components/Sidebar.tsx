@@ -167,7 +167,6 @@ function Calendars() {
   const calendars = useStore((s) => s.calendars);
   const toggle = useStore((s) => s.toggleCalendar);
   const defaultId = useStore((s) => s.defaultCalendarId);
-  const setDefault = useStore((s) => s.setDefaultCalendar);
   const [editing, setEditing] = useState<string | null>(null); // calendar id, 'new', or none
   return (
     <Section
@@ -199,19 +198,12 @@ function Calendars() {
         >
           <i className="cal-dot" />
           <span className="cal-name">{c.name}</span>
-          {c.url ? (
-            <span className={cls('cal-sub', c.syncError && 'err')} title={c.syncError ? `Couldn't update: ${c.syncError}` : 'Subscribed (read-only), kept up to date'}>{c.syncError ? '!' : '↻'}</span>
-          ) : <button
-            className={cls('cal-star', c.id === defaultId && 'on')}
-            title={c.id === defaultId ? 'Default calendar for new events' : 'Make this the default calendar for new events'}
-            aria-label={c.id === defaultId ? `${c.name} is the default calendar for new events` : `Make ${c.name} the default calendar for new events`}
-            onClick={(e) => {
-              e.preventDefault();
-              setDefault(c.id);
-            }}
-          >
-            {c.id === defaultId ? '★' : '☆'}
-          </button>}
+          {/* the default calendar and a subscription that couldn't update are marked; changing either is in the ⋯ card */}
+          {c.url && c.syncError ? (
+            <span className="cal-mark err" title={`Couldn't update: ${c.syncError}`}>!</span>
+          ) : c.id === defaultId ? (
+            <span className="cal-mark" title="Default calendar for new events" aria-label="default calendar">★</span>
+          ) : null}
           <button
             className="cal-edit"
             title={`Edit ${c.name}`}

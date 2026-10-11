@@ -107,13 +107,14 @@ work before it (2 weeks unless you say otherwise) — not an all-day event.
 
 ## Calendars
 
-Each calendar has a slim show/hide switch (clicking anywhere on the row works too); ★ after the name
-marks the default calendar for new events (hover another calendar to move it). The Calendars and
+Each calendar has a slim show/hide switch (clicking anywhere on the row works too); its name gets the rest of the
+row (two lines if it needs them). ★ marks the default calendar for new events, and a red ! a subscription that
+couldn't update. The Calendars and
 Deadlines sections fold away by clicking their heading — the chevron turns and the section slides
 closed; a folded section shows a summary (calendar dots, deadline count). Remembered.
 
 Sidebar → hover a calendar → **⋯** to rename it, pick a colour (12 presets or custom), make it the
-default for new events, or delete it (its events either move to another calendar or are deleted
+default for new events, see when a subscription last updated (and refresh it now), or delete it (its events either move to another calendar or are deleted
 with it). The **+** next to “Calendars” adds one. All of it can be undone with ⌘Z.
 
 ## Repeating events
