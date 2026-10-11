@@ -1432,6 +1432,10 @@ kbd { font: inherit; font-weight: 600; padding: 0 5px; border-radius: 4px; backg
 .side-body { display: grid; grid-template-rows: 1fr; transition: grid-template-rows 0.22s ease, opacity 0.18s; }
 .side-body-inner { min-height: 0; overflow: hidden; display: flex; flex-direction: column; gap: 2px; }
 .side-section.collapsed .side-body { grid-template-rows: 0fr; opacity: 0; }
+/* An open card is always as tall as what's in it: its body may only shrink below its content while folding (min-height 0
+   is what lets the 1fr → 0fr slide work, but it also let an open card's row come out too short — WebKit, on opening the
+   app — clipping the bottom of the card). Opening snaps to full height and fades in. */
+.side-section:not(.collapsed) .side-body-inner { min-height: auto; }
 .side-section.collapsed { flex: none !important; }
 .side-add { flex: none; display: grid; place-items: center; width: 22px; height: 22px; border-radius: 6px; color: var(--text-3); }
 .side-add:hover { background: var(--bg-hover); color: var(--text); }
@@ -1557,6 +1561,9 @@ body.dragging-block, body.dragging-block * { cursor: grabbing !important; user-s
 
 /* ---------- sidebar sections as cards ---------- */
 .sidebar { gap: 10px; }
+/* The sidebar scrolls; its cards never shrink to fit (WebKit squeezed them in a short window — a card's folding body
+   reports no minimum height — and clipped the bottom of what was in them). */
+.sidebar > * { flex-shrink: 0; }
 .side-section {
   padding: 4px 6px 8px; border-radius: 12px;
   background: color-mix(in srgb, var(--bg) 55%, var(--bg-side));
