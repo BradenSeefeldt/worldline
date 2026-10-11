@@ -18,9 +18,13 @@ const CHUNK = 24_000; // raw bytes per piece: base64 twice (inside, then the enc
 export const UPDATE_TTL = 30 * 86_400; // seconds an update is kept (a snapshot covers anything older)
 const MAX_CONTENT = 100_000;
 
+/** The message format. A message from a newer format is not read; the app says to update instead. */
+export const WIRE_VERSION = 1;
+
 export interface SyncKeys {
   key: Uint8Array; // encryption key
   tag: string; // what relays index this group's messages by
+  snapTag: string; // a second tag on snapshot pieces only, so they can be asked for on their own
 }
 
 export const newSecret = () => bytesToHex(crypto.getRandomValues(new Uint8Array(32)));
@@ -29,7 +33,7 @@ export const newDeviceKey = () => bytesToHex(generateSecretKey());
 export function deriveSync(secretHex: string): SyncKeys {
   const s = hexToBytes(secretHex);
   const k = (info: string) => hkdf(sha256, s, utf8ToBytes('worldline-sync'), utf8ToBytes(info), 32);
-  return { key: k('v1/key'), tag: bytesToHex(k('v1/tag')).slice(0, 32) };
+  return { key: k('v1/key'), tag: bytesToHex(k('v1/tag')).slice(0, 32), snapTag: bytesToHex(k('v1/snap')).slice(0, 32) };
 }
 
 const b64u = (b: Uint8Array) => btoa(String.fromCharCode(...b)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
@@ -56,12 +60,16 @@ export function parsePairingCode(text: string): string | null {
   }
 }
 
-// ---- compression (Yjs documents are mostly text: they shrink a lot)
+// ---- compression (Yjs documents are mostly text: they shrink a lot). The browser's own CompressionStream where it
+// has one (Safari 16.4+ / macOS 13.4+ / iOS 16.4+); older ones use fflate, which writes the same format (raw deflate).
+const native = () => typeof CompressionStream !== 'undefined' && typeof DecompressionStream !== 'undefined';
 async function squash(data: Uint8Array): Promise<Uint8Array> {
+  if (!native()) return (await import('fflate')).deflateSync(data);
   const s = new Blob([data as BlobPart]).stream().pipeThrough(new CompressionStream('deflate-raw'));
   return new Uint8Array(await new Response(s).arrayBuffer());
 }
 async function unsquash(data: Uint8Array): Promise<Uint8Array> {
+  if (!native()) return (await import('fflate')).inflateSync(data);
   const s = new Blob([data as BlobPart]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
   return new Uint8Array(await new Response(s).arrayBuffer());
 }
@@ -72,7 +80,7 @@ const rand = () => bytesToHex(crypto.getRandomValues(new Uint8Array(8)));
 /** One batch of changes, as a signed, encrypted message. */
 export async function sealUpdate(update: Uint8Array, keys: SyncKeys, deviceSk: string, now = Date.now()): Promise<Event> {
   const t = Math.floor(now / 1000);
-  const content = nip44.encrypt(JSON.stringify({ v: 1, u: b64(await squash(update)) }), keys.key);
+  const content = nip44.encrypt(JSON.stringify({ v: WIRE_VERSION, u: b64(await squash(update)) }), keys.key);
   return finalizeEvent({ kind: KIND, created_at: t, tags: [['d', `${keys.tag}:u:${rand()}`], ['t', keys.tag], ['expiration', String(t + UPDATE_TTL)]], content }, hexToBytes(deviceSk));
 }
 
@@ -83,12 +91,15 @@ export async function sealSnapshot(state: Uint8Array, keys: SyncKeys, deviceSk: 
   const id = rand();
   const n = Math.max(1, Math.ceil(packed.length / CHUNK));
   return Array.from({ length: n }, (_, i) => {
-    const content = nip44.encrypt(JSON.stringify({ v: 1, s: id, i, n, c: b64(packed.subarray(i * CHUNK, (i + 1) * CHUNK)) }), keys.key);
-    return finalizeEvent({ kind: KIND, created_at: t, tags: [['d', `${keys.tag}:s:${i}`], ['t', keys.tag]], content }, hexToBytes(deviceSk));
+    const content = nip44.encrypt(JSON.stringify({ v: WIRE_VERSION, s: id, i, n, c: b64(packed.subarray(i * CHUNK, (i + 1) * CHUNK)) }), keys.key);
+    return finalizeEvent({ kind: KIND, created_at: t, tags: [['d', `${keys.tag}:s:${i}`], ['t', keys.tag], ['t', keys.snapTag]], content }, hexToBytes(deviceSk));
   });
 }
 
-export type Opened = { kind: 'update'; device: string; at: number; data: Uint8Array } | { kind: 'piece'; device: string; at: number; snap: string; i: number; n: number; data: Uint8Array };
+export type Opened =
+  | { kind: 'update'; device: string; at: number; data: Uint8Array }
+  | { kind: 'piece'; device: string; at: number; snap: string; i: number; n: number; data: Uint8Array }
+  | { kind: 'newer'; device: string; at: number }; // from a newer Worldline, in a format this one can't read
 
 /** Open a message: must carry this group's tag, be signed, and decrypt with the group key. Anything else → null. */
 export async function openMessage(ev: Event, keys: SyncKeys, now = Date.now()): Promise<Opened | null> {
@@ -101,6 +112,7 @@ export async function openMessage(ev: Event, keys: SyncKeys, now = Date.now()): 
   } catch {
     return null;
   }
+  if (typeof body?.v === 'number' && body.v > WIRE_VERSION) return { kind: 'newer', device: ev.pubkey, at: ev.created_at };
   try {
     if (typeof body.u === 'string') return { kind: 'update', device: ev.pubkey, at: ev.created_at, data: await unsquash(unb64(body.u)) };
     if (typeof body.s === 'string' && typeof body.c === 'string' && Number.isInteger(body.i) && Number.isInteger(body.n) && body.n! > 0 && body.n! <= 400 && body.i! < body.n!)

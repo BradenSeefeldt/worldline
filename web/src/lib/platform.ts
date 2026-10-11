@@ -60,11 +60,8 @@ export function routeLinksToBrowser() {
  *  Resolves false if they cancelled. */
 export async function saveFile(name: string, text: string, mime = 'text/plain'): Promise<boolean> {
   if (isApp()) {
-    const [{ save }, { invoke }] = await Promise.all([import('@tauri-apps/plugin-dialog'), import('@tauri-apps/api/core')]);
-    const path = await save({ defaultPath: name });
-    if (!path) return false;
-    await invoke('save_text', { path, contents: text });
-    return true;
+    const { invoke } = await import('@tauri-apps/api/core');
+    return invoke<boolean>('save_file', { name, contents: text }); // the Save panel is shown by the native side (lib.rs)
   }
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob([text], { type: mime }));

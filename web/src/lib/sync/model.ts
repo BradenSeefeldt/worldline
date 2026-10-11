@@ -13,6 +13,13 @@ export const NESTED = ['habitLog', 'habitNotes'] as const;
 export const PROFILE = ['myName', 'homeZone', 'defaultCalendarId', 'skipped', 'dismissed'] as const;
 export const SETTINGS = ['weekStartsOn', 'hour24', 'defaultEventMin', 'dueMinutes', 'leadDays', 'suggest', 'habitsFromCalendar', 'linkDefaults', 'dayStartHour', 'hideWeekends', 'weekNumbers', 'subsRefreshMin'] as const;
 
+/** The synced data's format. Bump it when a synced record changes shape in a way an older copy would get wrong (and
+ *  convert old records when reading). A device finding a newer format in the document stops syncing and asks to be
+ *  updated, rather than writing old-format records over new ones. */
+export const SYNC_SCHEMA = 1;
+/** The newest format any device has written into this document (1 for documents from before this was recorded). */
+export const docSchema = (doc: Y.Doc) => Math.max(1, Number(doc.getMap('meta').get('schema')) || 1);
+
 type Rec = { id: string } & Record<string, unknown>;
 type Nested = Record<string, Record<string | number, unknown>>;
 /** The part of the app's state that syncs. */
@@ -95,6 +102,8 @@ export function writeLocal(doc: Y.Doc, prev: Synced | null, next: Synced, origin
     for (const n of NESTED) writeNested(doc, n, prev?.[n], next[n] ?? {});
     writeSingles(doc, 'profile', PROFILE, prev ?? undefined, next as unknown as Record<string, unknown>);
     writeSingles(doc, 'settings', SETTINGS, prev?.settings, next.settings ?? {});
+    const meta = doc.getMap<unknown>('meta');
+    if (docSchema(doc) < SYNC_SCHEMA || !meta.has('schema')) meta.set('schema', Math.max(SYNC_SCHEMA, docSchema(doc)));
   }, origin);
 }
 

@@ -86,19 +86,21 @@ const kv = {
   },
 };
 
-// ---- saving: batched (typing fires many changes), retried if it fails
+// ---- saving: batched (typing fires many changes), retried if it fails, one write at a time (in order) so a slow or
+// failed older write can never land after a newer one
 let pending: { key: string; value: string } | null = null;
 let timer = 0;
 let failing = false;
+let chain: Promise<void> = Promise.resolve();
+let busy = 0;
 const troubleListeners = new Set<(ok: boolean) => void>();
 /** Hear when saving starts failing (false) and when it works again (true). */
 export const onSaveTrouble = (fn: (ok: boolean) => void) => (troubleListeners.add(fn), () => void troubleListeners.delete(fn));
 
-async function write() {
-  clearTimeout(timer);
+async function writeOnce() {
   const p = pending;
   pending = null;
-  if (!p || loadProblem) return;
+  if (!p || loadProblem || readOnly) return;
   try {
     await kv.set(p.key, p.value, true);
     if (failing) {
@@ -107,16 +109,25 @@ async function write() {
     }
   } catch (e) {
     console.error('Saving failed; will try again', e);
-    pending ??= p; // keep it (unless something newer is already waiting)
+    pending ??= p; // keep it (unless something newer is already waiting — that replaces it)
     if (!failing) {
       failing = true;
       troubleListeners.forEach((fn) => fn(false));
     }
+    clearTimeout(timer);
     timer = window.setTimeout(() => void write(), 5000);
   }
 }
-/** Write anything not yet saved (called when the window hides or closes, and before a restart). */
+function write(): Promise<void> {
+  clearTimeout(timer);
+  busy++;
+  chain = chain.then(writeOnce).finally(() => void busy--);
+  return chain;
+}
+/** Write anything not yet saved (called when the window hides or closes, before quitting and before a restart). */
 export const flush = () => write();
+/** Is everything the app holds saved (nothing waiting, nothing being written, the last write worked)? */
+export const allSaved = () => !pending && !busy && !failing && !loadProblem && !readOnly;
 
 const storage: StateStorage = {
   getItem: async (key) => {
@@ -139,7 +150,7 @@ const storage: StateStorage = {
     return value;
   },
   setItem: (key, value) => {
-    if (loadProblem) return; // never write over data we couldn't read
+    if (loadProblem || readOnly) return; // never write over data we couldn't read (or another tab's)
     pending = { key, value };
     clearTimeout(timer);
     timer = window.setTimeout(() => void write(), isApp() ? 300 : 0);
@@ -148,10 +159,19 @@ const storage: StateStorage = {
 };
 
 /** Other things kept beside the app's state, never in it (so never in a backup): the sync key, the sync document. */
-export const sideStore = { get: kv.get, set: (key: string, value: string) => kv.set(key, value), del: kv.del };
+export const sideStore = { get: kv.get, set: async (key: string, value: string) => void (readOnly || (await kv.set(key, value))), del: kv.del };
 
 /** The storage the app's state is saved to. */
 export const appStorage = (): StateStorage => storage;
+
+/** Another tab or window of this web app holds the data (see main.tsx): this one never saves, so neither writes
+ *  over the other's changes. */
+let readOnly = false;
+export const makeReadOnly = () => {
+  readOnly = true;
+  pending = null;
+  clearTimeout(timer);
+};
 
 /** The hydration itself failed (e.g. a migration threw): treat it like unreadable data. */
 const problemListeners = new Set<() => void>();
@@ -194,6 +214,9 @@ export const beforeRestore = (key: string) => kv.get(key + BEFORE_RESTORE).then(
 
 /** Start over from the recovery screen: an empty calendar; the unreadable data stays kept aside. */
 export async function startOverKeepingUnreadable(key: string) {
+  // (data that read fine but couldn't be loaded — from a newer version, or a failed migration — is kept aside too)
+  const cur = await kv.get(key).catch(() => null);
+  if (cur !== null) await kv.set(`${key}${UNREADABLE}-${new Date().toISOString()}`, cur); // never over an earlier copy kept aside
   await kv.del(key).catch(() => undefined);
   loadProblem = null;
 }

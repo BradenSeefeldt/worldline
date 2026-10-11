@@ -68,7 +68,7 @@ export function SyncSettings() {
     <>
       <Box title="This device">
         <Row
-          title={<><i className={cls('st-dot', sync.state === 'offline' ? 'off' : sync.state === 'connecting' ? '' : 'ok')} />{{ off: 'Off', connecting: 'Connecting…', synced: 'Syncing', sending: 'Sending…', offline: 'Offline — changes are kept and sent when it’s back' }[sync.state]}</>}
+          title={<><i className={cls('st-dot', sync.state === 'offline' || sync.state === 'update-needed' ? 'off' : sync.state === 'connecting' ? '' : 'ok')} />{{ off: 'Off', connecting: 'Connecting…', synced: 'Syncing', sending: 'Sending…', offline: 'Offline — changes are kept and sent when it’s back', 'update-needed': 'Paused — another device has a newer Worldline. Update this one to carry on syncing (nothing is lost meanwhile)' }[sync.state]}</>}
           note={`Last sent ${ago(sync.lastOut)} · last received ${ago(sync.lastIn)}`}
         />
         <Row title="Other devices" note={others.length ? others.map(([k, t]) => `…${k.slice(-4)} (heard from ${ago(t)})`).join(' · ') : 'None yet — pair one below'} />

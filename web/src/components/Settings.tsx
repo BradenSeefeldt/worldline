@@ -443,6 +443,7 @@ function SchedulingPane() {
 function DataPane() {
   const calendars = useStore((x) => x.calendars);
   const hasHabits = useStore((x) => x.habits.length > 0);
+  const synced = useStore((x) => x.sync.on) ? ' Sync is on, so your other devices go back too.' : '';
   const st = useStore.getState();
   const [days, setDays] = useState<string[]>([]);
   const [day, setDay] = useState('');
@@ -471,11 +472,11 @@ function DataPane() {
   const restoreFile = async (f: File) => {
     const r = readBackup(await f.text(), storeVersion);
     if (!r.ok) return setMsg({ text: r.reason, bad: true });
-    if (!(await ask({ title: 'Restore this backup?', body: `Everything is replaced with the backup from ${fmtWhen(new Date(r.backup.savedAt).getTime())}. Save a backup of what you have now first if you might want it.`, confirm: 'Restore', danger: true }))) return;
+    if (!(await ask({ title: 'Restore this backup?', body: `Everything is replaced with the backup from ${fmtWhen(new Date(r.backup.savedAt).getTime())}. Save a backup of what you have now first if you might want it.${synced}`, confirm: 'Restore', danger: true }))) return;
     await replaceAndReload(r.backup.state);
   };
   const restoreSnapshot = async () => {
-    if (!day || !(await ask({ title: `Go back to ${day}?`, body: 'Everything is replaced with how it was on that day. Save a backup first if you might want what you have now.', confirm: 'Restore snapshot', danger: true }))) return;
+    if (!day || !(await ask({ title: `Go back to ${day}?`, body: `Everything is replaced with how it was on that day. Save a backup first if you might want what you have now.${synced}`, confirm: 'Restore snapshot', danger: true }))) return;
     const value = await snapshotValue(day);
     if (!value) return setMsg({ text: 'That snapshot couldn’t be read.', bad: true });
     await replaceSaved(STORE_KEY, value);

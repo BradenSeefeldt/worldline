@@ -24,7 +24,11 @@ const webApp: Plugin = {
     const files: string[] = [];
     const walk = (d: string) => readdirSync(d).forEach((f) => (statSync(join(d, f)).isDirectory() ? walk(join(d, f)) : files.push(relative(OUT, join(d, f)))));
     walk(OUT);
-    const list = files.filter((f) => f !== 'sw.js').map((f) => `./${f}`);
+    // Kept on the phone up front: everything the app needs offline — but not KaTeX's .woff / .ttf fonts (Safari uses the
+    // .woff2 copies) or the city list behind the time-zone search (loaded only when that opens; kept once fetched).
+    // That halves what installing it downloads (~1.9 → ~1 MB compressed).
+    const later = (f: string) => /\.(woff|ttf)$/.test(f) || /city-timezones/.test(f);
+    const list = files.filter((f) => f !== 'sw.js' && !later(f)).map((f) => `./${f}`);
     const version = createHash('sha256').update(list.join('\n') + pkg.version).digest('hex').slice(0, 12);
     writeFileSync(join(OUT, 'sw.js'), `// Keeps Worldline working offline (written by vite.web.config.ts).
 const CACHE = 'worldline-${version}';
@@ -39,7 +43,11 @@ self.addEventListener('fetch', (e) => {
     e.respondWith(fetch(req).catch(() => caches.match('./index.html', { ignoreVary: true }).then((r) => r || caches.match('./', { ignoreVary: true }))));
     return;
   }
-  e.respondWith(caches.match(req, { ignoreVary: true }).then((hit) => hit || fetch(req))); // by address alone: servers' Vary headers mustn't hide the kept copy
+  // by address alone: servers' Vary headers mustn't hide the kept copy; anything fetched later (a lazily loaded part) is kept too
+  e.respondWith(caches.match(req, { ignoreVary: true }).then((hit) => hit || fetch(req).then((res) => {
+    if (res.ok && new URL(req.url).pathname.includes('/assets/')) { const copy = res.clone(); void caches.open(CACHE).then((c) => c.put(req, copy)); }
+    return res;
+  })));
 });
 `);
   },

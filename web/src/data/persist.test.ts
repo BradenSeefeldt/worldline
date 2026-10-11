@@ -65,6 +65,22 @@ describe('a save that fails', () => {
   });
 });
 
+describe('saving in order', () => {
+  it('after a failed save, a newer change is what ends up saved (the old value never comes back)', async () => {
+    const p = await load();
+    failWrites = true;
+    p.appStorage().setItem('calendar-v1', good('Old'));
+    await new Promise((r) => setTimeout(r, 10));
+    expect(p.allSaved()).toBe(false);
+    failWrites = false;
+    p.appStorage().setItem('calendar-v1', good('New'));
+    await p.flush();
+    await p.flush();
+    expect(mem.get('calendar-v1')).toBe(good('New'));
+    expect(p.allSaved()).toBe(true);
+  });
+});
+
 describe('restoring', () => {
   it('keeps what it replaced, so it can be undone; refuses something that isn’t saved data', async () => {
     mem.set('calendar-v1', good('Before'));

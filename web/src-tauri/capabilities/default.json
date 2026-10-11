@@ -13,7 +13,6 @@
       "allow": [{ "url": "https://*" }, { "url": "http://*" }]
     },
     "opener:default",
-    "dialog:allow-save",
     "autostart:default",
     "updater:default",
     "process:allow-restart",

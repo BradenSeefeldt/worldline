@@ -933,6 +933,9 @@ export const useStore = create<State>()(
       // v2: Projects became pages you write in (About, steps, waiting-on and notes folded into editor documents).
       //     The untouched demo projects are swapped for the new demo; anything else is converted, losing nothing.
       migrate: (persisted, version) => {
+        // saved by a newer Worldline (an older copy was opened afterwards): its format is unknown here, so load nothing
+        // and save nothing — the recovery screen says to update; the data stays untouched for the newer version
+        if (version > STORE_VERSION) throw new Error('it was saved by a newer version of Worldline — install the latest version to open it');
         const p = persisted as Partial<State>;
         if (version < 1 && p.habits && p.habits.length === DEMO_HABIT_IDS.length && p.habits.every((h) => DEMO_HABIT_IDS.includes(h.id))) Object.assign(p, makeDemoHabits());
         if (version < 2 && p.projects) {

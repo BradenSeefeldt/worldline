@@ -2,13 +2,13 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App';
 import { useStore } from './data/store';
-import { firstRun, flush, loadProblem, onLoadProblem } from './data/persist';
-import { Recovery } from './components/Recovery';
+import { firstRun, flush, loadProblem, makeReadOnly, onLoadProblem } from './data/persist';
+import { OpenElsewhere, Recovery } from './components/Recovery';
 import { CrashScreen } from './components/CrashScreen';
 import { isApp, routeLinksToBrowser } from './lib/platform';
 import { runScheduling } from './data/schedSync';
 import './styles.css';
-import { resumeSync } from './data/syncEngine';
+import { flushSync, resumeSync } from './data/syncEngine';
 
 // In the Mac app the saved data comes from a database (asynchronously): show the app once it's loaded, so it never
 // flashes the starting data first. A new install (nothing saved yet) starts empty, not with the demo.
@@ -18,8 +18,47 @@ const loaded = new Promise<void>((r) => {
   useStore.persist.onFinishHydration(() => r());
   onLoadProblem(r);
 });
-void loaded.then(() => {
+// The web version in a browser: one tab at a time owns the data. A second tab (or window) would hold its own copy and
+// save over the first one's changes, and run sync twice — so it only says where Worldline is already open.
+// "Use it here instead" (components/Recovery.tsx) takes the lock over: the old tab saves, then reloads as the second one.
+const LOCK = 'worldline-app';
+function ownTab(): Promise<boolean> {
+  if (isApp() || !navigator.locks) return Promise.resolve(true);
+  try {
+    if (sessionStorage.getItem('wl-yielded')) {
+      sessionStorage.removeItem('wl-yielded');
+      return Promise.resolve(false);
+    }
+  } catch {
+    /* no sessionStorage: fine */
+  }
+  return new Promise((r) => {
+    navigator.locks
+      .request(LOCK, { ifAvailable: true }, (lock) => (r(!!lock), lock ? new Promise(() => {}) : undefined))
+      .catch(async () => {
+        // another tab took over: save what's pending, stop saving, and step aside
+        await flush();
+        makeReadOnly();
+        try {
+          sessionStorage.setItem('wl-yielded', '1');
+        } catch {
+          /* fine */
+        }
+        new BroadcastChannel(LOCK).postMessage('saved'); // the taking tab loads only after this
+        location.reload();
+      });
+  });
+}
+
+void Promise.all([loaded, ownTab()]).then(([, mine]) => {
   if (isApp()) document.documentElement.classList.add('in-app');
+  if (!mine) {
+    makeReadOnly();
+    createRoot(document.getElementById('root')!).render(<OpenElsewhere />);
+    return;
+  }
+  // The iPhone / web version: ask the browser to keep this site's data even when the device runs low on space.
+  if (!isApp()) void navigator.storage?.persist?.().catch(() => undefined);
   if (loadProblem) {
     createRoot(document.getElementById('root')!).render(<Recovery reason={loadProblem} />);
     return;
@@ -32,10 +71,17 @@ void loaded.then(() => {
     routeLinksToBrowser();
     // Closing the window: hide it and keep running (Settings → General, on by default) so scheduling links stay
     // live — or really quit. Either way, anything not yet saved is written first.
+    // Quitting (⌘Q): save everything first, then quit (src-tauri/src/lib.rs asks, and quits anyway after 3 s).
+    void Promise.all([import('@tauri-apps/api/event'), import('@tauri-apps/api/core')]).then(([{ listen }, { invoke }]) =>
+      listen('quit-requested', async () => {
+        await Promise.race([Promise.all([flush(), flushSync()]), new Promise((r) => setTimeout(r, 2500))]);
+        await invoke('quit_now');
+      }),
+    );
     void import('@tauri-apps/api/window').then(({ getCurrentWindow }) => {
       const win = getCurrentWindow();
       void win.onCloseRequested(async (e) => {
-        await flush();
+        await Promise.race([Promise.all([flush(), flushSync()]), new Promise((r) => setTimeout(r, 2500))]);
         if (useStore.getState().settings.keepRunning) {
           e.preventDefault();
           await win.hide();

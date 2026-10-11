@@ -1,7 +1,7 @@
 {
   "name": "worldline",
   "private": true,
-  "version": "0.4.0",
+  "version": "0.5.0",
   "type": "module",
   "scripts": {
     "tauri": "tauri",
@@ -15,6 +15,7 @@
     "app:package": "tauri build --bundles app && bash scripts/make-dmg.sh",
     "build:guest": "vite build --config vite.guest.config.ts",
     "build:web": "vite build --config vite.web.config.ts",
+    "preview:site": "vite preview --config vite.guest.config.ts --port 4175 --strictPort --host",
     "preview:web": "vite preview --config vite.web.config.ts --port 4174 --strictPort --host"
   },
   "dependencies": {
@@ -22,7 +23,6 @@
     "@noble/hashes": "2.0.1",
     "@tauri-apps/api": "2.12.2",
     "@tauri-apps/plugin-autostart": "2.6.0",
-    "@tauri-apps/plugin-dialog": "2.8.0",
     "@tauri-apps/plugin-http": "2.8.1",
     "@tauri-apps/plugin-opener": "2.7.0",
     "@tauri-apps/plugin-process": "2.4.0",
@@ -39,6 +39,7 @@
     "chrono-node": "^2.10.2",
     "city-timezones": "^1.3.4",
     "date-fns": "^4.4.0",
+    "fflate": "0.8.2",
     "idb-keyval": "6.3.0",
     "jsqr": "1.4.0",
     "katex": "0.18.11",

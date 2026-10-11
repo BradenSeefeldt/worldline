@@ -57,3 +57,31 @@ export function Recovery({ reason }: { reason: string }) {
     </div>
   );
 }
+
+/** Take the data over from the other tab (it saves, says so, and reloads as the second one — main.tsx), then start
+ *  here: only once it has said it saved (or after 8 s, if it's gone), so this tab never loads older data. */
+const takeOver = () => {
+  const ch = new BroadcastChannel('worldline-app');
+  const saved = new Promise<void>((r) => {
+    ch.onmessage = (e) => e.data === 'saved' && r();
+    setTimeout(r, 8000);
+  });
+  void navigator.locks?.request('worldline-app', { steal: true }, () => saved).finally(() => location.reload());
+};
+
+/** The web version, opened in a second tab or window: the first one owns the data (main.tsx). */
+export function OpenElsewhere() {
+  return (
+    <div className="rc">
+      <div className="rc-card">
+        <h1>Worldline is open in another tab</h1>
+        <p>To keep your data from being saved over, Worldline runs in one tab or window at a time. Switch to that one, or use it here instead (the other one saves and steps aside).</p>
+        <div className="rc-row rc-last">
+          <span />
+          <button className="ce-btn" onClick={() => location.reload()}>Reload</button>
+          <button className="ce-btn primary" onClick={takeOver}>Use it here instead</button>
+        </div>
+      </div>
+    </div>
+  );
+}

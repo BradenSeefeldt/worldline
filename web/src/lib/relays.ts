@@ -20,8 +20,9 @@ export interface Transport {
   send: (ev: Event) => Promise<boolean>;
   /** Everything matching from every relay that answers within a few seconds (duplicates removed). */
   query: (filter: Filter) => Promise<Event[]>;
-  /** New matching events as they arrive (and stored ones first). Returns a function that stops it. */
-  subscribe: (filter: Filter, onEvent: (ev: Event) => void) => () => void;
+  /** New matching events as they arrive (and stored ones first). `onStored`: the relays have sent what they had
+   *  stored (called only if at least one relay is actually connected then). Returns a function that stops it. */
+  subscribe: (filter: Filter, onEvent: (ev: Event) => void, onStored?: () => void) => () => void;
   /** How many relays it talks to (for "Live · on 6 of 7 relays"). */
   size?: number;
   /** Disconnect from everything (when switching to a new relay list). */
@@ -71,8 +72,12 @@ export function relayTransport(relays = RELAYS): Transport {
     publish: async (ev) => (await Promise.allSettled(pool.publish(relays, ev, { maxWait: 8000 }))).filter((r) => r.status === 'fulfilled').length,
     send: (ev) => Promise.any(pool.publish(relays, ev, { maxWait: 8000 })).then(() => true, () => false),
     query: (filter) => pool.querySync(relays, filter, { maxWait: 7000 }),
-    subscribe: (filter, onEvent) => {
-      const sub = pool.subscribeMany(relays, filter, { onevent: onEvent });
+    subscribe: (filter, onEvent, onStored) => {
+      const sub = pool.subscribeMany(relays, filter, {
+        onevent: onEvent,
+        // (the pool also reports "done" when every relay failed: only count it when one is connected)
+        oneose: () => [...pool.listConnectionStatus().values()].some(Boolean) && onStored?.(),
+      });
       return () => sub.close();
     },
   };
@@ -96,10 +101,13 @@ export function memoryTransport(opts: { down?: boolean } = {}): Transport & { ev
     },
     send: async (ev: Event) => (await t.publish(ev)) > 0,
     query: async (filter: Filter) => (t.down ? [] : t.events.filter((e) => matchFilter(filter, e))),
-    subscribe: (filter: Filter, on: (ev: Event) => void) => {
+    subscribe: (filter: Filter, on: (ev: Event) => void, onStored?: () => void) => {
       const s = { filter, on };
       subs.add(s);
-      if (!t.down) for (const e of t.events) if (matchFilter(filter, e)) on(e);
+      if (!t.down) {
+        for (const e of t.events) if (matchFilter(filter, e)) on(e);
+        onStored?.();
+      }
       return () => void subs.delete(s);
     },
   };

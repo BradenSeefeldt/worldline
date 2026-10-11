@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { SnapshotAssembler, deriveSync, newDeviceKey, newSecret, openMessage, pairingCode, parsePairingCode, sealSnapshot, sealUpdate, UPDATE_TTL } from './wire';
+import { KIND, SnapshotAssembler, deriveSync, newDeviceKey, newSecret, openMessage, pairingCode, parsePairingCode, sealSnapshot, sealUpdate, UPDATE_TTL } from './wire';
 
 const keys = deriveSync(newSecret());
 /** Random bytes that don't compress (the system source gives at most 64 KB per call). */
@@ -31,13 +31,13 @@ describe('messages', () => {
     expect(ev.tags.find((t) => t[0] === 'expiration')).toBeTruthy();
     const got = await openMessage(ev, keys);
     expect(got?.kind).toBe('update');
-    expect(new TextDecoder().decode(got!.data)).toBe('Group meeting '.repeat(500));
+    expect(new TextDecoder().decode((got as { data: Uint8Array }).data)).toBe('Group meeting '.repeat(500));
   });
   it('someone without the secret can’t read or forge; an expired update is ignored', async () => {
     const ev = await sealUpdate(new Uint8Array([1, 2, 3]), keys, dev);
     expect(await openMessage(ev, deriveSync(newSecret()))).toBeNull();
     const other = deriveSync(newSecret());
-    const forged = await sealUpdate(new Uint8Array([9]), { key: other.key, tag: keys.tag }, newDeviceKey()); // right tag, wrong key
+    const forged = await sealUpdate(new Uint8Array([9]), { ...keys, key: other.key }, newDeviceKey()); // right tag, wrong key
     expect(await openMessage(forged, keys)).toBeNull();
     const old = await sealUpdate(new Uint8Array([1]), keys, dev, Date.now() - (UPDATE_TTL + 60) * 1000);
     expect(await openMessage(old, keys)).toBeNull();
@@ -62,5 +62,36 @@ describe('messages', () => {
     const oa = await openMessage(a[0], keys), ob = await openMessage(b[1], keys);
     expect(await asm.add(oa as never)).toBeNull();
     expect(await asm.add(ob as never)).toBeNull(); // different snapshot ids: no whole snapshot yet
+  });
+  it('snapshot pieces carry a second tag, so they can be asked for on their own', async () => {
+    const [p] = await sealSnapshot(noise(1000), keys, dev);
+    expect(p.tags.filter((t) => t[0] === 't').map((t) => t[1])).toEqual([keys.tag, keys.snapTag]);
+    expect(keys.snapTag).not.toBe(keys.tag);
+  });
+  it('a message from a newer Worldline is recognised as such (not read)', async () => {
+    const { finalizeEvent } = await import('nostr-tools/pure');
+    const nip44 = await import('nostr-tools/nip44');
+    const { hexToBytes } = await import('@noble/hashes/utils.js');
+    const content = nip44.encrypt(JSON.stringify({ v: 2, x: 'something new' }), keys.key);
+    const ev = finalizeEvent({ kind: KIND, created_at: Math.floor(Date.now() / 1000), tags: [['d', 'x'], ['t', keys.tag]], content }, hexToBytes(dev));
+    expect((await openMessage(ev, keys))?.kind).toBe('newer');
+  });
+});
+
+describe('older Macs and iPhones (no CompressionStream: Safari before 16.4)', () => {
+  it('compress with fflate in the same format — each side reads the other’s messages', async () => {
+    const data = new TextEncoder().encode('Thesis writing '.repeat(400));
+    const modern = await sealUpdate(data, keys, dev);
+    const saved = { C: globalThis.CompressionStream, D: globalThis.DecompressionStream };
+    try {
+      Object.assign(globalThis, { CompressionStream: undefined, DecompressionStream: undefined });
+      const old = await sealUpdate(data, keys, dev);
+      expect(old.content.length).toBeLessThan(data.length / 3);
+      expect(new TextDecoder().decode(((await openMessage(modern, keys)) as { data: Uint8Array }).data)).toBe('Thesis writing '.repeat(400));
+      Object.assign(globalThis, { CompressionStream: saved.C, DecompressionStream: saved.D });
+      expect(new TextDecoder().decode(((await openMessage(old, keys)) as { data: Uint8Array }).data)).toBe('Thesis writing '.repeat(400));
+    } finally {
+      Object.assign(globalThis, { CompressionStream: saved.C, DecompressionStream: saved.D });
+    }
   });
 });
