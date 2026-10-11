@@ -1,8 +1,9 @@
 # Build the Mac app and attach it to a draft GitHub release.
-# Runs when a version tag is pushed (git tag v0.1.0 && git push origin v0.1.0), or by hand from the Actions tab.
+# Runs when a version tag is pushed (git tag v0.1.0 && git push origin v0.1.0).
+# Actions are pinned to exact commits (this job holds the update-signing key): bump them deliberately.
 # The app is built for both Apple Silicon and Intel Macs (a "universal" app). It isn't signed with a paid Apple
 # Developer ID, so on first launch users choose Open Anyway (System Settings → Privacy & Security) — see the README.
-# Automatic updates: the build is also packed as Worldline.app.tar.gz, signed with the update key (the
+# Automatic updates: the build is also packed as Worldline_universal.app.tar.gz, signed with the update key (the
 # TAURI_SIGNING_PRIVATE_KEY secret; its public half is in tauri.conf.json), and described in latest.json. Installed
 # apps read latest.json from the newest *published* release, so publishing the draft is what ships an update.
 name: Release
@@ -10,7 +11,6 @@ name: Release
 on:
   push:
     tags: ['v*']
-  workflow_dispatch:
 
 permissions:
   contents: write
@@ -22,19 +22,20 @@ jobs:
       run:
         working-directory: web
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
 
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           node-version: 24
           cache: npm
           cache-dependency-path: web/package-lock.json
 
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@686976e191b89faba57d3206551f0f330d8cb249 # stable
         with:
+          toolchain: stable
           targets: aarch64-apple-darwin,x86_64-apple-darwin
 
-      - uses: swatinem/rust-cache@v2
+      - uses: swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
         with:
           workspaces: web/src-tauri -> target
 
@@ -45,7 +46,7 @@ jobs:
         env:
           TZ: America/Toronto
 
-      - uses: tauri-apps/tauri-action@v0
+      - uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5 # v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
@@ -55,14 +56,24 @@ jobs:
           tagName: ${{ github.ref_name }}
           releaseName: Worldline ${{ github.ref_name }}
           releaseBody: |
-            Download **Worldline_…_universal.dmg** below, open it, and drag Worldline onto Applications.
+            **[Download Worldline.dmg](https://github.com/BradenSeefeldt/worldline/releases/latest/download/Worldline.dmg)** · macOS 11+ · Apple silicon and Intel · or [open it on your iPhone](https://bradenseefeldt.github.io/worldline/app/)
 
-            First launch: macOS says it can't verify the app (it isn't signed with a paid Apple Developer ID).
-            Open **System Settings → Privacy & Security**, scroll down, and click **Open Anyway** — once.
+            Open the .dmg and drag Worldline onto Applications. The first time you open it, macOS says it can't check the app (it isn't signed with a paid Apple Developer ID): **System Settings → Privacy & Security → Open Anyway**, once. Or install from Terminal, which skips that step: `curl -fsSL https://bradenseefeldt.github.io/worldline/install.sh | sh`
 
-            Already have Worldline? It updates itself: within a day you'll see **Update ready · Restart** in the sidebar
-            (or Settings → About → Check for updates).
+            Already have Worldline? It updates itself within a day (or Settings → About → Check for updates).
           releaseDraft: true
           prerelease: false
           includeUpdaterJson: true
           args: --target universal-apple-darwin --bundles app,dmg --config '{"bundle":{"createUpdaterArtifacts":true}}'
+
+      # One download name that never changes, so …/releases/latest/download/Worldline.dmg always gets the newest. The
+      # release keeps four files: Worldline.dmg, the signed update (Worldline_universal.app.tar.gz + .sig), latest.json.
+      - name: Name the disk image Worldline.dmg
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          dmg=$(ls src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg | head -1)
+          cp "$dmg" "$RUNNER_TEMP/Worldline.dmg"
+          gh release upload "$TAG" "$RUNNER_TEMP/Worldline.dmg" --clobber
+          gh release delete-asset "$TAG" "$(basename "$dmg")" -y

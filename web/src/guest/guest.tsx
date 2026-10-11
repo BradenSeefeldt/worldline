@@ -1,4 +1,4 @@
-// The guest page's entry (book.html → GitHub Pages). Light or dark follows the visitor's device.
+// The guest page (book.html → GitHub Pages, when the address carries a scheduling link — see entry.ts). Light or dark follows the visitor's device.
 import { StrictMode, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { RemoteGuest } from './RemoteGuest';

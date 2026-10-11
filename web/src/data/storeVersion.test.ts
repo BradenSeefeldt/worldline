@@ -16,10 +16,10 @@ Object.assign(globalThis, {
 it('data from a newer version: not loaded, never overwritten, the app is told to update', async () => {
   const { useStore } = await import('./store');
   const persist = await import('./persist');
-  await new Promise((r) => setTimeout(r, 20));
+  for (let i = 0; i < 200 && !persist.loadProblem; i++) await new Promise((r) => setTimeout(r, 10));
   expect(persist.loadProblem).toMatch(/newer version/);
   expect(useStore.getState().myName).not.toBe('From the future');
   useStore.getState().setSettings({ hour24: true });
   await persist.flush();
   expect(mem.get('calendar-v1')).toBe(saved);
-});
+}, 30_000); // (importing the whole store is slow on a busy machine)
