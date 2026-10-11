@@ -2658,3 +2658,7 @@ html.in-app .sidebar .mini { top: calc(8px - env(safe-area-inset-top)); }
 .phone .toast { bottom: calc(150px + env(safe-area-inset-bottom)); }
 .phone .scrim { transition: opacity 0.22s; }
 .phone .hp-title { display: none; } /* (the top bar says "Habits") */
+/* Touch screens: text in boxes is at least 16 px — iOS zooms the whole page into any box with smaller text */
+@media (hover: none) and (pointer: coarse) {
+  input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='color']), textarea, select, [contenteditable='true'] { font-size: max(16px, 1em) !important; }
+}

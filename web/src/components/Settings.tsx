@@ -112,7 +112,7 @@ export function Settings() {
         <nav className="st-side">
           <label className="st-search">
             <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden><circle cx="7" cy="7" r="4.5" /><path d="m10.5 10.5 3.5 3.5" /></svg>
-            <input placeholder="Search settings" value={q} onChange={(e) => setQ(e.target.value)} autoFocus />
+            <input placeholder="Search settings" value={q} onChange={(e) => setQ(e.target.value)} />
           </label>
           {shown.map((s) => (
             <div key={s.id} className={cls(GAPS.has(s.id) && !q && 'st-gap-after')}>
