@@ -4,8 +4,14 @@
 //
 //   · Turn on (first device): this device's data becomes the shared document; a snapshot goes out at once.
 //   · Join (another device, with the pairing code): this device's own data is replaced by what the others have.
-//   · Each change: sent ~1.5 s after you stop (merged into one update), or at once when the app goes to the
-//     background (the iPhone stops running a hidden app within seconds); kept 30 days by the relays.
+//     Remembered (`joining`) until the group's data has been shown and saved here: a join cut short (offline, or the
+//     app closed) carries on at the next launch. Only a device that never joined may start an empty document.
+//   · Data replaced (a restore, starting over, erase everything): sync stops and this device joins again — the
+//     replacement is never sent out as everyone's edits.
+//   · Each change: sent ~1.5 s after you stop (merged into one update; a big one in pieces), or at once when the app
+//     goes to the background (the iPhone stops running a hidden app within seconds); kept 30 days by the relays. A
+//     message no relay takes is tried again as it is (later changes go separately); what never went out (offline,
+//     then closed) goes out at the next launch.
 //   · Snapshots: each device republishes its whole document after starting and every 6 hours if anything changed,
 //     so a device that was off for months still catches up.
 //   · Catching up: a device that synced recently asks only for what's new since then (less a day, for clocks that
@@ -21,13 +27,13 @@ import * as Y from 'yjs';
 import type { Event } from 'nostr-tools/pure';
 import type { Filter } from 'nostr-tools/filter';
 import { useStore } from './store';
-import { allSaved, flush as flushStore, sideStore } from './persist';
+import { allSaved, flush as flushStore, onDataReplaced, sideStore } from './persist';
 import { SYNC_SCHEMA, docIsEmpty, docSchema, pick, readDoc, writeLocal, type Synced } from '../lib/sync/model';
-import { KIND, SnapshotAssembler, deriveSync, newDeviceKey, newSecret, openMessage, sealSnapshot, sealUpdate } from '../lib/sync/wire';
+import { KIND, SnapshotAssembler, deriveSync, newDeviceKey, newSecret, openMessage, sealSnapshot, sealUpdates } from '../lib/sync/wire';
 import { RELAYS, loadRelayList, relayTransport, type Transport } from '../lib/relays';
 import { isApp } from '../lib/platform';
 
-const CONFIG = 'worldline-sync'; // { secret, device, snapAt, seenAt, fullAt } — beside the app's data, never in a backup
+const CONFIG = 'worldline-sync'; // SyncConfig — beside the app's data, never in a backup
 const DOC = 'worldline-sync-doc'; // the shared document, as Yjs bytes (base64)
 const HOUR = 3_600_000;
 const DAY = 24 * HOUR;
@@ -41,6 +47,10 @@ export interface SyncConfig {
   snapAt?: number; // when this device last published a snapshot
   seenAt?: number; // everything published before this (less MARGIN) has been received
   fullAt?: number; // when this device last did a full catch-up
+  joining?: boolean; // joining: the group's data hasn't yet been shown and saved here (nothing of this device's goes out)
+  joined?: boolean; // this device joined (rather than started) the group: it never starts an empty document
+  sent?: string; // (base64 Yjs state vector) everything in the document up to this has reached a relay
+  unsent?: boolean; // when the document was last saved, some changes made here hadn't reached a relay yet
 }
 
 const b64 = (b: Uint8Array) => {
@@ -96,7 +106,13 @@ export function startEngine(cfg: SyncConfig, transport: Transport, mode: 'resume
   let t = transport;
   let stopped = false;
   let paused = false; // a newer Worldline's data: nothing is read, written or saved until this device is updated
-  let outgoing: Uint8Array[] = [];
+  let outgoing: Uint8Array[] = []; // changes made here, not yet sealed into messages
+  let unsent: Event[] = []; // messages no relay has taken yet: tried again as they are, never merged with newer changes
+  let inFlight = false;
+  let sending: Promise<void> = Promise.resolve();
+  let acked: Uint8Array | undefined = cfg.sent ? unb64(cfg.sent) : undefined; // (state vector) everything up to this is on the relays
+  let joining = mode === 'join';
+  let joinApplied = false; // (joining) the group's data has been shown here
   let sendTimer: ReturnType<typeof setTimeout> | undefined;
   let saveTimer: ReturnType<typeof setTimeout> | undefined;
   let applyTimer: ReturnType<typeof setTimeout> | undefined;
@@ -108,6 +124,8 @@ export function startEngine(cfg: SyncConfig, transport: Transport, mode: 'resume
   const seen = new Set<string>(); // messages already handled (asking again returns them again)
   const set = st().setSync;
   set({ on: true, state: 'connecting' });
+  const pendingLocal = () => outgoing.length > 0 || unsent.length > 0 || inFlight;
+  const offReplaced = onDataReplaced(() => stop()); // this device's data is being replaced: write nothing more
 
   function pause() {
     if (paused) return;
@@ -118,6 +136,7 @@ export function startEngine(cfg: SyncConfig, transport: Transport, mode: 'resume
     clearTimeout(snapTimer);
     clearTimeout(settleTimer);
     outgoing = [];
+    unsent = [];
     set({ state: 'update-needed' });
   }
 
@@ -146,6 +165,7 @@ export function startEngine(cfg: SyncConfig, transport: Transport, mode: 'resume
       sendTimer = setTimeout(() => void send(), 1500);
     } else if (origin === 'remote') {
       if (docSchema(doc) > SYNC_SCHEMA) return pause();
+      if (!pendingLocal()) acked = Y.encodeStateVector(doc); // (it came from a relay; nothing here waits to go out)
       clearTimeout(applyTimer);
       applyTimer = setTimeout(applyRemote, 150); // a burst (catching up) is shown once
     }
@@ -175,6 +195,10 @@ export function startEngine(cfg: SyncConfig, transport: Transport, mode: 'resume
       }
     }
     set({ lastIn: clock(), state: 'synced' });
+    if (joining && !joinApplied) {
+      joinApplied = true;
+      void saveDoc(); // at once: until it's saved, a restart has to join again
+    }
   }
 
   /** Save the document — only once the app's data is saved at least as far (see the top of the file). */
@@ -183,25 +207,62 @@ export function startEngine(cfg: SyncConfig, transport: Transport, mode: 'resume
     if (stopped || paused) return;
     if (applyTimer !== undefined) applyRemote(); // what arrived goes into the app's data first
     const bytes = Y.encodeStateAsUpdate(doc);
+    const joined = joining && joinApplied;
+    const sent = { sent: acked && b64(acked), unsent: pendingLocal() };
     await flushStore();
     if (stopped || paused) return;
-    if (allSaved()) await sideStore.set(DOC, b64(bytes)).catch(() => undefined);
-    else saveTimer = setTimeout(() => void saveDoc(), 5000); // the app's data isn't saving: keep the older document
+    if (!allSaved()) {
+      saveTimer = setTimeout(() => void saveDoc(), 5000); // the app's data isn't saving: keep the older document
+      return;
+    }
+    // what hasn't gone out yet is noted before the document (with those changes in it) is saved: never forgotten
+    if (cfg.sent !== sent.sent || !!cfg.unsent !== sent.unsent) {
+      Object.assign(cfg, sent);
+      await writeConfig(cfg).catch(() => undefined);
+      if (stopped || paused) return;
+    }
+    const ok = await sideStore.set(DOC, b64(bytes)).then(() => true, () => false);
+    if (ok && joined && !stopped && cfg.joining !== false) {
+      cfg.joining = false;
+      cfg.joined = true;
+      joining = false;
+      await writeConfig(cfg).catch(() => undefined);
+    }
   }
 
-  async function send() {
-    if (stopped || paused || !outgoing.length) return;
+  /** Send what changed here (one send at a time, in order). */
+  const send = () => (sending = sending.then(sendOnce));
+  async function sendOnce() {
+    if (stopped || paused) return;
     clearTimeout(sendTimer);
-    const batch = Y.mergeUpdates(outgoing);
-    outgoing = [];
-    set({ state: 'sending' });
-    const ok = await t.send(await sealUpdate(batch, keys, cfg.device, clock())).catch(() => false);
-    if (stopped) return;
-    if (ok) set({ state: 'synced', lastOut: clock() });
-    else {
-      outgoing.unshift(batch); // keep it; try again shortly
-      set({ state: 'offline' });
-      sendTimer = setTimeout(() => void send(), 15_000);
+    inFlight = true;
+    try {
+      if (outgoing.length) {
+        const batch = Y.mergeUpdates(outgoing);
+        outgoing = [];
+        unsent.push(...(await sealUpdates(batch, keys, cfg.device, clock())));
+      }
+      if (!unsent.length || stopped) return;
+      const todo = unsent;
+      unsent = [];
+      set({ state: 'sending' });
+      const ok = await Promise.all(todo.map((ev) => t.send(ev).catch(() => false)));
+      if (stopped || paused) return;
+      unsent = [...todo.filter((_, i) => !ok[i]), ...unsent]; // keep those; try again shortly
+      if (unsent.length) {
+        set({ state: 'offline' });
+        sendTimer = setTimeout(() => void send(), 15_000);
+        return;
+      }
+      set({ state: 'synced', lastOut: clock() });
+    } finally {
+      inFlight = false;
+    }
+    if (!pendingLocal()) {
+      acked = Y.encodeStateVector(doc); // everything here has reached a relay
+      cfg.sent = b64(acked);
+      cfg.unsent = false;
+      void writeConfig(cfg);
     }
   }
 
@@ -210,6 +271,7 @@ export function startEngine(cfg: SyncConfig, transport: Transport, mode: 'resume
     if (changedSinceSnapshot || clock() - (cfg.snapAt ?? 0) > 7 * DAY) {
       const pieces = await sealSnapshot(Y.encodeStateAsUpdate(doc), keys, cfg.device, clock());
       const results = await Promise.all(pieces.map((p) => t.publish(p).catch(() => 0)));
+      if (stopped || paused) return;
       if (results.every((n) => n > 0)) {
         changedSinceSnapshot = false;
         cfg.snapAt = clock();
@@ -279,24 +341,36 @@ export function startEngine(cfg: SyncConfig, transport: Transport, mode: 'resume
       t = next;
     }
     subscribe(false, cfg.seenAt ? Math.floor((cfg.seenAt - MARGIN) / 1000) : undefined);
-    if (outgoing.length) void send();
+    if (outgoing.length || unsent.length) void send();
     return true;
   }
 
   // ---- start
   const ready = (async () => {
     const saved = await sideStore.get(DOC).catch(() => null);
+    if (stopped) return;
+    // a join cut short (offline, or closed before the group's data was saved here), or a device that joined and lost
+    // its document: carry on joining — only a device that started the group may start an empty document
+    if (mode === 'resume' && (cfg.joining || (cfg.joined && !saved))) mode = 'join';
+    joining = mode === 'join';
+    if (joining && !cfg.joining) {
+      cfg.joining = true;
+      void writeConfig(cfg);
+    }
     if (saved && mode === 'resume') Y.applyUpdate(doc, unb64(saved), 'load');
     if (docSchema(doc) > SYNC_SCHEMA) return pause();
     if (mode === 'create' || (mode === 'resume' && docIsEmpty(doc))) writeLocal(doc, null, prev, 'local'); // this device's data starts the group
     else if (mode === 'resume') {
       // anything changed here while sync wasn't running (an edit just before quitting) goes out too
       writeLocal(doc, readDoc(doc) as Synced, prev, 'local');
+      // and what changed here but never reached a relay (made offline, then the app closed)
+      if (cfg.unsent) outgoing.push(Y.encodeStateAsUpdate(doc, acked));
     }
     // join: nothing of this device's own goes in; it takes the group's data as it arrives
     if (stopped) return;
     const since = catchUpFrom(cfg, mode, clock());
     subscribe(since === undefined, since);
+    if (outgoing.length) void send();
     snapTimer = setTimeout(() => void snapshot(), mode === 'create' ? 500 : 20_000);
   })();
 
@@ -308,19 +382,23 @@ export function startEngine(cfg: SyncConfig, transport: Transport, mode: 'resume
       await Promise.all([send(), saveDoc()]);
     },
     reconnect,
-    stop() {
-      stopped = true;
-      stopSubs.forEach((f) => f());
-      unsubStore();
-      clearTimeout(sendTimer);
-      clearTimeout(saveTimer);
-      clearTimeout(applyTimer);
-      clearTimeout(snapTimer);
-      clearTimeout(settleTimer);
-      doc.destroy();
-      set({ on: false, state: 'off' });
-    },
+    stop,
   };
+
+  function stop() {
+    if (stopped) return;
+    stopped = true;
+    offReplaced();
+    stopSubs.forEach((f) => f());
+    unsubStore();
+    clearTimeout(sendTimer);
+    clearTimeout(saveTimer);
+    clearTimeout(applyTimer);
+    clearTimeout(snapTimer);
+    clearTimeout(settleTimer);
+    doc.destroy();
+    set({ on: false, state: 'off' });
+  }
 }
 
 let deviceIds = new Map<string, string>();
@@ -343,11 +421,44 @@ async function run(cfg: SyncConfig, mode: 'resume' | 'create' | 'join') {
   running = { engine: startEngine(cfg, transport, mode), transport };
 }
 
+/** Development talks to the public relays only when asked to (localStorage `wl-dev-network` = `1`): a dev server
+ *  holding demo data must never send it into a real sync group. */
+const devNetworkOff = () => {
+  if (!import.meta.env.DEV) return false;
+  try {
+    return localStorage.getItem('wl-dev-network') !== '1';
+  } catch {
+    return true;
+  }
+};
+
 /** At launch: carry on if this device is set up to sync. */
 export async function resumeSync() {
+  await replacing;
+  if (devNetworkOff()) return;
   const cfg = await readConfig();
   if (cfg) await run(cfg, 'resume');
 }
+
+// This device's data replaced wholesale (data/persist.ts) would read as this device deleting or rolling back
+// everything, so it's never compared with the shared document: sync stops, the document is dropped, and this device
+// joins again — it takes the group's data (the other devices keep theirs). Erase everything rejoins at once; a
+// restore or starting over (the app reloads next) rejoins at the next launch.
+let replacing: Promise<void> = Promise.resolve();
+onDataReplaced((reloading) =>
+  (replacing = (async () => {
+    const r = running;
+    running = null;
+    r?.engine.stop(); // (first, before anything is awaited: the replacement must not reach the document)
+    r?.transport.close?.();
+    const cfg = await readConfig();
+    if (!cfg) return;
+    const next: SyncConfig = { ...cfg, joining: true, sent: undefined, unsent: undefined };
+    await sideStore.del(DOC);
+    await writeConfig(next);
+    if (r && !reloading) await run(next, 'join');
+  })()),
+);
 
 /** Send and save anything pending (before quitting). */
 export const flushSync = () => running?.engine.flush() ?? Promise.resolve();
@@ -385,7 +496,7 @@ export async function createSync(): Promise<string> {
 
 /** Join another device's sync (the secret from its pairing code): this device's own data is replaced by the group's. */
 export async function joinSync(secret: string) {
-  const cfg: SyncConfig = { secret, device: newDeviceKey() };
+  const cfg: SyncConfig = { secret, device: newDeviceKey(), joining: true };
   await sideStore.del(DOC);
   await writeConfig(cfg);
   await run(cfg, 'join');

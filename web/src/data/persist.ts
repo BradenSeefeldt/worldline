@@ -184,6 +184,14 @@ export const onLoadProblem = (fn: () => void) => void problemListeners.add(fn);
 
 // ---- snapshots and restoring
 
+/** Told when the app's data is replaced wholesale — a restore, starting over, erase everything (store.ts startFresh) —
+ *  before it happens. Sync listens (data/syncEngine.ts): it must never send the replacement out as everyone's edits. */
+const replacedListeners = new Set<(reloading: boolean) => Promise<void> | void>();
+export const onDataReplaced = (fn: (reloading: boolean) => Promise<void> | void) => (replacedListeners.add(fn), () => void replacedListeners.delete(fn));
+/** The app's data is about to be replaced (`reloading`: and the app reloads next). Each listener's first, synchronous
+ *  step runs before this returns. */
+export const dataReplaced = (reloading = false) => Promise.all([...replacedListeners].map((fn) => fn(reloading))).then(() => undefined);
+
 /** The daily snapshots kept in the database (newest first). The Mac app only. */
 export async function listSnapshots(): Promise<string[]> {
   if (!isApp()) return [];
@@ -201,6 +209,7 @@ export async function snapshotValue(day: string): Promise<string | null> {
  *  restore can be undone. The caller reloads the app afterwards. */
 export async function replaceSaved(key: string, value: string) {
   if (!readable(value)) throw new Error('That isn’t data Worldline can load.');
+  await dataReplaced(true);
   pending = null;
   clearTimeout(timer);
   const current = await kv.get(key).catch(() => null);
@@ -215,6 +224,7 @@ export const beforeRestore = (key: string) => kv.get(key + BEFORE_RESTORE).then(
 /** Start over from the recovery screen: an empty calendar; the unreadable data stays kept aside. */
 export async function startOverKeepingUnreadable(key: string) {
   // (data that read fine but couldn't be loaded — from a newer version, or a failed migration — is kept aside too)
+  await dataReplaced(true);
   const cur = await kv.get(key).catch(() => null);
   if (cur !== null) await kv.set(`${key}${UNREADABLE}-${new Date().toISOString()}`, cur); // never over an earlier copy kept aside
   await kv.del(key).catch(() => undefined);

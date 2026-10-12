@@ -25,18 +25,23 @@ Object.assign(globalThis, {
 let useStore: typeof import('./store').useStore;
 let startEngine: typeof import('./syncEngine').startEngine;
 let catchUpFrom: typeof import('./syncEngine').catchUpFrom;
+let readConfig: typeof import('./syncEngine').readConfig;
+let resumeSync: typeof import('./syncEngine').resumeSync;
+let replaceSaved: typeof import('./persist').replaceSaved;
 beforeAll(async () => {
   ({ useStore } = await import('./store'));
-  ({ startEngine, catchUpFrom } = await import('./syncEngine'));
+  ({ startEngine, catchUpFrom, readConfig, resumeSync } = await import('./syncEngine'));
+  ({ replaceSaved } = await import('./persist'));
 });
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const relay = memoryTransport();
 const secret = newSecret();
 const keys = deriveSync(secret);
+const relayDefault = relay, keysDefault = keys;
 
 /** The phone: a document fed from the relay's messages, and a way to make an edit and send it. */
-function phone() {
+function phone(relay: ReturnType<typeof memoryTransport> = relayDefault, keys = keysDefault) {
   const doc = new Y.Doc();
   const asm = new SnapshotAssembler();
   const device = newDeviceKey();
@@ -230,12 +235,13 @@ describe('saving the document on this device', () => {
 });
 
 describe('the catch-up point', () => {
+  const old = Date.now() - 86_400_000;
   const run = async (down: boolean) => {
     const r = memoryTransport({ down });
     mem.delete('worldline-sync');
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
     try {
-      const e = startEngine({ secret: newSecret(), device: newDeviceKey(), seenAt: Date.now() - 86_400_000, fullAt: Date.now() - 86_400_000 }, r, 'resume');
+      const e = startEngine({ secret: newSecret(), device: newDeviceKey(), seenAt: old, fullAt: old }, r, 'resume');
       await vi.advanceTimersByTimeAsync(15_000);
       e.stop();
     } finally {
@@ -248,6 +254,170 @@ describe('the catch-up point', () => {
     expect(await run(false)).toBeGreaterThan(Date.now() - 60_000);
   });
   it('stays put when no relay answered (opened offline): asking again later asks from the old point', async () => {
-    expect(await run(true)).toBeUndefined();
+    expect((await run(true)) ?? old).toBe(old); // (the config may be saved for other reasons: with the old point)
+  });
+});
+
+/** A sync group in its own relay: this app starts it with `events`, and a phone has caught up with it. */
+async function group(events: ReturnType<typeof ev>[], extra: Record<string, unknown> = {}) {
+  const r = memoryTransport(), s = newSecret(), k = deriveSync(s);
+  useStore.getState().startFresh();
+  useStore.setState({ events, ...extra });
+  const e = startEngine({ secret: s, device: newDeviceKey() }, r, 'create');
+  await sleep(900);
+  const p = phone(r, k);
+  await p.pull();
+  return { r, s, k, e, p };
+}
+
+describe('a change here while another device’s change waits to be shown (~150 ms)', () => {
+  it('keeps the phone’s delete and retitle; only the field edited here is added, on both devices', async () => {
+    const g = await group([ev('e1', 'One'), ev('e2', 'Two'), ev('e3', 'Three')]);
+    await g.p.edit((s) => ({ ...s, events: s.events.filter((x) => x.id !== 'e1').map((x) => (x.id === 'e2' ? { ...x, title: 'Two (phone)' } : x)) }));
+    await sleep(20); // in the document here, not yet shown
+    useStore.getState().updateEvent('e2', { location: 'Room 5' });
+    await sleep(400);
+    await g.e.flush();
+    for (const list of [(await g.p.pull()).events, useStore.getState().events]) {
+      expect(list.map((x) => x.id).sort()).toEqual(['e2', 'e3']);
+      expect(list.find((x) => x.id === 'e2')).toMatchObject({ title: 'Two (phone)', location: 'Room 5' });
+    }
+    g.e.stop();
+  });
+});
+
+describe('replacing this device’s data (start over, a restore, erase everything)', () => {
+  it('is never sent to the group as deletions: sync stops, and this device then takes the group’s data again', async () => {
+    const g = await group([ev('e1', 'One'), ev('e2', 'Two')]);
+    await g.e.flush();
+    expect((await readConfig())?.secret).toBe(g.s);
+    useStore.getState().startFresh(); // Erase everything, with sync running
+    await sleep(50);
+    expect(useStore.getState().sync.on).toBe(false);
+    const cfg = (await readConfig())!;
+    expect(cfg.joining).toBe(true);
+    expect(mem.has('worldline-sync-doc')).toBe(false);
+    const e = startEngine(cfg, g.r, 'resume'); // the next launch
+    await sleep(400);
+    await e.flush();
+    expect((await g.p.pull()).events.map((x) => x.id).sort()).toEqual(['e1', 'e2']);
+    expect(useStore.getState().events.map((x) => x.id).sort()).toEqual(['e1', 'e2']);
+    expect((await readConfig())?.joining).toBeFalsy();
+    e.stop();
+  });
+  it('restoring a snapshot or a backup does the same', async () => {
+    const g = await group([ev('e1', 'One'), ev('e2', 'Two')]);
+    await g.e.flush();
+    await replaceSaved('calendar-v1', JSON.stringify({ state: { events: [] }, version: 0 }));
+    expect(useStore.getState().sync.on).toBe(false); // (the app reloads next)
+    expect((await readConfig())?.joining).toBe(true);
+    expect(mem.has('worldline-sync-doc')).toBe(false);
+  });
+});
+
+describe('joining, interrupted', () => {
+  it('offline (or closed) before the group’s data arrived: the next launch carries on joining, sending nothing of this device’s', async () => {
+    const g = await group([ev('m1', 'Mac one'), ev('m2', 'Mac two')], { myName: 'Sam' });
+    await g.e.flush();
+    g.e.stop();
+    useStore.setState({ events: [ev('junk', 'Phone junk')], myName: 'Phone default' });
+    mem.delete('worldline-sync-doc');
+    const cfg = { secret: g.s, device: newDeviceKey(), joining: true };
+    const offline = startEngine(cfg, memoryTransport({ down: true }), 'join');
+    await sleep(100);
+    offline.stop();
+    const e = startEngine(cfg, g.r, 'resume');
+    await sleep(400);
+    await e.flush();
+    const there = await g.p.pull();
+    expect(there.events.map((x) => x.id).sort()).toEqual(['m1', 'm2']);
+    expect(there.myName).toBe('Sam');
+    expect(useStore.getState().events.map((x) => x.id).sort()).toEqual(['m1', 'm2']);
+    expect((await readConfig())?.secret).toBe(g.s);
+    expect((await readConfig())?.joining).toBeFalsy();
+    e.stop();
+  });
+  it('closed after the group’s data arrived but before it was saved: what the others changed meanwhile isn’t undone', async () => {
+    const g = await group([ev('m1', 'Mac one'), ev('m2', 'Mac two')]);
+    await g.e.flush();
+    g.e.stop();
+    useStore.setState({ events: [ev('junk', 'Phone junk')] });
+    mem.delete('worldline-sync-doc');
+    const cfg = { secret: g.s, device: newDeviceKey(), joining: true };
+    failAppSaves = true; // nothing gets saved before the app is closed
+    try {
+      const j = startEngine(cfg, g.r, 'join');
+      await sleep(400);
+      expect(useStore.getState().events.map((x) => x.id).sort()).toEqual(['m1', 'm2']);
+      j.stop();
+    } finally {
+      failAppSaves = false;
+    }
+    expect(cfg.joining).toBe(true);
+    await g.p.edit((s) => ({ ...s, events: s.events.filter((x) => x.id !== 'm1').map((x) => (x.id === 'm2' ? { ...x, title: 'Mac two (renamed)' } : x)) }));
+    const e = startEngine(cfg, g.r, 'resume');
+    await sleep(400);
+    await e.flush();
+    for (const list of [(await g.p.pull()).events, useStore.getState().events]) expect(list.map((x) => `${x.id}:${x.title}`)).toEqual(['m2:Mac two (renamed)']);
+    e.stop();
+  });
+});
+
+describe('sending', () => {
+  it('a big change (an import) goes out in pieces under the relays’ size limit; the phone gets all of it', async () => {
+    const g = await group([ev('e1', 'One')]);
+    const many = Array.from({ length: 3000 }, (_, i) => ev(`imp${i}`, crypto.randomUUID()));
+    useStore.setState({ events: [...useStore.getState().events, ...many] });
+    await g.e.flush();
+    expect(g.r.events.every((x) => x.content.length < 100_000)).toBe(true);
+    expect((await g.p.pull()).events).toHaveLength(3001);
+    g.e.stop();
+  });
+  it('a message a relay refuses is tried again as it is; later changes go out on their own, not merged into it', async () => {
+    const g = await group([ev('e1', 'One')]);
+    await g.e.flush(); // (the group's start, sent)
+    const send = g.r.send, tries = new Map<string, number>();
+    let refused: string | undefined;
+    g.r.send = async (x) => {
+      refused ??= x.id;
+      tries.set(x.id, (tries.get(x.id) ?? 0) + 1);
+      return x.id === refused ? false : send(x);
+    };
+    useStore.getState().updateEvent('e1', { title: 'Edit one' });
+    await g.e.flush();
+    useStore.getState().updateEvent('e1', { location: 'Edit two' });
+    await g.e.flush();
+    const ids = [...tries.keys()];
+    expect(ids).toHaveLength(2);
+    expect(tries.get(refused!)).toBe(2);
+    const second = (await openMessage(g.r.events.find((x) => x.id === ids[1])!, g.k)) as { data: Uint8Array };
+    const text = new TextDecoder().decode(second.data);
+    expect(text).toContain('Edit two');
+    expect(text).not.toContain('Edit one');
+    g.e.stop();
+  });
+  it('a change made offline goes out at the next launch, without waiting for a snapshot', async () => {
+    const g = await group([ev('e1', 'One')]);
+    await g.e.flush();
+    g.e.stop();
+    const off = startEngine((await readConfig())!, memoryTransport({ down: true }), 'resume');
+    await sleep(50);
+    useStore.getState().updateEvent('e1', { title: 'Edited offline' });
+    await off.flush();
+    off.stop();
+    const again = startEngine((await readConfig())!, g.r, 'resume');
+    await sleep(300); // (a snapshot would take 20 s)
+    expect((await g.p.pull()).events[0].title).toBe('Edited offline');
+    again.stop();
+  });
+});
+
+describe('development', () => {
+  it('sync doesn’t start at launch against the public relays unless asked for (localStorage wl-dev-network = 1)', async () => {
+    expect(import.meta.env.DEV).toBe(true);
+    expect(await readConfig()).toBeTruthy();
+    useStore.getState().setSync({ on: false, state: 'off' });
+    await resumeSync();
+    expect(useStore.getState().sync.on).toBe(false);
   });
 });

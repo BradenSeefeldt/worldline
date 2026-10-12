@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { KIND, SnapshotAssembler, deriveSync, newDeviceKey, newSecret, openMessage, pairingCode, parsePairingCode, sealSnapshot, sealUpdate, UPDATE_TTL } from './wire';
+import { KIND, MAX_CONTENT, SnapshotAssembler, deriveSync, newDeviceKey, newSecret, openMessage, pairingCode, parsePairingCode, sealSnapshot, sealUpdate, sealUpdates, UPDATE_TTL } from './wire';
 
 const keys = deriveSync(newSecret());
 /** Random bytes that don't compress (the system source gives at most 64 KB per call). */
@@ -62,6 +62,22 @@ describe('messages', () => {
     const oa = await openMessage(a[0], keys), ob = await openMessage(b[1], keys);
     expect(await asm.add(oa as never)).toBeNull();
     expect(await asm.add(ob as never)).toBeNull(); // different snapshot ids: no whole snapshot yet
+  });
+  it('a small update is one message; a big one goes out in pieces, each under the size limit, that come back whole', async () => {
+    expect(await sealUpdates(new Uint8Array([1, 2, 3]), keys, dev)).toHaveLength(1);
+    const big = noise(300_000);
+    const pieces = await sealUpdates(big, keys, dev);
+    expect(pieces.length).toBeGreaterThan(1);
+    expect(pieces.every((p) => p.content.length < MAX_CONTENT)).toBe(true);
+    expect(pieces.every((p) => p.tags.some((t) => t[0] === 'expiration'))).toBe(true); // kept 30 days, like any update
+    expect(new Set(pieces.map((p) => p.tags.find((t) => t[0] === 'd')![1])).size).toBe(pieces.length); // never replace each other
+    const asm = new SnapshotAssembler();
+    let whole: Uint8Array | null = null;
+    for (const p of pieces) {
+      const o = await openMessage(p, keys);
+      if (o?.kind === 'piece') whole = (await asm.add(o)) ?? whole;
+    }
+    expect(whole).toEqual(big);
   });
   it('snapshot pieces carry a second tag, so they can be asked for on their own', async () => {
     const [p] = await sealSnapshot(noise(1000), keys, dev);

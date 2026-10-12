@@ -94,3 +94,110 @@ describe('the app’s data as a synced document', () => {
     expect(updates).toBe(0);
   });
 });
+
+describe('writing only what changed here (another device’s newer changes may already be in the document)', () => {
+  it('a stale copy of a field the other device changed is never written back; the field changed here is', () => {
+    const { a, b, s0 } = pair();
+    const e = s0.events[0];
+    writeLocal(b, s0, { ...s0, events: [{ ...e, title: 'Group meeting (phone)' }], habitLog: { h: { 20000: 1, 20001: 3 } } });
+    Y.applyUpdate(a, Y.encodeStateAsUpdate(b)); // in a's document, not yet in a's data (still s0)
+    writeLocal(a, s0, { ...s0, events: [{ ...e, start: 3000 }], habitLog: { h: { 20000: 0, 20001: 1 } } });
+    sync(a, b);
+    for (const d of [a, b]) {
+      expect(readDoc(d).events![0]).toMatchObject({ title: 'Group meeting (phone)', start: 3000 });
+      expect(readDoc(d).habitLog).toEqual({ h: { 20000: 0, 20001: 3 } });
+    }
+  });
+  it('a record deleted on another device stays deleted, even when it’s edited here meanwhile', () => {
+    const { a, b, s0 } = pair();
+    writeLocal(b, s0, { ...s0, projects: [s0.projects[1]], habitLog: {} });
+    Y.applyUpdate(a, Y.encodeStateAsUpdate(b));
+    writeLocal(a, s0, { ...s0, projects: [{ ...s0.projects[0], title: 'A, edited' }, { ...s0.projects[1], title: 'B, edited' }], habitLog: { h: { 20000: 1, 20001: 1, 20002: 1 } } });
+    sync(a, b);
+    for (const d of [a, b]) {
+      expect(readDoc(d).projects).toEqual([{ id: 'p2', title: 'B, edited' }]);
+      expect(readDoc(d).habitLog).toEqual({ h: { 20002: 1 } });
+    }
+  });
+  it('the same field edited on both devices: both settle on one value (Yjs picks it, not the clock)', () => {
+    const { a, b, s0 } = pair();
+    const e = s0.events[0];
+    writeLocal(a, s0, { ...s0, events: [{ ...e, title: 'Mac' }] });
+    writeLocal(b, s0, { ...s0, events: [{ ...e, title: 'Phone' }] });
+    sync(a, b);
+    expect(readDoc(a).events![0].title).toBe(readDoc(b).events![0].title);
+  });
+});
+
+describe('list order', () => {
+  const big = (n: number) => Array.from({ length: n }, (_, i) => ({ id: `e${i}`, calendarId: 'c', title: `Event ${i}`, start: i * 1000, end: i * 1000 + 500, allDay: false }));
+  it('50 deletions in a 2,000-event document grow it by only a little (no positions are renumbered)', () => {
+    const doc = new Y.Doc();
+    let s = base({ events: big(2000) });
+    writeLocal(doc, null, s);
+    const before = Y.encodeStateAsUpdate(doc).length;
+    for (let i = 0; i < 50; i++) {
+      const next = { ...s, events: s.events.slice(1) };
+      writeLocal(doc, s, next);
+      s = next;
+    }
+    expect(Y.encodeStateAsUpdate(doc).length - before).toBeLessThan(1000);
+  });
+  it('events store no position at all', () => {
+    const { a } = pair();
+    expect((a.getMap('events').get('e1') as Y.Map<unknown>).has('_o')).toBe(false);
+  });
+  it('moving one column writes one new place, and concurrent moves and additions settle the same on both', () => {
+    const doc = new Y.Doc();
+    const p = (id: string) => ({ id, title: id });
+    const s0 = base({ projects: ['a', 'b', 'c', 'd', 'e'].map(p) });
+    writeLocal(doc, null, s0);
+    let sets = 0;
+    doc.on('update', (u: Uint8Array) => (sets += Y.decodeUpdate(u).structs.length));
+    const moved = { ...s0, projects: [s0.projects[4], ...s0.projects.slice(0, 4)] }; // e to the front
+    writeLocal(doc, s0, moved);
+    expect(sets).toBe(1);
+    expect(readDoc(doc).projects!.map((x) => x.id)).toEqual(['e', 'a', 'b', 'c', 'd']);
+    // two devices: one moves a to the end, the other adds f after b
+    const other = new Y.Doc();
+    Y.applyUpdate(other, Y.encodeStateAsUpdate(doc));
+    const [e, a, b, c, d] = moved.projects;
+    writeLocal(doc, moved, { ...moved, projects: [e, b, c, d, a] });
+    writeLocal(other, moved, { ...moved, projects: [e, a, b, p('f'), c, d] });
+    sync(doc, other);
+    expect(readDoc(doc).projects!.map((x) => x.id)).toEqual(['e', 'b', 'f', 'c', 'd', 'a']);
+    expect(readDoc(other).projects!.map((x) => x.id)).toEqual(['e', 'b', 'f', 'c', 'd', 'a']);
+  });
+  it('lists you don’t order keep this device’s order; new arrivals go at the end', () => {
+    const { a, s0 } = pair();
+    const mine = { ...s0, habits: [{ id: 'h2', title: 'Read' }, { id: 'h', title: 'Gym' }] };
+    writeLocal(a, s0, mine);
+    const other = new Y.Doc();
+    Y.applyUpdate(other, Y.encodeStateAsUpdate(a));
+    writeLocal(other, readDoc(other) as Synced, { ...(readDoc(other) as Synced), habits: [...(readDoc(other) as Synced).habits, { id: 'h0', title: 'Walk' }] });
+    Y.applyUpdate(a, Y.encodeStateAsUpdate(other));
+    expect(readDoc(a, mine).habits!.map((h) => h.id)).toEqual(['h2', 'h', 'h0']);
+  });
+  it('documents from before (a position `_o` on every record) still read in their order, and aren’t renumbered', () => {
+    const doc = new Y.Doc();
+    doc.transact(() => {
+      for (const [c, ids] of [['projects', ['p2', 'p1', 'p3']], ['habits', ['hb', 'ha']]] as const)
+        ids.forEach((id, i) => {
+          const y = new Y.Map();
+          doc.getMap(c).set(id, y);
+          y.set('id', id);
+          y.set('title', id);
+          y.set('_o', i);
+        });
+    });
+    const got = readDoc(doc) as Synced;
+    expect(got.projects.map((p) => p.id)).toEqual(['p2', 'p1', 'p3']);
+    expect(got.habits.map((h) => h.id)).toEqual(['hb', 'ha']);
+    expect(got.projects[0]).not.toHaveProperty('_o');
+    let updates = 0;
+    doc.on('update', () => updates++);
+    writeLocal(doc, got, { ...got, projects: got.projects.filter((p) => p.id !== 'p1') });
+    expect(updates).toBe(1);
+    expect((doc.getMap('projects').get('p3') as Y.Map<unknown>).get('_o')).toBe(2);
+  });
+});
