@@ -9,6 +9,9 @@
 // the last keystrokes reached the database), then it quits; if it doesn't answer within 3 s it quits anyway.
 // Closing the window: the web app decides (Settings → General → Keep running): by default it hides the window and the
 // app keeps running (like Calendar or Mail), so scheduling links stay live; ⌘Q quits; the Dock icon brings it back.
+#[cfg(target_os = "macos")]
+mod eventkit;
+
 use std::collections::HashSet;
 use std::sync::{Arc, Condvar, Mutex};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -44,6 +47,42 @@ fn set_alerts(state: tauri::State<AlertState>, alerts: Vec<Alert>) {
   let mut a = m.lock().unwrap_or_else(|e| e.into_inner());
   a.list = alerts;
   c.notify_all();
+}
+
+// ---- Calendars on this Mac (src/eventkit.rs). Each runs on a worker thread: asking for access waits for the person.
+#[cfg(target_os = "macos")]
+async fn blocking<T: Send + 'static>(f: impl FnOnce() -> T + Send + 'static) -> Result<T, String> {
+  tauri::async_runtime::spawn_blocking(f).await.map_err(|e| e.to_string())
+}
+#[cfg(target_os = "macos")]
+#[tauri::command]
+async fn ek_status() -> Result<String, String> {
+  blocking(eventkit::status).await
+}
+#[cfg(target_os = "macos")]
+#[tauri::command]
+async fn ek_request() -> Result<String, String> {
+  blocking(eventkit::request).await?
+}
+#[cfg(target_os = "macos")]
+#[tauri::command]
+async fn ek_calendars() -> Result<Vec<eventkit::EkCal>, String> {
+  blocking(eventkit::calendars).await
+}
+#[cfg(target_os = "macos")]
+#[tauri::command]
+async fn ek_events(from: f64, to: f64, calendars: Vec<String>) -> Result<Vec<eventkit::EkEvent>, String> {
+  blocking(move || eventkit::events(from, to, calendars)).await
+}
+#[cfg(target_os = "macos")]
+#[tauri::command]
+async fn ek_save(event: eventkit::EkSave) -> Result<String, String> {
+  blocking(move || eventkit::save(event)).await?
+}
+#[cfg(target_os = "macos")]
+#[tauri::command]
+async fn ek_delete(ext: String, occ: f64, calendar: String) -> Result<(), String> {
+  blocking(move || eventkit::delete(ext, occ, calendar)).await?
 }
 
 /// Settings → Alerts → Send a test alert.
@@ -183,7 +222,15 @@ pub fn run() {
     .plugin(tauri_plugin_process::init())
     .plugin(tauri_plugin_notification::init())
     .manage(AlertState::default())
-    .invoke_handler(tauri::generate_handler![save_file, quit_now, uninstall, set_alerts, test_alert])
+    .invoke_handler(tauri::generate_handler![
+      save_file, quit_now, uninstall, set_alerts, test_alert,
+      #[cfg(target_os = "macos")] ek_status,
+      #[cfg(target_os = "macos")] ek_request,
+      #[cfg(target_os = "macos")] ek_calendars,
+      #[cfg(target_os = "macos")] ek_events,
+      #[cfg(target_os = "macos")] ek_save,
+      #[cfg(target_os = "macos")] ek_delete
+    ])
     .on_menu_event(|app, ev| {
       if ev.id() == "quit" {
         request_quit(app);

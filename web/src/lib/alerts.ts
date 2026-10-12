@@ -3,7 +3,7 @@
 // Each event can carry `alert`: minutes before it starts (0 = when it starts), or null for none. Left unset, the default
 // applies (Settings → Alerts): one for timed events, one for all-day events (counted from the start of the day, so
 // −540 = 9 AM on the day, 420 = 5 PM the day before), one for deadlines (before the due moment). Subscribed calendars
-// only alert when that calendar has alerts turned on (its ⋯ card) or the event has its own. Hidden calendars, done
+// and calendars on the Mac (the Calendar app has its own alerts) only alert when that calendar has alerts turned on (its ⋯ card) or the event has its own. Hidden calendars, done
 // deadlines and tasks never alert.
 import { format } from 'date-fns';
 import type { CalEvent, CalendarSource } from '../data/types';
@@ -44,7 +44,7 @@ export function describeAlert(min: number | null, allDay: boolean): string {
 export function alertFor(ev: CalEvent, cal: CalendarSource | undefined, d: AlertDefaults): number | null {
   if (ev.alert === null) return null;
   if (typeof ev.alert === 'number') return ev.alert;
-  if (cal?.url && !cal.alerts) return null; // subscribed: off unless the calendar's alerts are on
+  if ((cal?.url || cal?.mac) && !cal.alerts) return null; // subscribed, or on the Mac (its Calendar app reminds you): off unless turned on
   if (cal && cal.alerts === false) return null;
   return ev.kind === 'deadline' ? d.alertDeadlineMin : ev.allDay ? d.alertAllDayMin : d.alertMin;
 }

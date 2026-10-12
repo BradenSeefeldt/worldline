@@ -30,15 +30,17 @@ export const DRAFT_ID = '__draft__';
 export const DAYS_IN_VIEW: Record<Exclude<ViewMode, 'month'>, number> = { day: 1, '3day': 3, week: 7 };
 export const HOUR_H_RANGE = [26, 160] as const;
 
+/** A calendar you can't change here: a subscription, or a calendar on the Mac that doesn't allow changes. */
+export const readOnly = (c: CalendarSource | undefined) => !!c && (!!c.url || (!!c.mac && !c.mac.writable));
 /** Calendar for new events: the starred default, unless it's hidden. */
 export const newEventCalendarId = (s: { calendars: CalendarSource[]; defaultCalendarId: string }) => {
-  const mine = s.calendars.filter((c) => !c.url); // subscribed calendars are read-only
+  const mine = s.calendars.filter((c) => !readOnly(c));
   return (mine.find((c) => c.id === s.defaultCalendarId && c.visible) ?? mine.find((c) => c.visible) ?? mine[0] ?? s.calendars[0]).id;
 };
 /** Is this event from a subscribed (read-only) calendar? */
 export const isLocked = (s: { events: CalEvent[]; calendars: CalendarSource[] }, id: string) => {
   const ev = resolveEvent(s.events, id);
-  return !!ev && !!s.calendars.find((c) => c.id === ev.calendarId)?.url;
+  return !!ev && readOnly(s.calendars.find((c) => c.id === ev.calendarId));
 };
 
 const newId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
@@ -176,6 +178,10 @@ interface State {
   /** Set how much was done on a day (epoch day); 0 clears it. */
   setHabitAmount: (id: string, day: number, amount: number) => void;
   links: BookingLink[]; // scheduling links (book a time / group poll)
+  /** Calendars on this Mac: what each event looked like when Worldline and the Calendar app last agreed
+   *  (data/macCalendars.ts). Saved with the data — so a restored backup brings its own — but never synced. */
+  macKnown: Record<string, string>;
+  setMacKnown: (k: Record<string, string>) => void;
   myName: string; // shown to guests on your links
   view: ViewMode;
   /** What the current view is showing; views report this as you scroll. */
@@ -220,6 +226,10 @@ interface State {
   updateCalendar: (id: string, patch: Partial<CalendarSource>) => void;
   /** Delete a calendar; its events move to `moveTo`, or are deleted when it's null. */
   deleteCalendar: (id: string, moveTo: string | null) => void;
+  /** Calendars on the Mac (data/macCalendars.ts): show one here, or stop showing it (its events leave Worldline only —
+   *  nothing is deleted on the Mac). Not undo steps: like a subscription's refresh, they aren't edits. */
+  addMacCalendar: (c: CalendarSource) => void;
+  removeMacCalendar: (id: string) => void;
   /** Subscribe to a calendar link (.ics / webcal://). Returns the new calendar's id; its events arrive shortly. */
   subscribeCalendar: (url: string, name: string, color: string) => string;
   /** Fetch a subscribed calendar again (no undo step: it's the feed's data, not an edit). */
@@ -330,6 +340,8 @@ export const useStore = create<State>()(
         projectNav: { hist: [], i: -1 },
         theme: 'system',
         links: [],
+        macKnown: {},
+        setMacKnown: (macKnown) => set({ macKnown }),
         myName: '',
         linkSync: {},
         view: initialView,
@@ -431,12 +443,19 @@ export const useStore = create<State>()(
           set({
             calendars: [{ id: 'personal', name: 'Personal', color: '#2f7cf6', visible: true, account: 'Local' }], defaultCalendarId: 'personal',
             events: [], tasks: [], habits: [], habitLog: {}, habitNotes: {}, projects: [], threads: [], projectLog: [], links: [],
-            selectedId: null, past: [], future: [], skipped: [], dismissed: [], projectNav: { hist: [], i: -1 },
+            selectedId: null, past: [], future: [], skipped: [], dismissed: [], projectNav: { hist: [], i: -1 }, macKnown: {},
           }),
         updateCalendar: (id, patch) => {
           record(`cal:${id}:${Object.keys(patch).sort().join()}`);
           set((s) => ({ calendars: s.calendars.map((c) => (c.id === id ? { ...c, ...patch, ...(patch.name !== undefined ? { autoName: false } : {}) } : c)) }));
         },
+        addMacCalendar: (c) => set((s) => ({ calendars: s.calendars.some((x) => x.id === c.id) ? s.calendars.map((x) => (x.id === c.id ? { ...x, ...c } : x)) : [...s.calendars, c] })),
+        removeMacCalendar: (id) =>
+          set((s) => ({
+            calendars: s.calendars.filter((c) => c.id !== id),
+            events: s.events.filter((e) => e.calendarId !== id),
+            ...(s.defaultCalendarId === id ? { defaultCalendarId: s.calendars.find((c) => c.id !== id && !readOnly(c))?.id ?? s.defaultCalendarId } : {}),
+          })),
         deleteCalendar: (id, moveTo) => {
           const s0 = get();
           if (s0.calendars.length <= 1) return;
@@ -986,6 +1005,7 @@ export const useStore = create<State>()(
         theme: s.theme,
         links: s.links,
         myName: s.myName,
+        macKnown: s.macKnown,
       }),
     },
   ),

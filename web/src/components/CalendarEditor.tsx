@@ -151,6 +151,7 @@ export function CalendarEditor({ id, onClose, mode: startMode = 'new' }: { id: s
           className="ce-name"
           placeholder={mode === 'new' || existing ? 'Calendar name' : 'Name (optional)'}
           value={name}
+          readOnly={!!existing?.mac} title={existing?.mac ? 'Named in the Calendar app' : undefined}
           onChange={(e) => rename(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && (existing ? onClose() : mode === 'subscribe' ? subscribe() : mode === 'new' ? create() : undefined)}
         />
@@ -171,7 +172,7 @@ export function CalendarEditor({ id, onClose, mode: startMode = 'new' }: { id: s
           </label>
         </div>
 
-        {!existing?.url && mode !== 'subscribe' && <label className="ce-row">
+        {!existing?.url && !(existing?.mac && !existing.mac.writable) && mode !== 'subscribe' && <label className="ce-row">
           <span>Default calendar for new events</span>
           <input
             type="checkbox"
@@ -183,16 +184,16 @@ export function CalendarEditor({ id, onClose, mode: startMode = 'new' }: { id: s
         </label>}
         {existing && (
           <label className="ce-row">
-            <span>Alerts for its events{existing.url ? '' : ' (Settings → Alerts)'}</span>
+            <span>Alerts for its events{existing.url ? '' : existing.mac ? ' (the Calendar app has its own)' : ' (Settings → Alerts)'}</span>
             <input
               type="checkbox"
               className="switch"
-              checked={existing.url ? !!existing.alerts : existing.alerts !== false}
+              checked={existing.url || existing.mac ? !!existing.alerts : existing.alerts !== false}
               onChange={(e) => updateCalendar(existing.id, { alerts: e.target.checked })}
             />
           </label>
         )}
-        {existing && <div className="ce-meta">{count} event{count === 1 ? '' : 's'} · {existing.url ? 'subscribed (read-only)' : existing.account}</div>}
+        {existing && <div className="ce-meta">{count} event{count === 1 ? '' : 's'} · {existing.url ? 'subscribed (read-only)' : existing.mac ? `${existing.account} · in the Calendar app${existing.mac.writable ? ', kept in step both ways' : ' (read-only)'}` : existing.account}</div>}
 
         {existing ? (
           confirming ? (
@@ -225,7 +226,12 @@ export function CalendarEditor({ id, onClose, mode: startMode = 'new' }: { id: s
             </div>
           ) : (
             <div className="ce-actions">
-              {existing.url ? (
+              {existing.mac ? (
+                // (only out of Worldline: nothing is deleted in the Calendar app)
+                <button className="ce-btn subtle-danger" title="Its events stay in the Calendar app" onClick={() => { useStore.getState().removeMacCalendar(existing.id); onClose(); }}>
+                  Stop showing here
+                </button>
+              ) : existing.url ? (
                 <button className="ce-btn subtle-danger" onClick={() => { deleteCalendar(existing.id, null); onClose(); }} disabled={!others.length}>
                   <Trash /> Unsubscribe
                 </button>

@@ -275,7 +275,9 @@ export function EventPanel() {
         )}
         <div className="prow">
           <span>Repeat</span>
-          {isException ? (
+          {ev.ext?.recurring ? (
+            <span className="prow-note">Repeats in the Calendar app · changes here are to this one</span>
+          ) : isException ? (
             <span className="prow-note">Changed occurrence of a repeating event</span>
           ) : (
             <select className="pselect" value={choiceOf(master?.recurrence)} onChange={(e) => setRepeat(e.target.value as RepeatChoice)}>

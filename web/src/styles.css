@@ -2674,3 +2674,5 @@ html.in-app .sidebar .mini { top: calc(8px - env(safe-area-inset-top)); }
   .st-ctl > .st-in, .st-ctl > input:not([type='checkbox']), .st-ctl > .pselect { max-width: 100%; }
   .st-foot { font-size: 12.5px; line-height: 1.4; }
 }
+
+.st-sub { padding: 10px 12px 2px; font-size: 11.5px; font-weight: 700; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.04em; } /* Settings: a heading inside a group (an account) */

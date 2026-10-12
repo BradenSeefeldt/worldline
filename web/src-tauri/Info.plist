@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Merged into the app's Info.plist by Tauri. macOS shows these words when Worldline asks for your calendars
+     (Settings → Calendars → Calendars on this Mac). -->
+<plist version="1.0">
+<dict>
+  <key>NSCalendarsFullAccessUsageDescription</key>
+  <string>Worldline shows the calendars on this Mac (iCloud, Google, Exchange…) next to its own, and saves your changes back to them.</string>
+  <key>NSCalendarsUsageDescription</key>
+  <string>Worldline shows the calendars on this Mac (iCloud, Google, Exchange…) next to its own, and saves your changes back to them.</string>
+</dict>
+</plist>

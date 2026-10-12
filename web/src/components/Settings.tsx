@@ -6,7 +6,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { useStore } from '../data/store';
 import type { AppSettings, StartPage } from '../data/settings';
 import type { ViewMode } from '../data/types';
-import { HOUR_H_RANGE } from '../data/store';
+import { HOUR_H_RANGE, readOnly } from '../data/store';
 import { TimeZonePicker } from './TimeZonePicker';
 import { CalendarEditor } from './CalendarEditor';
 import { Close } from './Icons';
@@ -21,6 +21,7 @@ import { toIcs } from '../lib/icsExport';
 import { relayHealth } from '../data/schedSync';
 import { canUpdate, checkForUpdate, restartToUpdate } from '../lib/updates';
 import { notificationAccess, testAlert } from '../data/alerts';
+import { askMacAccess, macAccess, macCalendarList, macHost, showMacCalendar, type MacAccess, type MacCalendar } from '../data/macCalendars';
 import { ALL_DAY_CHOICES, TIMED_CHOICES } from '../lib/alerts';
 import { SyncSettings } from './SyncSettings';
 
@@ -287,7 +288,7 @@ function CalendarPane() {
       </Group>
       <Group title="New events">
         <Row title="Default calendar">
-          <Pick label="Default calendar" value={defaultId} options={calendars.filter((c) => !c.url).map((c) => [c.id, c.name] as [string, string])} onChange={st.setDefaultCalendar} />
+          <Pick label="Default calendar" value={defaultId} options={calendars.filter((c) => !readOnly(c)).map((c) => [c.id, c.name] as [string, string])} onChange={st.setDefaultCalendar} />
         </Row>
         <Row title="Default length" note="When quick add or a double-click doesn’t say">
           <Pick label="Default length" value={s.defaultEventMin} options={[15, 30, 45, 60, 90, 120].map((m) => [m, mins(m)] as [number, string])} onChange={(v) => set({ defaultEventMin: v })} />
@@ -315,10 +316,11 @@ function CalendarsPane({ onNested }: { onNested: (open: boolean) => void }) {
   useEffect(() => onNested(!!editing), [editing]); // eslint-disable-line react-hooks/exhaustive-deps
   const count = (id: string) => events.filter((e) => e.calendarId === id).length;
   const refresh = async (id: string) => { setBusy(id); await useStore.getState().refreshCalendar(id); setBusy(null); };
-  const own = calendars.filter((c) => !c.url), subs = calendars.filter((c) => c.url);
+  const own = calendars.filter((c) => !c.url && !c.mac), subs = calendars.filter((c) => c.url);
   const dot = (color: string) => <i className="st-dot" style={{ background: color }} />;
   return (
     <>
+      <MacCalendarsGroup />
       <Group title="Your calendars">
         {own.map((c) => (
           <Row key={c.id} title={<>{dot(c.color)}{c.name}{c.id === defaultId ? ' ★' : ''}</>} note={`On this ${isApp() ? 'Mac' : 'browser'} · ${count(c.id)} events`}>
@@ -379,6 +381,71 @@ function TasksPane() {
 }
 
 // ---------------------------------------------------------------- Habits
+// Calendars on this Mac (iCloud, Google, Exchange…): connect, then pick which to show — data/macCalendars.ts
+function MacCalendarsGroup() {
+  const calendars = useStore((x) => x.calendars);
+  const [access, setAccess] = useState<MacAccess | null>(null);
+  const [list, setList] = useState<MacCalendar[]>([]);
+  const [host, setHost] = useState('');
+  const [busy, setBusy] = useState(false);
+  const load = async () => {
+    const a = await macAccess().catch(() => 'denied' as MacAccess);
+    setAccess(a);
+    if (a === 'full') setList(await macCalendarList().catch(() => []));
+  };
+  useEffect(() => {
+    if (!isApp()) return;
+    void macHost().then(setHost);
+    void load();
+  }, []);
+  const fromMac = calendars.filter((c) => c.mac);
+  if (!isApp())
+    return fromMac.length ? (
+      <Group title="Calendars on your Mac" foot="Kept in step with the Calendar app by your Mac: changes made here reach it (and iCloud, Google…) the next time your Mac is on.">
+        {fromMac.map((c) => <Row key={c.id} title={<><i className="st-dot" style={{ background: c.color }} />{c.name}</>} note={c.account + (c.mac!.writable ? '' : ' · read-only')} />)}
+      </Group>
+    ) : null;
+  const connect = async () => {
+    setBusy(true);
+    try {
+      setAccess(await askMacAccess());
+      await load();
+    } finally {
+      setBusy(false);
+    }
+  };
+  const accounts = [...new Set(list.map((c) => c.account))];
+  return (
+    <Group title="Calendars on this Mac" foot="iCloud, Google, Exchange — whatever the Calendar app has. Changes go both ways, and your iPhone sees them through sync. Turning one off only takes it out of Worldline.">
+      {access === 'notDetermined' && (
+        <Row title="Show your Mac’s calendars here" note="macOS asks you once whether Worldline may use your calendars">
+          <button className="ce-btn primary" disabled={busy} onClick={() => void connect()}>{busy ? 'Waiting…' : 'Connect…'}</button>
+        </Row>
+      )}
+      {(access === 'denied' || access === 'restricted' || access === 'writeOnly') && (
+        <Row title="Worldline can’t read your calendars" note="System Settings → Privacy & Security → Calendars → set Worldline to Full Access, then come back here">
+          <button className="ce-btn" onClick={() => void load()}>Check again</button>
+        </Row>
+      )}
+      {access === 'full' && !list.length && <Row title="No calendars in the Calendar app" note="Add an account in System Settings → Internet Accounts, or a calendar in the Calendar app" />}
+      {access === 'full' && accounts.map((a) => (
+        <div key={a}>
+          <div className="st-sub">{a}</div>
+          {list.filter((c) => c.account === a).map((c) => {
+            const shown = calendars.find((x) => x.mac?.id === c.id);
+            const elsewhere = shown && shown.mac!.host !== host;
+            return (
+              <Row key={c.id} title={<><i className="st-dot" style={{ background: c.color }} />{c.title}</>} note={elsewhere ? 'Kept in step by another Mac' : c.writable ? undefined : 'Read-only'}>
+                <Toggle label={`Show ${c.title} in Worldline`} on={!!shown} onChange={(v) => void showMacCalendar(c, v)} />
+              </Row>
+            );
+          })}
+        </div>
+      ))}
+    </Group>
+  );
+}
+
 // ---------------------------------------------------------------- Alerts
 function AlertsPane() {
   const [s, set] = useSettings();

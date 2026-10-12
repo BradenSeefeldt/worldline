@@ -1,6 +1,6 @@
 [package]
 name = "worldline"
-version = "0.7.1"
+version = "0.8.0"
 description = "Worldline: calendar, habits and research projects for the Mac"
 authors = ["BradenSeefeldt"]
 license = "MIT"
@@ -36,3 +36,11 @@ lto = true
 opt-level = "s"
 panic = "abort"
 strip = true
+
+# Calendars on this Mac (iCloud, Google, Exchange… through macOS's EventKit): src/eventkit.rs
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6"
+block2 = "0.6"
+objc2-foundation = { version = "0.3", features = ["NSArray", "NSDate", "NSString", "NSError", "NSURL", "NSPredicate", "NSTimeZone", "NSObject"] }
+objc2-app-kit = { version = "0.3", features = ["NSColor", "NSColorSpace"] }
+objc2-event-kit = { version = "0.3", features = ["EKEventStore", "EKEvent", "EKCalendar", "EKCalendarItem", "EKObject", "EKSource", "EKTypes", "EKRecurrenceRule", "EKRecurrenceEnd", "EKRecurrenceDayOfWeek", "block2", "objc2-app-kit"] }

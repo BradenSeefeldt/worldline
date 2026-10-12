@@ -24,3 +24,10 @@ is spelled out in [Syncing: What the relays can learn](sync.md#what-the-relays-c
   can't write files on its own.
 - Updates are signed, and the app refuses unsigned ones (see [Automatic updates](development.md#automatic-updates)).
 - The web version runs in one tab at a time, so two tabs can't save over each other.
+
+## Calendars on this Mac
+
+If you connect them (Settings → Calendars), Worldline reads and writes the Mac's calendars through macOS's own
+calendar access, on the Mac. Nothing goes to any server of Worldline's; the events reach your other devices only
+through Worldline's end-to-end-encrypted sync, like everything else.
+

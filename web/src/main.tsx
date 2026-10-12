@@ -10,6 +10,7 @@ import { runScheduling } from './data/schedSync';
 import './styles.css';
 import { flushSync, resumeSync } from './data/syncEngine';
 import { runAlerts } from './data/alerts';
+import { runMacCalendars } from './data/macCalendars';
 
 // In the Mac app the saved data comes from a database (asynchronously): show the app once it's loaded, so it never
 // flashes the starting data first. A new install (nothing saved yet) starts empty, not with the demo.
@@ -109,6 +110,7 @@ void Promise.all([loaded, ownTab()]).then(([, mine]) => {
   if (isApp() || import.meta.env.DEV) void runScheduling(); // data/schedSync.ts
   void resumeSync(); // syncing between your devices, if this one is set up (data/syncEngine.ts)
   runAlerts(); // reminders (data/alerts.ts)
+  runMacCalendars(); // the Mac app: calendars on this Mac, kept in step both ways (data/macCalendars.ts)
   createRoot(document.getElementById('root')!).render(
     <StrictMode>
       <CrashScreen>

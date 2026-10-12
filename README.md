@@ -24,7 +24,8 @@ macOS 11+ (Apple silicon and Intel) · iOS 16.4+ · 12 MB
 - **Habits** with strength, streaks and years of history.
 - **Projects**: write-as-you-go pages and notes that gather your to-dos, ideas and who you're waiting on.
 - **Scheduling links** (book a time, group polls) that work for anyone, with no accounts.
-- **Calendar subscriptions** (any iCal link) and sync between your Mac and iPhone.
+- **Your Mac's calendars** (iCloud, Google, Exchange) two-way, **subscriptions** to any iCal link, and **reminders**.
+- **Sync** between your Mac and iPhone, end-to-end encrypted.
 
 **Documentation:** [all docs](docs/README.md) · [Installing](docs/install.md) · [Using it](docs/using.md) ·
 [Sync](docs/sync.md) · [Privacy](docs/privacy.md) · [Development](docs/development.md)

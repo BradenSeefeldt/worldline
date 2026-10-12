@@ -121,6 +121,31 @@ turn on **Alerts for its events** in the calendar's ⋯ card; hidden calendars a
 Logic and tests: `web/src/lib/alerts.ts`, `alerts.test.ts`; delivery `web/src/data/alerts.ts` and
 `web/src-tauri/src/lib.rs`.
 
+## Calendars on this Mac (iCloud, Google, Exchange)
+
+**⚙ Settings → Calendars → Calendars on this Mac → Connect…** — macOS asks once whether Worldline may use your
+calendars (Full Access). Then switch on the ones to show: every calendar the Mac's Calendar app has, grouped by account
+(iCloud, Google, Exchange, On My Mac). They work like Worldline's own, both ways:
+
+- Events in them show here; what you add, change or delete here is saved to the Calendar app (and from there to
+  iCloud, Google…); what changes there shows here within two minutes, or as soon as you come back to Worldline.
+- Changed on both sides at once: the Calendar app's version wins.
+- A repeating event there arrives as its occurrences; changing one here changes that one. A new repeating event made
+  here in one of those calendars becomes a real repeating event there.
+- Read-only calendars (holidays, ones shared with you to view) stay read-only. Names come from the Calendar app;
+  colours you can change here. Reminders for them are off by default (the Calendar app has its own).
+- **Your iPhone** sees them through sync and can change them; the changes reach the Calendar app the next time your
+  Mac runs Worldline.
+- **Stop showing here** (the calendar's ⋯ card) only takes it out of Worldline — nothing is deleted in the Calendar app.
+- **Safeguards:** Worldline never deletes more than 5 events there in one go (if its data jumped — an old backup
+  restored — they come back instead, and it says so); a calendar that briefly comes back empty (iCloud refreshing) is
+  left as it was; events far in the past or future (outside about the last 2 months and next 13) are left alone.
+- If macOS ever asks again after an update, or Settings shows **Connect…** again, that's macOS re-checking the app
+  (it isn't signed with a paid Apple ID); allow it again and everything carries on.
+
+Logic and tests: `web/src/lib/macCalendars.ts` (what changed where — `macCalendars.test.ts`), `web/src/data/macCalendars.ts`
+(running it — `macCalendars.test.ts`, against a fake Calendar app), `web/src-tauri/src/eventkit.rs` (the bridge to macOS).
+
 ## Calendars
 
 Each calendar has a slim show/hide switch (clicking anywhere on the row works too); its name gets the rest of the
