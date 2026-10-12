@@ -99,17 +99,7 @@ export function SchedulingBody() {
           <button className="sl-btn" title="Copy link" onClick={(e) => { e.stopPropagation(); copyLink(l.id); }}>
             <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"><path d="M6.5 9.5 9.5 6.5M7 4.5l1.2-1.2a2.6 2.6 0 0 1 3.7 3.7L10.7 8.2M9 11.5l-1.2 1.2a2.6 2.6 0 0 1-3.7-3.7L5.3 7.8" /></svg>
           </button>
-          <button className="sl-btn" title="Open the page guests see" onClick={(e) => { e.stopPropagation(); window.open(linkUrl(l.id), '_blank'); }}>↗</button>
-          <button
-            className="sl-btn danger"
-            title="Delete link (and its upcoming meetings)"
-            onClick={(e) => {
-              e.stopPropagation();
-              void deleteLink(l);
-            }}
-          >
-            <Trash />
-          </button>
+          {/* Preview ↗ and Delete are in its card (click the row), so the name gets the room */}
           {booked.length > 0 && (
             <span className="sl-books">
               {booked.slice(0, 3).map((b) => (
