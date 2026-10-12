@@ -60,8 +60,8 @@ full width for long writing.
   typing and it becomes today's note) above earlier notes, newest first, each with a quiet date. A margin gathers
   to-dos from the notes, who you're waiting on and open questions. Move it to another project or delete it at the
   bottom.
-- *Project page:* name, one-line About, **pins** (+ Pin a link or folder: web links open, folder paths are copied —
-  a browser can't open folders), a catch-up (**waiting on others** with what each unblocks, **still to settle**,
+- *Project page:* name, one-line About, **pins** (+ Pin a link or folder: web links open; in the Mac app a folder opens in
+  Finder and a file is shown there — never opened; a browser copies the path), a catch-up (**waiting on others** with what each unblocks, **still to settle**,
   **decided**), its **Overview** (plan, outline, loose to-dos), and its own **Notes** (e.g. a meeting with a
   supervisor or student, written as a note starting "**Meeting with Alex.**"). Colour, archive, delete at the bottom.
 - **Search** (in the toolbar, or `/`) finds a word in every page, note, idea and pin — in all projects, or pick one

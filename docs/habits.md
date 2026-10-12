@@ -7,7 +7,7 @@ Small things you want to do regularly: “Gym 3× a week”, “Read 20 pages a 
   segments for “3× a week” or this week's days, a smooth bar for amounts — and one button:
   a **checkbox** = “kept it today” (for an avoid habit it starts ticked; untick it if you slipped), or **+** for amount
   habits, which opens a small box: type how much (“12” pages), Enter adds exactly that.
-- **Habits page:** the **Calendar | Habits** switch at the top left (or `H`). A card per habit: strength ring, streak,
+- **Habits page:** the **Calendar | Habits | Projects** switch at the top left (or `H`; on the iPhone, the Habits tab). A card per habit: strength ring, streak,
   this week (tap a day: done → rest day → empty; amount habits pick the day and use − / + or type), and the last six
   months. **+ New habit** (or the sidebar's +) has one-tap starters; ⋯ edits (name, colour, goal, calendar word).
 - **History (click a habit's name or “History →”)** — for tracking over years:
@@ -31,7 +31,7 @@ Small things you want to do regularly: “Gym 3× a week”, “Read 20 pages a 
   slipped; strength, streaks and the history count clean days.
 - **Notes and fixing old days:** on a habit's history, click any day (years back too) to change what happened or add
   a note; noted days get a dot, and the hover shows the note.
-- **Export CSV** (⚙ Settings → Data): every habit, every recorded day — date, habit, amount, status (logged / calendar /
+- **Export CSV** (⚙ Settings → Habits, or Data & Backups): every habit, every recorded day — date, habit, amount, status (logged / calendar /
   rest), note.
 - **Nudge:** from Wednesday, a weekly habit that's short (counting sessions already booked) gets one suggestion in the
   quick-add box at your usual time on the first free day: “Gym tomorrow at 7:30am · Gym: 1 of 3 this week · 2 to go”.

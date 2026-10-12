@@ -72,8 +72,10 @@ candidates left), the Action opens an issue instead. Run it by hand from the Act
   and only for times the link offers; at most 200 answers go out at once (confirmed ones first), so a flood of junk
   requests can't make the link too big to open. Worldline keeps at most 1,000 answers per link and forgets answers
   about meetings more than 30 days over (requests that old are ignored).
-- **What relays see:** random-looking keys and tags, ciphertext, timestamps. Not who you are, not who booked, not
-  when. Each link has its own keys, so your links can't be tied to each other.
+- **What relays see:** random-looking keys and tags, ciphertext, timestamps, sizes, and — like any internet service —
+  the IP address of whoever connects: your Mac's and each guest's. Not names, times or your calendar. Each link has its
+  own keys, but your Worldline follows all your links over one connection, so a relay could tell they're the same
+  person's, see when your app is online, and see that a guest's address opened the same link.
 - **Forgeries:** only your app can change a link's availability (it's signed); only someone with the link can book
   (anything else fails to decrypt); a request for a time the link never offered is refused; each request is answered
   once (restarting can't book it twice).
@@ -89,11 +91,11 @@ candidates left), the Action opens an issue instead. Run it by hand from the Act
 | Two guests click the same time | Earliest request wins (ties: smaller message id), the same rule on every page and in Worldline. The second sees “someone else booked it first” within seconds; their request is withdrawn only if they then pick another time — until then Worldline's answer is what counts, and it may still confirm theirs (see the next row). |
 | A clock is wrong (or forged) | Times are absolute instants, so time zones and the guest's clock don't affect what's shown. Worldline's published versions always count up even if this Mac's clock was set back. A guest whose clock runs fast is treated as asking now (can't dodge “not sooner than 4 h”). A guest's clock is never believed further back than the version of your times it quotes; a request quoting no genuine version counts from when Worldline saw it; one claiming to be older than the version it quotes is refused. While Worldline is running it sees requests arrive, and each counts from when it arrived (give or take a minute), so nobody can jump the queue by backdating. Guest pages make the checks they can (a request older than the version it quotes holds nothing) and otherwise go by the guest's clock until Worldline answers. A request that reaches Worldline late (a relay that was down) counts from when it arrived. |
 | A guest has an old link | Deleted or replaced: the page says “This link is closed”. That notice is kept (beside your data, through restarts) and sent again until at least one relay takes it, so a link deleted or given a new address while offline is shown closed once Worldline is back online. Mangled (cut short when pasted): the page says the address is incomplete instead of guessing. (The address's “#…” must look like a link — it always starts “A” then Q–Z or a–f — so the landing page's own “#features” link just shows the landing page.) |
-| Someone who has the link misbehaves | Like any Calendly link, they can book; a flood of fake holds would block times until you look. Delete the link or give it a **New address**. A flood of junk requests can't make the link unopenable (answers published are capped; see above), and an unanswered request more than two weeks older than your last publish holds nothing. People who don't have the link can do nothing. |
+| Someone who has the link misbehaves | Like any Calendly link, they can book; a flood of fake holds would block times until you look. Delete the link or give it a **New address**. A flood of junk requests can't make the link unopenable or stall your Mac (Worldline answers at most 500 at a time; a poll keeps at most 300 answers; answers published are capped, see above), and an unanswered request more than two weeks older than your last publish holds nothing. While Worldline is closed, a guest can claim to have asked as early as the version of your times they saw, so the earliest of those wins; once it's running it goes by when requests arrive. People who don't have the link can't read or book it (though anyone can post junk to a relay, which Worldline ignores). |
 
 Logic and tests: [`web/src/lib/schedwire.ts`](../web/src/lib/schedwire.ts) (keys, address, encryption, who gets a
 slot — `schedwire.test.ts`), [`web/src/data/schedSync.ts`](../web/src/data/schedSync.ts) (Worldline's side),
 [`web/src/guest/`](../web/src/guest/) (the guest page), and `schedSync.test.ts`, which runs
 your app and several guests end to end over in-memory relays (one of them down): a booking race, the app closed while
 someone books, poll answers, a deleted link. The guest page is built with `npm run build:guest` and deployed by
-[`.github/workflows/pages.yml`](../.github/workflows/pages.yml) on every push.
+[`.github/workflows/pages.yml`](../.github/workflows/pages.yml) on every push to `main` that changes `web/`.

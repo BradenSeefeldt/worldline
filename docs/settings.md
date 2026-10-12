@@ -7,17 +7,17 @@ search box), the chosen section's settings beside them.
 
 | Section | What's there |
 |---|---|
-| **General** | Your name (on scheduling links), home time zone, **week starts on** Monday or Sunday, **12- or 24-hour time** (everywhere a time is shown; typing either works in quick add), what to open on launch, keep running when the window is closed, **open at login** |
+| **General** | Your name (on scheduling links), home time zone, **week starts on** Monday or Sunday, **12- or 24-hour time** (everywhere a time is shown; typing either works in quick add), what to open on launch; on the Mac, keep running when the window is closed and **open at login** |
 | **Appearance** | Every theme as a tile. **Follow the Mac's light / dark setting**: pick one light and one dark theme and Worldline switches with your Mac; off: pick any one theme. Hour height; events **filled** or as a coloured **stripe** |
 | **Calendar** | Default view, where a day scrolls to, **show weekends** (off: a Monday–Friday week), **week numbers** (mini month, month view), default calendar, **default event length**, the home-time column, tasks and deadline runways on the calendar |
-| **Calendars** | Every calendar and subscription with its status (“Couldn't update: …”), Refresh / Edit, how often subscriptions refresh, + New / Subscribe / Import |
+| **Calendars** | **Calendars on this Mac** (Connect…, then a switch per calendar; see [Using it](using.md#calendars-on-this-mac-icloud-google-exchange)); every calendar and subscription with its status (“Couldn't update: …”), Refresh / Edit, how often subscriptions refresh (15 min to 3 hours), + New / Subscribe / Import |
 | **Alerts** | Reminders: the default for events (10 minutes before), all-day events (none) and deadlines (1 hour before); whether notifications are allowed; send a test alert |
 | **Tasks & Deadlines** | A deadline's time and runway when none is given; each kind of quick-add suggestion on or off |
 | **Habits** | Whether calendar events count towards habits; the weekly nudge; export CSV |
 | **Scheduling** | What new links start with (length, hours, single-use, buffer, earliest booking); the relays and which are connected |
 | **Sync** | Turn on sync, join from another device (see [Syncing your Mac and iPhone](sync.md)) |
-| **Data & Backups** | Show in Finder; **restore one of the last 14 daily snapshots**; **back up everything to one .json file** and restore from it; **export a calendar as .ics** (for Apple Calendar, Google, Outlook); habits CSV; erase everything; uninstall |
-| **About** | Version, **check for updates**, source code, keyboard shortcuts |
+| **Data & Backups** | Where it's kept (on the Mac: Show in Finder); **restore one of the last 14 daily snapshots** (Mac); **undo the last restore**; **back up everything to one .json file** and restore from it; **export a calendar as .ics** (for Apple Calendar, Google, Outlook); habits CSV; erase everything; uninstall (Mac) — or, in a browser, load the demo data |
+| **About** | Version, **check for updates** and whether to check automatically, source code, keyboard shortcuts |
 
 Settings live in one saved object ([`web/src/data/settings.ts`](../web/src/data/settings.ts)); anything missing or
 invalid — an older version saved it, or a setting was added since — falls back to its default. Tests:
@@ -26,8 +26,9 @@ repeating events included), `nativeDialogs.test.ts`.
 
 ## Themes
 
-Settings → Appearance, in two groups:
-- *Light:* **System** (follows the computer), **Light**, **Paper** (off-white + ink cobalt), **Gilt** (white + antique gold), **Ice** (steel grey +
+Settings → Appearance. With **Follow the Mac's light / dark setting** on (the default), you pick one light and one dark
+theme; off, one theme from either group:
+- *Light:* **Light**, **Paper** (off-white + ink cobalt), **Gilt** (white + antique gold), **Ice** (steel grey +
   crimson), **Sand** (beige + red), **Peach** (apricot + deep teal), **Rosé** (blush + plum), **Butter** (pale yellow +
   royal blue), **Sage** (green-grey + forest), **Mint** (seafoam + tomato red), **Sky** (powder blue + terracotta),
   **Lavender** (pale lilac + jade).

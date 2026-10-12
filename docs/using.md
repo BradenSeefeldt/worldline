@@ -11,8 +11,10 @@
 | New event by hand | Drag on empty time, or double-click a slot. It's a draft until you press **Enter** or **Add event** on its card; click anywhere else (or Esc / Discard) and it disappears. Keeping it is one ⌘Z step |
 | Edit | Click an event — the card saves as you type. Click it again (or `Esc`) to close |
 | Move / resize | Drag the event / drag its bottom edge (on touch: long-press first) |
-| Delete | `Delete` key or the card’s button |
+| Delete | `Delete` / `⌫` key or the card’s button |
 | Undo / redo | `⌘Z` / `⇧⌘Z`, or “Undo” on the pop-up (quick-add's pop-up also has “Edit”) |
+| Keyboard only | `Tab` reaches every event (day, week and month views) and every task row; `Enter` or `Space` opens it. Screen readers read each one out by name and time |
+| Other pages | `H` Habits, `P` Projects, `⌘,` Settings (all shortcuts: Settings → About) |
 
 Quick-add rules. Tested three ways in [`web/src/lib/`](../web/src/lib/): hand-written phrases
 (`quickparse.test.ts`), a blind set written without seeing the code (`quickparse.blind.json`),
@@ -110,8 +112,9 @@ work before it (2 weeks unless you say otherwise) — not an all-day event.
 Every event in your calendars reminds you 10 minutes before it starts, and every deadline 1 hour before it's due;
 all-day events don't, unless you choose a time (Settings → **Alerts**: "On the day, at 9 AM", "The day before, at
 5 PM"…). An event's card has its own **Alert** (Default · None · When it starts · 5, 10, 15, 30 minutes · 1, 2 hours
-· 1 day before); for a repeating event it applies to the whole series. Subscribed calendars stay quiet unless you
-turn on **Alerts for its events** in the calendar's ⋯ card; hidden calendars and done deadlines never alert.
+· 1 day before); for a repeating event it applies to the whole series. Subscribed calendars (and calendars on this Mac) stay quiet unless you
+turn on **Alerts for its events** in the calendar's ⋯ card, where you can also turn a calendar's alerts off; an event
+with its own Alert still alerts. Events in hidden calendars, and done deadlines, never alert.
 
 - **Mac:** reminders are Mac notifications, on time even while Worldline's window is closed (it keeps running in
   the background); a reminder also shows inside the app. One missed by more than 5 minutes (the Mac was asleep) is
@@ -183,11 +186,14 @@ Sidebar → **Calendars → +** → **Subscribe to a link**, and paste the calen
 calendar's "subscribe"/iCal link, a team's schedule (`webcal://…`), a Google calendar's *Secret address in iCal
 format* (Google Calendar → the calendar's ⋮ → Settings and sharing → Integrate calendar), an Outlook "publish" link.
 It's read-only here (its events change at their source), refreshed when the app opens and every 30 minutes
-(⋯ → **Refresh now**), and named from the feed unless you name it. Repeating events, moved and cancelled
+(Settings → Calendars to change it; ⋯ → **Refresh now**), and named from the feed unless you name it. Repeating events, moved and cancelled
 occurrences, and time zones (including Outlook's Windows zone names) are handled. **Import a file** copies an
 `.ics` file in as a calendar of your own (editable): drop the file onto the big area, or click it to choose one.
 
-Subscriptions are read by the Mac app; the iPhone version gets their events through [sync](sync.md).
+Subscriptions are read by the Mac app; the iPhone version gets their events through [sync](sync.md). Only public
+addresses are read (never this Mac or the local network), at most 20 MB. A feed is someone else's file, so limits
+keep it from stalling the app: events repeating more often than hourly aren't shown, a series shows at most 5,000
+occurrences, and a calendar at most 50,000 events.
 
 ## Time zones (travelling)
 

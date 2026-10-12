@@ -11,17 +11,19 @@ https://github.com/BradenSeefeldt/worldline/releases/latest/download/Worldline.d
 
 **Install:** open the `.dmg`, drag **Worldline** onto **Applications**, open it from Applications or Spotlight, and
 keep it in the Dock (right-click its Dock icon → *Options → Keep in Dock*). Closing the window keeps it running in the
-background (so your scheduling links stay live); click the Dock icon to bring it back, ⌘Q to quit.
+background (so your scheduling links stay live and reminders arrive on time; Settings → General to change it); click
+the Dock icon to bring it back, ⌘Q to quit.
 
 **Open Anyway (once):** the app isn't signed with a paid Apple Developer ID, so the first time a *downloaded* copy is
 opened macOS refuses ("Apple could not verify…"). Once: **System Settings → Privacy & Security**, scroll down,
 **Open Anyway**. (A copy you built yourself on this Mac, or one installed from Terminal as below, opens normally.)
 
 **Where your data lives:** one SQLite database file, `worldline.db`, in
-`~/Library/Application Support/io.github.bradenseefeldt.worldline/` (⚙ Settings → Data → **Show in Finder**). SQLite is
+`~/Library/Application Support/io.github.bradenseefeldt.worldline/` (⚙ Settings → Data & Backups → **Show in Finder**). SQLite is
 a small, reliable database kept in a single file — no server; the app reads and writes it directly, and each change is
-saved atomically (all or nothing), so a crash can't leave it half-written. A snapshot of each of the last 14 days is
-kept inside it as a safety net. A new install starts empty.
+saved atomically (all or nothing), so a crash can't leave it half-written. A compressed snapshot of each of the last 14 days is
+kept inside it as a safety net. A new install starts empty. Quitting — ⌘Q, the Dock, logging out or shutting down —
+saves everything first.
 
 **Build it yourself** (needs [Node.js](https://nodejs.org) 22+ and [Rust](https://rustup.rs), and Apple's command-line
 tools: `xcode-select --install`):
@@ -41,7 +43,8 @@ That builds the app and makes `web/release/Worldline-<version>.dmg` (the app its
 curl -fsSL https://bradenseefeldt.github.io/worldline/install.sh | sh
 ```
 
-This downloads the latest release, copies Worldline into `/Applications` and opens it. Files downloaded by Terminal
+This downloads the latest release, copies Worldline into `/Applications` (or `~/Applications` if you can't write to
+`/Applications`) and opens it. A Worldline already there goes to the Trash; quit it first. Files downloaded by Terminal
 aren't flagged by macOS, so there's no "Open Anyway" step. The script is
 [`web/scripts/install.sh`](../web/scripts/install.sh) in this repo — read it first if you like.
 
@@ -53,7 +56,8 @@ close first (guests see "closed"), and the login item is removed. Backups and ex
 
 If you already deleted the app by dragging it to the Trash, these are the leftovers to remove (all named after the
 app's id, `io.github.bradenseefeldt.worldline`): in `~/Library/` — `Application Support/…` (your data), `Caches/…`,
-`WebKit/…`, `Preferences/….plist`, and `LaunchAgents/Worldline.plist` if you turned on Open at login.
+`WebKit/…`, `HTTPStorages/…`, `Saved Application State/….savedState`, `Logs/…`, `Preferences/….plist`, and
+`LaunchAgents/Worldline.plist` if you turned on Open at login.
 
 ## On your iPhone (free, works offline)
 
@@ -62,16 +66,18 @@ Screen**. It opens like an app, works with no internet (the whole app is kept on
 phone. Then [pair it with your Mac](sync.md) so both have the same calendar. No App Store, no Apple account, nothing
 to pay.
 
-On the phone the top bar shows where you are: ☰ (the sidebar — or drag it out from the left edge of the screen), the
-month (tap it to open the whole month), the view, and today; under it, the week (swipe it sideways; tap a day to go
-there). The tabs at the bottom go to Calendar, Habits, Projects and Settings, and the big **+** in the bottom-right
-corner adds an event, task or deadline.
+On the phone the top bar shows where you are: ☰ (the sidebar, the same as on the Mac — or drag it out from the left
+edge of the screen), the month (tap it to open the whole month as a grid: swipe it sideways for the next or previous
+month, tap a day to go there), the view, and today's date (tap it to go to today). Away from your home zone the ✈ pill
+sits there too. On Habits the top bar is just the title, and on Projects it's the search. The tabs at the bottom go to
+Calendar, Habits, Projects and Settings, and the big **+** in the bottom-right corner adds an event, task or deadline.
 
-Updates: it checks when you open it (and once a day) whether the site has a newer version; then the sidebar shows
+Updates: it checks when you open it or come back to it (and once a day) whether the site has a newer version; then the sidebar shows
 **Update to … · Reload** (or Settings → About → **Update now**). Everything is saved first.
 
 In month view, tap a day to see it (and the next two) in 3 Day.
 
 What it can't do that the Mac app does: read calendar subscriptions itself (a browser can't read other sites'
-feeds — your Mac does, and sync brings the events), answer scheduling links (your Mac does), or send reminders while
-it's closed (it shows them while it's open; your Mac sends them on time).
+feeds — your Mac does, and sync brings the events), connect the Mac's calendars (it sees and changes them through
+sync), answer scheduling links (your Mac does), or send reminders while it's closed (it shows them while it's open;
+your Mac sends them on time).
