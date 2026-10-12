@@ -16,7 +16,7 @@ export const SETTINGS = ['weekStartsOn', 'hour24', 'defaultEventMin', 'dueMinute
 /** The synced data's format. Bump it when a synced record changes shape in a way an older copy would get wrong (and
  *  convert old records when reading). A device finding a newer format in the document stops syncing and asks to be
  *  updated, rather than writing old-format records over new ones. */
-export const SYNC_SCHEMA = 1;
+export const SYNC_SCHEMA = 2; // 2: Projects pages can hold code blocks (an older copy would show them as nothing, then save that)
 /** The newest format any device has written into this document (1 for documents from before this was recorded). */
 export const docSchema = (doc: Y.Doc) => Math.max(1, Number(doc.getMap('meta').get('schema')) || 1);
 

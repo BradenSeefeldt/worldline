@@ -23,6 +23,12 @@ things you type are read back out of the text and gathered for you, so nothing n
 - **Pasted markdown arrives formatted** (notes from Obsidian or VS Code, action items from an email): headings, lists,
   bold, equations, and checklists — `- [ ] …`, `[] …` and `[x] …` lines become to-dos, nested by indentation. Dollar
   amounts stay text there too.
+- **Code:** type ```` ``` ```` and a space (or ```` ```python ````, ```` ```bash ````…) for a code block: monospaced, with
+  syntax colours, the language (picked by itself — Python, a terminal session, shell, C/C++, Fortran, Julia, R, Rust,
+  SQL, JSON, YAML… — or chosen from the label) and a **Copy** button. Tab / ⇧Tab indent; ⌘↩ or three Enters leave it.
+  **Pasting code** — from VS Code, a terminal, a Jupyter session — makes a code block by itself (Python's `# comments`
+  don't turn into headings); so does a ```` ``` ```` fence in pasted markdown. Inside code, `@name` and `[]` are just
+  text. One command in a sentence: `` `module load hdf5` ``. (`web/src/components/CodeBlock.tsx`, `CodeBlock.test.ts`)
 
 ## The board
 

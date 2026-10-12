@@ -1,6 +1,6 @@
 // The writing surface for Projects pages and notes: a real document editor (TipTap / ProseMirror), not a text box.
 // Markdown as you type: "# " title, "## " subtitle, "### ", "- " / "1. " lists, "> " quote, **bold**, *italic*, `code`,
-// "---" a rule; pasted markdown arrives formatted. Links (paste or type a URL), and checkbox to-dos: "[] " starts one,
+// ``` a code block (components/CodeBlock.tsx), "---" a rule; pasted markdown arrives formatted, pasted code as a code block. Links (paste or type a URL), and checkbox to-dos: "[] " starts one,
 // Tab to put one under another ("once that's done, then…"). Two things are highlighted as you type, read straight
 // from the text: "@Name" (someone else's to-do) and "Idea:" / "Decided:" / "Q:" at the start of a paragraph —
 // click a "Q:" once it's settled. Equations: $…$ inline, a paragraph of $$…$$ displayed (KaTeX); click one to edit it.
@@ -20,6 +20,7 @@ import { Placeholder } from '@tiptap/extensions';
 import { Markdown } from '@tiptap/markdown';
 import { looksLikeMarkdown, normalizeTodos, protectDollars, restoreDollars, type DocNode } from '../lib/projects';
 import { cls } from '../lib/format';
+import { LANGUAGES, ProjectCode, looksLikeCode } from './CodeBlock';
 
 const MARK = /^(Idea|Decided|Q):/;
 
@@ -42,7 +43,8 @@ const Marks = Extension.create({
     const build = (doc: PMNode) => {
       const out: Decoration[] = [];
       doc.descendants((node, pos, parent) => {
-        if (node.isText && node.text) {
+        if (node.type.name === 'codeBlock') return false; // (code: "@decorator" isn't a person)
+        if (node.isText && node.text && !node.marks.some((m) => m.type.name === 'code')) {
           for (const m of node.text.matchAll(/@\w+/g)) out.push(Decoration.inline(pos + m.index!, pos + m.index! + m[0].length, { class: 'pj-who' }));
         }
         if (node.type.name === 'paragraph' && parent?.type.name !== 'taskItem') {
@@ -186,11 +188,12 @@ export function DocEditor({ doc, onChange, placeholder, className, autoFocus, on
     extensions: [
       StarterKit.configure({
         heading: { levels: [1, 2, 3] }, // "# " title, "## " subtitle, "### " sub-subtitle
-        codeBlock: false,
+        codeBlock: false, // (ProjectCode below: the same, with colours and a Copy button)
         link: { openOnClick: true, autolink: true, linkOnPaste: true, HTMLAttributes: { target: '_blank', rel: 'noopener noreferrer' } },
       }),
       TaskList,
       TaskItem.configure({ nested: true }),
+      ProjectCode,
       Placeholder.configure({ placeholder: placeholder ?? '' }),
       Marks,
       Markdown, // reads pasted markdown (see handlePaste); the typed shortcuts are the editor's own
@@ -206,8 +209,23 @@ export function DocEditor({ doc, onChange, placeholder, className, autoFocus, on
       // arrives formatted; anything else pastes as usual.
       handlePaste: (_view, event) => {
         const ed = editorRef.current;
+        if (!ed || ed.isActive('codeBlock')) return false; // inside code: pasted as it is
+        // code from an editor (VS Code says which language) or a terminal: a code block, not mangled into headings
+        const raw = (event.clipboardData?.getData('text/plain') ?? '').replace(/\r\n?/g, '\n');
+        let vscode: string | null = null;
+        try {
+          vscode = (JSON.parse(event.clipboardData?.getData('vscode-editor-data') || 'null') as { mode?: string } | null)?.mode ?? null;
+        } catch {
+          /* not from VS Code */
+        }
+        if ((vscode && raw.includes('\n')) || (!raw.trimStart().startsWith('```') && looksLikeCode(raw))) {
+          const language = vscode && LANGUAGES.some(([l]) => l === vscode) ? vscode : vscode === 'shellscript' ? 'bash' : null;
+          // (with a line after it, where the cursor lands: the next thing pasted or typed goes below, not into it)
+          ed.chain().focus().insertContent([{ type: 'codeBlock', attrs: { language }, content: [{ type: 'text', text: raw.replace(/\n+$/, '') }] }, { type: 'paragraph' }]).run();
+          return true;
+        }
         const text = normalizeTodos(event.clipboardData?.getData('text/plain') ?? '');
-        if (!ed?.markdown || !text.trim() || !looksLikeMarkdown(text)) return false;
+        if (!ed.markdown || !text.trim() || !looksLikeMarkdown(text)) return false;
         const parsed = restoreDollars(ed.markdown.parse(protectDollars(text)) as DocNode);
         if (!parsed.content?.length) return false;
         ed.chain().focus().insertContent(parsed.content).run();

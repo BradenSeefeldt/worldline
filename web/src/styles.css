@@ -2676,3 +2676,34 @@ html.in-app .sidebar .mini { top: calc(8px - env(safe-area-inset-top)); }
 }
 
 .st-sub { padding: 10px 12px 2px; font-size: 11.5px; font-weight: 700; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.04em; } /* Settings: a heading inside a group (an account) */
+
+/* ---------- code in Projects pages and notes (components/CodeBlock.tsx) ---------- */
+.pj-code {
+  --code-bg: color-mix(in srgb, var(--text) 5%, var(--panel)); --code-line: color-mix(in srgb, var(--text) 10%, transparent);
+  --k: #a626a4; --s: #50a14f; --n: #986801; --c: #8a8f98; --f: #4078f2; --b: #0184bc; --m: #e45649;
+  margin: 0.6em 0 0.9em; border-radius: 10px; background: var(--code-bg); border: 1px solid var(--code-line); overflow: hidden;
+}
+:root[data-mode='dark'] .pj-code { --k: #c678dd; --s: #98c379; --n: #d19a66; --c: #7f848e; --f: #61afef; --b: #56b6c2; --m: #e06c75; }
+.pj-code-bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 4px 6px 4px 8px; border-bottom: 1px solid var(--code-line); user-select: none; }
+.pj-code-lang {
+  appearance: none; -webkit-appearance: none; border: 0; background: none; padding: 2px 4px; border-radius: 5px; cursor: pointer;
+  font: 600 11.5px -apple-system, system-ui, sans-serif; color: var(--text-3);
+}
+.pj-code-lang:hover:not(:disabled) { color: var(--text); background: var(--bg-hover); }
+.pj-code-copy { padding: 2px 9px; border-radius: 6px; font-size: 11.5px; font-weight: 600; color: var(--text-2); }
+.pj-code-copy:hover { background: var(--bg-hover); color: var(--text); }
+.pj-code-copy.ok { color: var(--ok); }
+.pj-code pre { margin: 0; padding: 10px 12px 12px; overflow-x: auto; tab-size: 4; }
+.pj-code pre code {
+  display: block; padding: 0; background: none; white-space: pre; color: var(--text);
+  font: 12.5px/1.55 ui-monospace, 'SF Mono', Menlo, monospace; font-variant-ligatures: none;
+}
+.pj-code .hljs-keyword, .pj-code .hljs-selector-tag, .pj-code .hljs-doctag { color: var(--k); }
+.pj-code .hljs-string, .pj-code .hljs-regexp, .pj-code .hljs-addition { color: var(--s); }
+.pj-code .hljs-number, .pj-code .hljs-literal, .pj-code .hljs-attr, .pj-code .hljs-variable, .pj-code .hljs-template-variable { color: var(--n); }
+.pj-code .hljs-comment, .pj-code .hljs-quote { color: var(--c); font-style: italic; }
+.pj-code .hljs-title, .pj-code .hljs-section, .pj-code .hljs-function .hljs-title { color: var(--f); }
+.pj-code .hljs-built_in, .pj-code .hljs-type, .pj-code .hljs-params, .pj-code .hljs-meta { color: var(--b); }
+.pj-code .hljs-deletion, .pj-code .hljs-symbol, .pj-code .hljs-bullet, .pj-code .hljs-tag, .pj-code .hljs-name { color: var(--m); }
+.pj-code .hljs-meta .hljs-keyword, .pj-code .hljs-meta.prompt_ { color: var(--c); } /* a terminal's "$" / ">>>" */
+@media (hover: none) { .pj-code pre code { font-size: 13px; } }

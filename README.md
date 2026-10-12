@@ -22,7 +22,7 @@ macOS 11+ (Apple silicon and Intel) · iOS 16.4+ · 12 MB
 - **Quick add** in plain English: “lunch with Sam tomorrow 12:30 #social for 90 min” — or “move Alex's meeting to tues at 3pm”.
 - **Tasks and deadlines**, with runways that change colour as the due date gets close.
 - **Habits** with strength, streaks and years of history.
-- **Projects**: write-as-you-go pages and notes that gather your to-dos, ideas and who you're waiting on.
+- **Projects**: write-as-you-go pages and notes that gather your to-dos, ideas and who you're waiting on — with equations and code.
 - **Scheduling links** (book a time, group polls) that work for anyone, with no accounts.
 - **Your Mac's calendars** (iCloud, Google, Exchange) two-way, **subscriptions** to any iCal link, and **reminders**.
 - **Sync** between your Mac and iPhone, end-to-end encrypted.
