@@ -3,7 +3,8 @@
 // A sync group is one 32-byte secret, shared by pairing (a QR code / a code to paste). From it come the encryption
 // key and a random-looking tag the relays index messages by. Each device signs with its own throwaway key; only
 // someone with the secret can make a message that decrypts, so relays (and anyone else) see ciphertext only.
-//   · an update: one batch of changes (small), kept by relays for 30 days (an expiration tag)
+//   · an update: one batch of changes, kept by relays for 30 days (an expiration tag); a big one (an import) goes in
+//     pieces, like a snapshot's, that never replace each other
 //   · a snapshot: a device's whole document, in pieces (relays limit message size), replaced each time it's
 //     republished — so a device that was off for months still catches up from snapshots + recent updates.
 import { finalizeEvent, generateSecretKey, verifyEvent, type Event } from 'nostr-tools/pure';
@@ -16,7 +17,8 @@ export const KIND = 30078;
 const PREFIX = 'wlsync1:';
 const CHUNK = 24_000; // raw bytes per piece: base64 twice (inside, then the encryption) makes ~43 KB, under relays’ size limits
 export const UPDATE_TTL = 30 * 86_400; // seconds an update is kept (a snapshot covers anything older)
-const MAX_CONTENT = 100_000;
+/** The largest message read: anything bigger is ignored (a sender splits what's bigger into pieces). */
+export const MAX_CONTENT = 100_000;
 
 /** The message format. A message from a newer format is not read; the app says to update instead. */
 export const WIRE_VERSION = 1;
@@ -82,6 +84,20 @@ export async function sealUpdate(update: Uint8Array, keys: SyncKeys, deviceSk: s
   const t = Math.floor(now / 1000);
   const content = nip44.encrypt(JSON.stringify({ v: WIRE_VERSION, u: b64(await squash(update)) }), keys.key);
   return finalizeEvent({ kind: KIND, created_at: t, tags: [['d', `${keys.tag}:u:${rand()}`], ['t', keys.tag], ['expiration', String(t + UPDATE_TTL)]], content }, hexToBytes(deviceSk));
+}
+
+/** One batch of changes as messages: one message, or (too big for one: an import) pieces that each stay under the
+ *  relays' size limit. A receiver puts the pieces together just as it does a snapshot's. */
+export async function sealUpdates(update: Uint8Array, keys: SyncKeys, deviceSk: string, now = Date.now()): Promise<Event[]> {
+  const packed = await squash(update);
+  if (packed.length <= CHUNK) return [await sealUpdate(update, keys, deviceSk, now)];
+  const t = Math.floor(now / 1000);
+  const id = rand();
+  const n = Math.ceil(packed.length / CHUNK);
+  return Array.from({ length: n }, (_, i) => {
+    const content = nip44.encrypt(JSON.stringify({ v: WIRE_VERSION, s: id, i, n, c: b64(packed.subarray(i * CHUNK, (i + 1) * CHUNK)) }), keys.key);
+    return finalizeEvent({ kind: KIND, created_at: t, tags: [['d', `${keys.tag}:u:${id}:${i}`], ['t', keys.tag], ['expiration', String(t + UPDATE_TTL)]], content }, hexToBytes(deviceSk));
+  });
 }
 
 /** A device's whole document, as signed, encrypted pieces (each replaces the same piece from last time). */

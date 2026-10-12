@@ -549,7 +549,8 @@ function SchedulingPane() {
 function DataPane() {
   const calendars = useStore((x) => x.calendars);
   const hasHabits = useStore((x) => x.habits.length > 0);
-  const synced = useStore((x) => x.sync.on) ? ' Sync is on, so your other devices go back too.' : '';
+  // (replacing the data with sync on: the other devices keep theirs, and this one takes it back from them — syncEngine.ts)
+  const synced = useStore((x) => x.sync.on) ? ' Sync is on: your other devices keep their data, and this device then takes it back from them. To keep the result on this device only, turn sync off first.' : '';
   const st = useStore.getState();
   const [days, setDays] = useState<string[]>([]);
   const [day, setDay] = useState('');
@@ -652,7 +653,7 @@ function DataPane() {
           </Row>
         )}
         <Row title="Erase everything" note="Events, tasks, habits, projects and notes">
-          <button className="ce-btn subtle-danger" onClick={async () => (await ask({ title: 'Erase everything?', body: 'All events, tasks, habits, projects and notes. This can’t be undone (save a backup first if in doubt).', confirm: 'Erase everything', danger: true })) && st.startFresh()}>Erase everything…</button>
+          <button className="ce-btn subtle-danger" onClick={async () => (await ask({ title: 'Erase everything?', body: `All events, tasks, habits, projects and notes. This can’t be undone (save a backup first if in doubt).${synced}`, confirm: 'Erase everything', danger: true })) && st.startFresh()}>Erase everything…</button>
         </Row>
       </Group>
     </>

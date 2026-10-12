@@ -2,11 +2,14 @@
 
 **⚙ Settings → Sync → Turn on sync** on the Mac; it shows a QR code. On the iPhone: Settings → Sync → **Join…** →
 scan it (or paste the code — copy it on the Mac; with the same Apple ID it's on the iPhone's clipboard). Joining
-replaces the iPhone's own data with your synced calendar.
+replaces the iPhone's own data with your synced calendar. If the join is cut short (no network, or the app closed
+first), it carries on at the next launch; the iPhone's own data never goes out.
 
 - **Every device keeps a full copy** and works offline; changes merge when they reach each other. Two devices
   editing different things always merge, and so do different fields of one item (a title on the phone, a time on the
-  Mac); the same field edited on both keeps the later edit.
+  Mac). The same field changed on both before either has seen the other's change: both end up with the same one of
+  the two, but it's picked by the editing sessions' random ids (how Yjs settles it), not by which edit was later.
+  Deleting an item beats a change made to it elsewhere at the same time.
 - **End-to-end encrypted**, through the same public Nostr relays as [scheduling links](scheduling-links.md) (kept
   current weekly). Relays see random-looking tags and ciphertext. The pairing code is the key — share it only with
   your own devices.
@@ -22,15 +25,29 @@ replaces the iPhone's own data with your synced calendar.
 
 ## How sync stays correct
 
+- **Writing only what changed.** A device writes into the shared document only the fields it changed itself, so a
+  change made just as another device's change arrives can't write an older copy back over it, or bring back
+  something deleted elsewhere.
+- **Replacing your data.** Restoring a snapshot or backup, starting over, or erasing everything stops sync on that
+  device; it then joins again and takes your synced data back from the other devices, which keep theirs. A
+  replacement is never sent out as deletions or edits to everyone. (To restore onto one device only, turn sync off
+  first.)
 - **Catching up.** After a restart a device asks the relays only for what's new since it last caught up, less a day
   in case device clocks disagree. It does a full catch-up when it joins, after 25 days away, once a week, and when
   something arrives that depends on an update it never saw.
 - **Sending before it stops.** Changes are sent at once when the app goes to the background, because an iPhone stops
-  running a hidden app within seconds. It reconnects when it comes back.
+  running a hidden app within seconds. It reconnects when it comes back. Changes that didn't get out (offline, then
+  closed) are remembered and go out at the next launch.
+- **Big changes.** A big change (an import) goes out in pieces that fit the relays' size limit. A message the relays
+  refuse is tried again on its own; later changes go out separately.
+- **Order.** Only the order of the Projects board's columns is shared, as a place written when a column is added or
+  moved. Nothing else stores a position, so deleting things doesn't grow the shared document.
 - **Saving in the right order.** The sync copy on a device is only saved once the app's own data is saved at least as
   far. So a crash can't make another device's changes look like deletions.
 - **Newer versions.** A device that sees data or messages from a newer Worldline pauses syncing and says to update. It
   doesn't write old-format records over new ones.
+- **Development.** A development build doesn't resume sync at launch unless the browser's localStorage has
+  `wl-dev-network` set to `1`, so demo data can't reach a real sync group.
 - **Older devices.** Macs and iPhones without the browser's built-in compression use a small library (fflate) that
   produces the same format.
 
@@ -46,6 +63,7 @@ it.
 
 ## Known limits
 
-- A note edited on two devices while both are offline keeps the later edit of the whole note.
+- A note edited on two devices while both are offline keeps one of the two edits of the whole note (not
+  necessarily the later one).
 - The iPhone version syncs only while it's open.
 - Relays keep updates for 30 days. Snapshots, republished every 6 hours by running devices, cover longer gaps.

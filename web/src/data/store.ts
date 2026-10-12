@@ -19,7 +19,7 @@ import { newLinkKeys, pruneDecisions, type Accept, type Decision } from '../lib/
 import { endSeries, removeEvent, updateEvent, type Scope } from '../lib/mutate';
 import { normalizeFeedUrl, parseIcs } from '../lib/ics';
 import { fetchText, canFetchFeeds } from '../lib/platform';
-import { appStorage, markLoadProblem, onFlush } from './persist';
+import { appStorage, dataReplaced, markLoadProblem, onFlush } from './persist';
 import { fmtWhen } from '../lib/format';
 import { STORE_VERSION } from './storeVersion';
 import type { UpdateStatus } from '../lib/updates';
@@ -526,12 +526,14 @@ export const useStore = create<State>()(
           }));
           return { id, count: feed.events.length };
         },
-        startFresh: () =>
+        startFresh: () => {
+          void dataReplaced(); // sync stops first: the empty calendar must not go out as deleting everything
           set({
             calendars: [{ id: 'personal', name: 'Personal', color: '#2f7cf6', visible: true, account: 'Local' }], defaultCalendarId: 'personal',
             events: [], tasks: [], habits: [], habitLog: {}, habitNotes: {}, projects: [], threads: [], projectLog: [], links: [],
             selectedId: null, past: [], future: [], skipped: [], dismissed: [], projectNav: { hist: [], i: -1 }, macKnown: {},
-          }),
+          });
+        },
         updateCalendar: (id, patch) => {
           record(`cal:${id}:${Object.keys(patch).sort().join()}`);
           set((s) => ({ calendars: s.calendars.map((c) => (c.id === id ? { ...c, ...patch, ...(patch.name !== undefined ? { autoName: false } : {}) } : c)) }));
