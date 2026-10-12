@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { addDays, format, startOfDay } from 'date-fns';
 import { isLocked, newEventCalendarId, readOnly, useStore } from '../data/store';
 import type { CalEvent, Recurrence } from '../data/types';
-import { MIN } from '../lib/dates';
+import { MIN, earliestEnd } from '../lib/dates';
 import { ALL_DAY_CHOICES, TIMED_CHOICES, alertFor, describeAlert } from '../lib/alerts';
 import { decodeEvent, describeRecurrence, isOccurrenceId, resolveEvent } from '../lib/recurrence';
 import type { Scope } from '../lib/mutate';
@@ -134,11 +134,11 @@ export function EventPanel() {
   };
   const dur = ev.end - ev.start;
 
-  // Moving the start keeps the duration; the end can never go before the start.
+  // Moving the start keeps the duration; the end can never go before the start (an all-day event keeps a day).
   const setStart = (start: number) => !isNaN(start) && up({ start, end: start + dur });
   const setEnd = (end: number) => {
     if (isNaN(end)) return;
-    up({ end: Math.max(end, ev.start + (ev.allDay ? 0 : 15 * MIN)) });
+    up({ end: Math.max(end, earliestEnd(ev.start, ev.allDay)) });
   };
   // All-day events store an exclusive end (next midnight); the form shows the last day.
   const lastDay = ev.allDay ? ev.end - 1 : ev.end;

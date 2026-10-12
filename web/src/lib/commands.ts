@@ -12,6 +12,8 @@ import type { CalEvent, CalendarSource, Recurrence } from '../data/types';
 import { parseQuick } from './quickparse';
 import { MIN, minutesOfDay, weekStart } from './dates';
 import { typoDistance } from './fuzzy';
+import { rotateDays } from './mutate';
+import { untilInstant } from './recurrence';
 
 export type CommandKind = 'delete' | 'move' | 'shift' | 'resize' | 'done';
 
@@ -158,7 +160,7 @@ function matchInstances(a: Analysis, events: CalEvent[], now: Date, near?: numbe
 function matchSeries(a: Analysis, masters: CalEvent[], now: Date): CalEvent[] {
   if (!a.required.length && a.atTime === undefined) return [];
   return masters
-    .filter((m) => m.recurrence && (m.recurrence.until === undefined || m.recurrence.until > now.getTime()))
+    .filter((m) => m.recurrence && (m.recurrence.until === undefined || untilInstant(m.recurrence)! > now.getTime()))
     .filter((m) => a.atTime === undefined || minutesOfDay(m.start) === a.atTime)
     .filter((m) => !a.weekdays || (m.recurrence!.byDay ?? [new Date(m.start).getDay()]).some((d) => a.weekdays!.includes(d)))
     .map((m) => ({ m, score: titleScore(a, m.title) }))
@@ -320,7 +322,10 @@ export function parseCommand(
         const a = analyze(r.replace(/\bby\b/gi, ' '), calendars, now);
         const plan = (ev: CalEvent): Change => {
           const shift = (t: number) => addDays(t, sign * dur.days).getTime() + sign * dur.minutes * MIN;
-          return { start: shift(ev.start), end: shift(ev.end), allDay: ev.allDay };
+          // a weekly series on set weekdays moves its weekdays too ("push all gym sessions 1 day later": Mon → Tue)
+          const r = ev.recurrence;
+          const turn = !ev.seriesId && r?.freq === 'weekly' && r.byDay?.length && dur.days % 7;
+          return { start: shift(ev.start), end: shift(ev.end), allDay: ev.allDay, ...(turn ? { recurrence: { ...r, byDay: rotateDays(r.byDay!, sign * dur.days) } } : {}) };
         };
         const summary = `${fmtAmount(dur)} ${sign < 0 ? 'earlier' : 'later'}`;
         const ms = a.series ? matchSeries(a, masters, now) : [];

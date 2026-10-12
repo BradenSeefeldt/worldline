@@ -7,7 +7,7 @@
 // placed in its zone. Overridden occurrences (RECURRENCE-ID), skipped ones (EXDATE) and cancellations are honoured.
 import { RRule } from 'rrule';
 import type { CalEvent } from '../data/types';
-import { instantOf, wallClock } from './zone';
+import { instantOf, wallClock, zoneOffset } from './zone';
 
 const DAY = 86_400_000;
 
@@ -85,6 +85,72 @@ export function zoneOfTzid(tzid?: string): string | undefined {
   return valid(t) ? t : undefined;
 }
 
+// A zone named in a way we don't know ("Customized Time Zone", a Windows name not listed above) is described in the
+// file itself by a VTIMEZONE: its offsets and the dates they change. The IANA zone that agrees with that description
+// over the window is used in its place (any one that agrees gives the same instants).
+const offsetMin = (v: string) => {
+  const m = v.trim().match(/^([+-])(\d{2})(\d{2})(\d{2})?$/);
+  return m ? (m[1] === '-' ? -1 : 1) * (+m[2] * 60 + +m[3]) : undefined;
+};
+function zonesFromVtimezones(all: Prop[], from: number, to: number): Map<string, string> {
+  // each VTIMEZONE's changes of offset: when (an instant), from what, to what
+  type Change = { at: number; from: number; to: number };
+  const blocks: { tzid: string; changes: Change[] }[] = [];
+  let cur: (typeof blocks)[number] | null = null, part: Prop[] | null = null;
+  const lo = from - 400 * DAY, hi = to + 400 * DAY;
+  for (const p of all) {
+    const v = p.value.trim().toUpperCase();
+    if (p.name === 'BEGIN' && v === 'VTIMEZONE') cur = { tzid: '', changes: [] };
+    else if (cur && p.name === 'END' && v === 'VTIMEZONE') { blocks.push(cur); cur = null; }
+    else if (cur && p.name === 'BEGIN' && (v === 'STANDARD' || v === 'DAYLIGHT')) part = [];
+    else if (cur && part && p.name === 'END') {
+      const get = (n: string) => part!.find((x) => x.name === n)?.value.trim();
+      const offFrom = offsetMin(get('TZOFFSETFROM') ?? ''), offTo = offsetMin(get('TZOFFSETTO') ?? '');
+      const d = (get('DTSTART') ?? '').match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})/);
+      if (offFrom !== undefined && offTo !== undefined && d) {
+        const start = Date.UTC(+d[1], +d[2] - 1, +d[3], +d[4], +d[5]); // the wall clock (before the change) as if UTC
+        let walls = [start];
+        const rule = get('RRULE');
+        if (rule) {
+          try {
+            walls = new RRule({ ...RRule.parseString(rule.replace(/^RRULE:/i, '')), dtstart: new Date(start) })
+              .between(new Date(lo), new Date(hi), true).map((x) => x.getTime());
+            if (start < lo) walls.unshift(start); // (when it began, for zones that have since stopped changing)
+          } catch { /* keep DTSTART alone */ }
+        }
+        for (const w of walls) cur.changes.push({ at: w - offFrom * 60_000, from: offFrom, to: offTo });
+      }
+      part = null;
+    } else if (part) part.push(p);
+    else if (cur && p.name === 'TZID') cur.tzid = p.value.trim();
+  }
+  let zones: string[] = [];
+  try {
+    zones = (Intl as unknown as { supportedValuesOf(k: string): string[] }).supportedValuesOf('timeZone');
+  } catch { /* an older engine: such zones fall back as before */ }
+  const found = new Map<string, string>();
+  for (const b of blocks) {
+    if (!b.tzid || zoneOfTzid(b.tzid)) continue;
+    const changes = b.changes.sort((x, y) => x.at - y.at);
+    // what the offset must be: just before and after each change in the window, and between changes
+    const samples: [number, number][] = [];
+    const inside = changes.filter((c) => c.at >= lo && c.at <= hi);
+    inside.forEach((c, i) => {
+      samples.push([c.at - 3_600_000, c.from], [c.at + 3_600_000, c.to]);
+      if (inside[i + 1]) samples.push([(c.at + inside[i + 1].at) / 2, c.to]);
+    });
+    if (!inside.length) {
+      // no change in the window (a zone without daylight saving): the offset since its last change
+      const last = changes.filter((c) => c.at < lo).pop();
+      if (!last) continue;
+      samples.push([from, last.to], [(from + to) / 2, last.to], [to, last.to]);
+    }
+    const match = zones.find((z) => samples.every(([t, off]) => zoneOffset(z, t) === off));
+    if (match) found.set(b.tzid, match);
+  }
+  return found;
+}
+
 /** A DATE or DATE-TIME value: all-day, or a wall-clock time and the zone it's in ('UTC' for a trailing Z). */
 interface When {
   allDay: boolean;
@@ -131,6 +197,12 @@ function hash(s: string) {
 export function parseIcs(text: string, calendarId: string, from: number, to: number): IcsCalendar {
   const all = props(text);
   const cal: IcsCalendar = { events: [] };
+  // zones known only by their VTIMEZONE description: named by an IANA zone that agrees with it
+  const bare = (tzid: string) => tzid.replace(/^"|"$/g, '').trim();
+  if (all.some((p) => p.params.TZID && !zoneOfTzid(p.params.TZID))) {
+    const vtz = zonesFromVtimezones(all, from, to);
+    for (const p of all) if (p.params.TZID && vtz.has(bare(p.params.TZID))) p.params.TZID = vtz.get(bare(p.params.TZID))!;
+  }
   const defaultTz = zoneOfTzid(all.find((p) => p.name === 'X-WR-TIMEZONE')?.value);
   const name = all.find((p) => p.name === 'X-WR-CALNAME')?.value;
   if (name) cal.name = unescape(name);
@@ -151,7 +223,7 @@ export function parseIcs(text: string, calendarId: string, from: number, to: num
 
   const get = (v: Prop[], n: string) => v.find((p) => p.name === n);
   // Overrides of single occurrences, by UID and the occurrence they replace.
-  const overrides = new Map<string, Map<string, Prop[]>>();
+  const overrides = new Map<string, Map<string, { v: Prop[]; w: When }>>();
   for (const v of vevents) {
     const rid = get(v, 'RECURRENCE-ID');
     if (!rid) continue;
@@ -159,7 +231,7 @@ export function parseIcs(text: string, calendarId: string, from: number, to: num
     const w = when(rid, defaultTz);
     if (!w) continue;
     if (!overrides.has(uid)) overrides.set(uid, new Map());
-    overrides.get(uid)!.set(keyOf(w), v);
+    overrides.get(uid)!.set(keyOf(w), { v, w });
   }
 
   const make = (v: Prop[], start: When, idKey: string): CalEvent | null => {
@@ -212,10 +284,15 @@ export function parseIcs(text: string, calendarId: string, from: number, to: num
       continue;
     }
     if (opts.until) {
-      // UNTIL is an instant (…Z) or a date; bring it onto the same floating clock (inclusive)
+      // UNTIL is an instant (…Z), a date or a wall-clock time; bring it onto the same floating clock (inclusive).
+      // A date means through the end of that day, for a timed series too. An instant ending an all-day series
+      // (RFC 5545 forbids it, but older exports wrote it) means the day it falls on here.
       const u = opts.until.getTime();
-      const untilIsUtc = /UNTIL=\d{8}T\d{6}Z/i.test(rule);
-      opts.until = new Date(untilIsUtc && !start.allDay ? floating(toWall(u)) : u + (start.allDay ? DAY - 1 : 0));
+      const untilIsUtc = /UNTIL=\d{8}T\d{6}Z/i.test(rule), untilIsDate = /UNTIL=\d{8}(?!T)/i.test(rule);
+      if (untilIsUtc && start.allDay) {
+        const c = wallClock(u, defaultTz);
+        opts.until = new Date(Date.UTC(c.y, c.m, c.d) + DAY - 1);
+      } else opts.until = new Date(untilIsUtc ? floating(toWall(u)) : u + (untilIsDate ? DAY - 1 : 0));
     }
     const rr = new RRule({ ...opts, dtstart: new Date(floating(start)) });
     const skip = new Set(whens(v.filter((p) => p.name === 'EXDATE'), defaultTz).map(keyOf));
@@ -224,11 +301,21 @@ export function parseIcs(text: string, calendarId: string, from: number, to: num
     const occ: When[] = rr.between(new Date(a), new Date(b), true).map((d) => ({
       allDay: start.allDay, y: d.getUTCFullYear(), m: d.getUTCMonth(), d: d.getUTCDate(), minutes: d.getUTCHours() * 60 + d.getUTCMinutes(), tz: start.tz,
     }));
+    const used = new Set<string>();
     for (const w of [...occ, ...extra]) {
       const k = keyOf(w);
-      if (skip.has(k)) continue;
-      const over = mine?.get(k);
+      // an override replaces its occurrence even when that's also listed as skipped (some writers do both)
+      const over = mine?.get(k)?.v;
+      if (over) used.add(k);
+      else if (skip.has(k)) continue;
       const e = over ? make(over, when(get(over, 'DTSTART'), defaultTz) ?? w, k) : make(v, w, k);
+      if (e && inWindow(e)) cal.events.push(e);
+    }
+    // an occurrence moved into the window from outside the stretch expanded (last year's meeting moved to this week)
+    for (const [k, o] of mine ?? []) {
+      if (used.has(k) || (floating(o.w) >= a && floating(o.w) <= b)) continue;
+      const s = when(get(o.v, 'DTSTART'), defaultTz);
+      const e = s && make(o.v, s, k);
       if (e && inWindow(e)) cal.events.push(e);
     }
   }
@@ -236,7 +323,7 @@ export function parseIcs(text: string, calendarId: string, from: number, to: num
   const seriesUids = new Set(vevents.filter((v) => get(v, 'RRULE')).map((v) => get(v, 'UID')?.value ?? ''));
   for (const [uid, m] of overrides) {
     if (seriesUids.has(uid)) continue;
-    for (const [k, v] of m) {
+    for (const [k, { v }] of m) {
       const s = when(get(v, 'DTSTART'), defaultTz);
       const e = s && make(v, s, k);
       if (e && inWindow(e)) cal.events.push(e);

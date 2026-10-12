@@ -35,6 +35,13 @@ export const atMinutes = (i: number, minutes: number) => {
   return d.getTime();
 };
 
+/** t moved by `days` calendar days and `minutes` on the wall clock: 9:00 + 1 day is 9:00 the next day, even across a
+ *  daylight-saving change (when a day is 23 or 25 hours long). */
+export const shiftWall = (t: number, days: number, minutes = 0) => atMinutes(dayIndex(t) + days, minutesOfDay(t) + minutes);
+
+/** The earliest an event can end: a day after it starts (all-day) or 15 minutes after (timed). */
+export const earliestEnd = (start: number, allDay?: boolean) => (allDay ? addDays(new Date(start), 1).getTime() : start + 15 * MIN);
+
 export const isWeekend = (i: number) => {
   const dow = dateAt(i).getDay();
   return dow === 0 || dow === 6;

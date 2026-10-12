@@ -53,9 +53,43 @@ describe('reading .ics calendars', () => {
       'BEGIN:VEVENT', 'UID:s', 'DTSTART;TZID=America/Toronto:20260105T100000', 'DTEND;TZID=America/Toronto:20260105T110000',
       'RRULE:FREQ=WEEKLY;UNTIL=20260126T150000Z', 'SUMMARY:Seminar', 'END:VEVENT',
       'BEGIN:VEVENT', 'UID:f', 'DTSTART;VALUE=DATE:20200101', 'RRULE:FREQ=YEARLY', 'SUMMARY:New Year', 'END:VEVENT',
-    ), 's', FROM, TO);
+    ), 's', new Date(2026, 0, 1).getTime(), new Date(2027, 0, 1).getTime()); // (the year on this machine's clock, where all-day days are)
     expect(c.events.filter((e) => e.title === 'Seminar')).toHaveLength(4); // Jan 5, 12, 19, 26
     expect(c.events.filter((e) => e.title === 'New Year').map((e) => new Date(e.start).getFullYear())).toEqual([2026]);
+  });
+  it('a date-only UNTIL on a timed series includes that day (L9)', () => {
+    const c = parseIcs(cal(
+      'BEGIN:VEVENT', 'UID:s', 'DTSTART;TZID=America/Toronto:20260105T100000', 'DTEND;TZID=America/Toronto:20260105T110000',
+      'RRULE:FREQ=WEEKLY;UNTIL=20260126', 'SUMMARY:Seminar', 'END:VEVENT',
+    ), 's', FROM, TO);
+    expect(c.events.map((e) => e.start)).toEqual([5, 12, 19, 26].map((d) => toronto(2026, 0, d, 10)));
+  });
+  it('an occurrence moved into the window from outside the stretch read is kept (L9)', () => {
+    const c = parseIcs(cal(
+      'BEGIN:VEVENT', 'UID:w', 'DTSTART;TZID=America/Toronto:20250106T100000', 'DTEND;TZID=America/Toronto:20250106T110000',
+      'RRULE:FREQ=WEEKLY;UNTIL=20251222T150000Z', 'SUMMARY:Weekly', 'END:VEVENT',
+      // the Dec 22 2025 meeting, moved to Jan 7 2026 (the series itself ended before the window)
+      'BEGIN:VEVENT', 'UID:w', 'RECURRENCE-ID;TZID=America/Toronto:20251222T100000', 'DTSTART;TZID=America/Toronto:20260107T160000',
+      'DTEND;TZID=America/Toronto:20260107T170000', 'SUMMARY:Weekly (moved)', 'END:VEVENT',
+    ), 'w', FROM, TO);
+    expect(c.events.map((e) => [e.title, e.start])).toEqual([['Weekly (moved)', toronto(2026, 0, 7, 16)]]);
+  });
+  it('a zone known only by its VTIMEZONE (an unknown name) is read from that description (L9)', () => {
+    const c = parseIcs(cal(
+      'BEGIN:VTIMEZONE', 'TZID:Customized Time Zone',
+      'BEGIN:STANDARD', 'DTSTART:16010101T020000', 'TZOFFSETFROM:-0400', 'TZOFFSETTO:-0500', 'RRULE:FREQ=YEARLY;BYDAY=1SU;BYMONTH=11', 'END:STANDARD',
+      'BEGIN:DAYLIGHT', 'DTSTART:16010101T020000', 'TZOFFSETFROM:-0500', 'TZOFFSETTO:-0400', 'RRULE:FREQ=YEARLY;BYDAY=2SU;BYMONTH=3', 'END:DAYLIGHT',
+      'END:VTIMEZONE',
+      'BEGIN:VTIMEZONE', 'TZID:India time (custom)',
+      'BEGIN:STANDARD', 'DTSTART:16010101T000000', 'TZOFFSETFROM:+0530', 'TZOFFSETTO:+0530', 'END:STANDARD',
+      'END:VTIMEZONE',
+      'BEGIN:VEVENT', 'UID:a', 'DTSTART;TZID="Customized Time Zone":20260302T150000', 'DTEND;TZID="Customized Time Zone":20260302T160000',
+      'RRULE:FREQ=WEEKLY;COUNT=2', 'SUMMARY:Call', 'END:VEVENT',
+      'BEGIN:VEVENT', 'UID:b', 'DTSTART;TZID=India time (custom):20260302T090000', 'DTEND;TZID=India time (custom):20260302T100000', 'SUMMARY:Standup', 'END:VEVENT',
+    ), 'v', FROM, TO);
+    const by = (t: string) => c.events.filter((e) => e.title === t).map((e) => e.start);
+    expect(by('Call')).toEqual([toronto(2026, 2, 2, 15), toronto(2026, 2, 9, 15)]); // EST, then EDT
+    expect(by('Standup')).toEqual([Date.UTC(2026, 2, 2, 3, 30)]);
   });
   it("Outlook's Windows zone names and Mozilla-style TZIDs are understood; webcal links become https", () => {
     expect(zoneOfTzid('Eastern Standard Time')).toBe('America/Toronto');

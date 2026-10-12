@@ -11,7 +11,7 @@
 //                    "lunch" means noon, a date with no time is all-day
 //   5. location    — "at/in <Capitalized place>" or "@ place"; the rest is the title
 import * as chrono from 'chrono-node';
-import { addDays, addMonths, startOfDay } from 'date-fns';
+import { addDays, addMonths, getDaysInMonth, isLeapYear, startOfDay } from 'date-fns';
 import type { CalendarSource, Recurrence } from '../data/types';
 import { MIN, dayIndex } from './dates';
 import { fixDateTypos } from './fuzzy';
@@ -201,8 +201,15 @@ function normalize(input: string, now: Date) {
   t = t.replace(new RegExp(`(?<!${MONTH}\\s*)\\b(?:on\\s+)?the (\\d{1,2})(?:st|nd|rd|th)\\b`, 'gi'), (m, d: string) => {
     const day = +d;
     if (day < 1 || day > 31) return m;
-    const month = day >= now.getDate() ? now : addMonths(now, 1);
+    let month = day >= now.getDate() ? now : addMonths(now, 1);
+    while (getDaysInMonth(month) < day) month = addMonths(month, 1); // "the 31st" in November is December's
     return ` ${month.toLocaleString('en', { month: 'short' })} ${day} `;
+  });
+  // "feb 29" with no year: the next one there is (a leap year)
+  t = t.replace(/\b(?:feb(?:ruary)?\.?\s+29(?:th)?|29(?:th)?\s+(?:of\s+)?feb(?:ruary)?\.?)(?!,?\s*\d{4})\b/gi, (m) => {
+    let y = now.getFullYear();
+    while (!isLeapYear(new Date(y, 0, 1)) || new Date(y, 1, 29) < startOfDay(now)) y++;
+    return `${m} ${y}`;
   });
 
   // Bare time ranges: "11-1", "2 to 4", "between 2 and 3" → "from 11 to 1" (not after a month: "oct 3-5")
@@ -389,8 +396,9 @@ export function parseQuick(input: string, calendars: CalendarSource[], now = new
             r.freq === 'daily' ? diffDays % r.interval === 0
             : r.freq === 'weekly'
               ? r.byDay!.includes(d.getDay()) && (Math.floor(dayIndex(d) / 7) - Math.floor(dayIndex(start) / 7)) % r.interval === 0
-            : r.freq === 'monthly' ? d.getDate() === start.getDate()
-            : d.getDate() === start.getDate() && d.getMonth() === start.getMonth();
+            : r.freq === 'monthly'
+              ? d.getDate() === start.getDate() && ((d.getFullYear() - start.getFullYear()) * 12 + d.getMonth() - start.getMonth()) % r.interval === 0
+            : d.getDate() === start.getDate() && d.getMonth() === start.getMonth() && (d.getFullYear() - start.getFullYear()) % r.interval === 0;
           if (hit && ++count === n) recurrence.until = addDays(d, 1).getTime() - 1;
         }
       }

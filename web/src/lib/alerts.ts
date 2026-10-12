@@ -61,7 +61,8 @@ export function upcomingAlerts(events: CalEvent[], calendars: CalendarSource[], 
     if (ev.kind !== 'deadline' && cal && !cal.visible) continue;
     const min = alertFor(ev, cal, d);
     if (min === null) continue;
-    const at = ev.start - min * 60_000;
+    // all-day: on the wall clock from the start of the day (9 AM is 9 AM on a daylight-saving day too)
+    const at = ev.allDay && ev.kind !== 'deadline' ? new Date(ev.start).setMinutes(-min) : ev.start - min * 60_000;
     if (at < from || at >= to) continue;
     const when = ev.kind === 'deadline'
       ? `Due ${format(ev.start, 'EEE MMM d')} at ${fmtTime(ev.start)}`
