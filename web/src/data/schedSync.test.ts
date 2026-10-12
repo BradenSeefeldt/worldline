@@ -3,9 +3,9 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { generateSecretKey, type Event } from 'nostr-tools/pure';
 import type { Filter } from 'nostr-tools/filter';
-import { KIND, derive, newestAvail, openGuestMsg, parseFragment, guestUrl, resolveHolds, sealGuestMsg, withHolds, type Decoded, type LinkRef } from '../lib/schedwire';
+import { KIND, derive, newestAvail, openGuestMsg, parseFragment, guestUrl, resolveHolds, sealGuestMsg, withHolds, type BookedAgainst, type Decoded, type LinkRef } from '../lib/schedwire';
 import { memoryTransport, type Transport } from '../lib/relays';
-import { epochDay } from '../lib/zone';
+import { epochDay, instantOf } from '../lib/zone';
 
 const mem = new Map<string, string>();
 const localStorage = { getItem: (k: string) => mem.get(k) ?? null, setItem: (k: string, v: string) => void mem.set(k, v), removeItem: (k: string) => void mem.delete(k) };
@@ -22,9 +22,11 @@ beforeAll(async () => {
   ({ startScheduleSync } = await import('./schedSync'));
 });
 
-let now = new Date(2026, 9, 7, 19, 10).getTime(); // Wed Oct 7 2026, 7:10 PM
+// Every time is on the host's (Toronto) clock, whatever zone this machine is in.
+const TZ = 'America/Toronto';
+const t = (d: number, h: number, m = 0) => instantOf(2026, 9, d, h * 60 + m, TZ);
+let now = t(7, 19, 10); // Wed Oct 7 2026, 7:10 PM
 const clock = () => now;
-const t = (d: number, h: number, m = 0) => new Date(2026, 9, d, h, m).getTime();
 const sec = (ms: number) => Math.floor(ms / 1000);
 
 /** Several relays as one network: publish to all (count who accepted), read from all, ignore duplicates. */
@@ -43,17 +45,21 @@ function network(...relays: Transport[]): Transport {
 const relays = [memoryTransport(), memoryTransport(), memoryTransport({ down: true })];
 const net = network(...relays);
 
+/** The version of the times each link's guest page last saw (a booking quotes it, as the real page does). */
+const seenVersion = new Map<string, BookedAgainst>();
 /** What a guest's page does: read the link from the address, fetch the free/busy and everyone's messages. */
 async function guestLooks(url: string) {
   const ref = parseFragment(url.split('#')[1])!;
   const { availTag, msgTag } = derive(ref.secret);
   const avail = newestAvail(await net.query({ kinds: [KIND], authors: [ref.hostPk], '#d': [availTag] }), ref)!;
+  if (avail?.view.tok) seenVersion.set(ref.hostPk, { at: avail.at, tok: avail.view.tok });
   const msgs = (await net.query({ kinds: [KIND], '#d': [msgTag] })).map((e) => openGuestMsg(e, ref)).filter((d): d is Decoded => !!d);
   return { ref, view: avail?.view, msgs };
 }
 const book = (ref: LinkRef, start: number, at: number, name?: string) => {
   const sk = generateSecretKey();
-  const ev = sealGuestMsg({ t: 'book', start, name }, ref, sk, at);
+  const av = seenVersion.get(ref.hostPk);
+  const ev = sealGuestMsg({ t: 'book', start, name, av }, ref, sk, Math.max(at, (av?.at ?? 0) + 1)); // as the page does: never before that version
   return { sk, ev, send: () => net.publish(ev) };
 };
 const settle = () => new Promise((r) => setTimeout(r, 0));
@@ -69,7 +75,7 @@ describe('scheduling between computers, end to end', () => {
     st.setMyName('Sam');
     linkId = st.createLink('book');
     const days = [8, 9].map((d) => epochDay(2026, 9, d));
-    st.updateLink(linkId, { title: 'Chat', days, firstDay: days[0], lastDay: days[1], singleUse: false, timeZone: 'America/Toronto' });
+    st.updateLink(linkId, { title: 'Chat', days, firstDay: days[0], lastDay: days[1], singleUse: false, timeZone: TZ });
     engine = startScheduleSync(net, clock);
     await engine.tick();
     const link = useStore.getState().links.find((l) => l.id === linkId)!;
@@ -85,8 +91,9 @@ describe('scheduling between computers, end to end', () => {
 
   it('two guests click the same time at once: both pages and the app agree who got it', async () => {
     const { ref } = await guestLooks(url);
-    const kai = book(ref, t(8, 11), sec(now), 'Kai');
-    const jo = book(ref, t(8, 11), sec(now) + 1, 'Jordan');
+    const at = seenVersion.get(ref.hostPk)!.at + 1; // as a real page does: after the version it booked against
+    const kai = book(ref, t(8, 11), at, 'Kai');
+    const jo = book(ref, t(8, 11), at + 1, 'Jordan');
     await jo.send();
     await kai.send();
     // before the app has answered, each guest page sees Kai holding it
@@ -95,7 +102,8 @@ describe('scheduling between computers, end to end', () => {
     expect(holds.winners.map((h) => h.pk)).toEqual([kai.ev.pubkey]);
     expect(holds.losers.map((h) => h.pk)).toEqual([jo.ev.pubkey]);
     expect(withHolds(view, holds.winners, new Set(), now).days[0].slots).not.toContain(t(8, 11)); // a third guest can't pick it
-    // the app collects them
+    // the app collects them (a minute later: the requests' clocks are ahead of this frozen one, which would count them as made "now")
+    now += 60_000;
     engine.process();
     const s = useStore.getState();
     const booked = s.events.filter((e) => e.bookedVia === linkId);
@@ -169,7 +177,7 @@ describe('scheduling between computers, end to end', () => {
     const st = useStore.getState();
     const pollId = st.createLink('poll');
     const days = [12, 13].map((d) => epochDay(2026, 9, d));
-    st.updateLink(pollId, { title: 'Group meeting', days, firstDay: days[0], lastDay: days[1], timeZone: 'America/Toronto' });
+    st.updateLink(pollId, { title: 'Group meeting', days, firstDay: days[0], lastDay: days[1], timeZone: TZ });
     await engine.tick();
     const purl = guestUrl('https://x/', useStore.getState().links.find((l) => l.id === pollId)!.nostr!);
     const { ref, view } = await guestLooks(purl);
@@ -203,7 +211,7 @@ describe('cancelling', () => {
     const st = useStore.getState();
     const id = st.createLink('book');
     const days = [14, 15].map((d) => epochDay(2026, 9, d));
-    st.updateLink(id, { title: 'Cancel test', days, firstDay: days[0], lastDay: days[1], singleUse: false, timeZone: 'America/Toronto' });
+    st.updateLink(id, { title: 'Cancel test', days, firstDay: days[0], lastDay: days[1], singleUse: false, timeZone: TZ });
     const engine = startScheduleSync(net, clock);
     await engine.tick();
     const url = guestUrl('https://x/', useStore.getState().links.find((l) => l.id === id)!.nostr!);
@@ -240,5 +248,51 @@ describe('cancelling', () => {
     useStore.setState((s) => ({ events: [...s.events, { id: 'past-one', calendarId: cal, title: 'Old', start: Date.now() - 86_400_000, end: Date.now() - 82_800_000, allDay: false, bookedVia: id }] }));
     useStore.getState().deleteLink(id);
     expect(useStore.getState().events.some((e) => e.id === 'past-one')).toBe(true);
+  });
+});
+
+describe('a link deleted or re-addressed while offline (M9)', () => {
+  const setDown = (down: boolean) => relays.slice(0, 2).forEach((r) => ((r as { down: boolean }).down = down));
+  async function newLink(title: string) {
+    const st = useStore.getState();
+    const id = st.createLink('book');
+    const days = [14, 15].map((d) => epochDay(2026, 9, d));
+    st.updateLink(id, { title, days, firstDay: days[0], lastDay: days[1], singleUse: false, timeZone: TZ });
+    return id;
+  }
+  const urlOf = (id: string) => guestUrl('https://x/', useStore.getState().links.find((l) => l.id === id)!.nostr!);
+
+  it('deleted with every relay down: guests are told it’s closed once a relay is back', async () => {
+    const id = await newLink('Offline delete');
+    const engine = startScheduleSync(net, clock);
+    await engine.tick();
+    const url = urlOf(id);
+    setDown(true);
+    useStore.getState().deleteLink(id);
+    await settle();
+    await settle();
+    setDown(false);
+    expect((await guestLooks(url)).view.gone).toBe(false); // nothing got out yet
+    await engine.tick();
+    expect((await guestLooks(url)).view.gone).toBe(true);
+    engine.stop();
+  });
+
+  it('…even if the app was quit and restarted in between (the notice is kept on disk)', async () => {
+    const id = await newLink('Offline re-address');
+    let engine = startScheduleSync(net, clock);
+    await engine.tick();
+    const url = urlOf(id);
+    setDown(true);
+    useStore.getState().resetLinkKeys(id); // "New address"
+    await settle();
+    await settle();
+    engine.stop();
+    setDown(false);
+    engine = startScheduleSync(net, clock);
+    await engine.tick();
+    expect((await guestLooks(url)).view.gone).toBe(true);
+    expect((await guestLooks(urlOf(id))).view.gone).toBe(false); // the new address works
+    engine.stop();
   });
 });

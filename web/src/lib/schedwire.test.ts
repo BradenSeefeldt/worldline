@@ -4,26 +4,31 @@ import * as nip44 from 'nostr-tools/nip44';
 import { bytesToHex, hexToBytes } from '@noble/hashes/utils.js';
 import { busyFor, newLink, publicView, type BookingLink } from './booking';
 import {
-  KIND, derive, fromWire, guestUrl, latestPerGuest, linkFragment, liveDecisions, mergeResponses, newLinkKeys, newestAvail, nextCreatedAt, openAvail,
-  openGuestMsg, parseFragment, planBookings, refOf, resolveHolds, sealAvail, sealGuestMsg, toWire, withHolds, type Decoded, type RemoteView,
+  KIND, MAX_PUBLISHED, REFUSAL_KEEP, availToken, derive, fromWire, guestUrl, latestPerGuest, linkFragment, liveDecisions, mergeResponses, newLinkKeys, newestAvail,
+  nextCreatedAt, openAvail, openGuestMsg, parseFragment, planBookings, pruneDecisions, publishedDecisions, refOf, resolveHolds, sealAvail, sealGuestMsg, toWire,
+  toWithdraw, withHolds, type Decision, type Decoded, type RemoteView,
 } from './schedwire';
-import { epochDay } from './zone';
+import { epochDay, instantOf } from './zone';
 import type { CalEvent } from '../data/types';
 
-const NOW = new Date(2026, 9, 7, 19, 10).getTime(); // Wed Oct 7 2026, 7:10 PM (Toronto)
-const t = (d: number, h: number, m = 0) => new Date(2026, 9, d, h, m).getTime();
+// Every time is on the host's (Toronto) clock, whatever zone this machine is in.
+const TZ = 'America/Toronto';
+const t = (d: number, h: number, m = 0) => instantOf(2026, 9, d, h * 60 + m, TZ);
+const NOW = t(7, 19, 10); // Wed Oct 7 2026, 7:10 PM (Toronto)
 const sec = (ms: number) => Math.floor(ms / 1000);
 const DAYS = [8, 9, 12].map((d) => epochDay(2026, 9, d));
+const KEYS = newLinkKeys(); // the link's keys (booking requests quote tokens made with them)
 const link = (extra: Partial<BookingLink> = {}): BookingLink => ({
-  ...newLink({ id: 'L1', mode: 'book', hostName: 'Sam', calendars: [{ id: 'work', visible: true }], calendarId: 'work', timeZone: 'America/Toronto', now: NOW }),
-  days: DAYS, firstDay: DAYS[0], lastDay: DAYS[2], singleUse: false, nostr: newLinkKeys(), ...extra,
+  ...newLink({ id: 'L1', mode: 'book', hostName: 'Sam', calendars: [{ id: 'work', visible: true }], calendarId: 'work', timeZone: TZ, now: NOW }),
+  days: DAYS, firstDay: DAYS[0], lastDay: DAYS[2], singleUse: false, nostr: KEYS, ...extra,
 });
 const ev = (title: string, start: number, mins: number, extra: Partial<CalEvent> = {}): CalEvent => ({ id: title, calendarId: 'work', title, start, end: start + mins * 60_000, allDay: false, ...extra });
 const remote = (l: BookingLink, events: CalEvent[] = [], extra: Partial<RemoteView> = {}): RemoteView => ({
   ...fromWire(toWire(publicView(l, events, NOW), { noticeMin: l.noticeMin, singleUse: !!l.singleUse, updatedAt: NOW, decisions: l.decisions }))!, ...extra,
 });
-/** A guest's booking request, as decoded. */
-const req = (pk: string, start: number, at: number, id = `${pk}-id`): Decoded => ({ pk: pk.padEnd(64, '0'), id, at, msg: { t: 'book', start } });
+/** A guest's booking request, as decoded — made against the version of the times published at `av` (default: `at`). */
+const req = (pk: string, start: number, at: number, id = `${pk}-id`, av = at): Decoded => ({ pk: pk.padEnd(64, '0'), id, at, msg: { t: 'book', start, av: { at: av, tok: availToken(KEYS.sk, av) } } });
+const P = (pk: string) => pk.padEnd(64, '0');
 
 describe('the link address', () => {
   it('carries the host key and secret after "#", and reads back exactly', () => {
@@ -159,35 +164,36 @@ describe('guests’ messages', () => {
 describe('who gets a slot', () => {
   const l = link({ durationMin: 60 });
   const view = remote(l);
+  const S = sec(NOW); // requests made just now
   it('two guests, same time: the earlier request holds it, everywhere', () => {
-    const { winners, losers } = resolveHolds(view, [req('bb', t(8, 11), 101), req('aa', t(8, 11), 100)], NOW);
+    const { winners, losers } = resolveHolds(view, [req('bb', t(8, 11), S + 1), req('aa', t(8, 11), S + 0)], NOW);
     expect(winners.map((w) => w.pk[1])).toEqual(['a']);
     expect(losers.map((w) => w.pk[1])).toEqual(['b']);
   });
   it('an exact tie is broken by the event id, so every page agrees', () => {
-    const r = resolveHolds(view, [req('aa', t(8, 11), 100, 'z'), req('bb', t(8, 11), 100, 'c')], NOW);
+    const r = resolveHolds(view, [req('aa', t(8, 11), S + 0, 'z'), req('bb', t(8, 11), S + 0, 'c')], NOW);
     expect(r.winners[0].id).toBe('c');
   });
   it('overlapping (not identical) times conflict too; separate ones don’t', () => {
-    const r = resolveHolds(view, [req('aa', t(8, 11), 100), req('bb', t(8, 11, 30), 101), req('cc', t(8, 14), 102)], NOW);
+    const r = resolveHolds(view, [req('aa', t(8, 11), S + 0), req('bb', t(8, 11, 30), S + 1), req('cc', t(8, 14), S + 2)], NOW);
     expect(r.winners.map((w) => w.pk[1])).toEqual(['a', 'c']);
   });
   it('a request for a time that isn’t offered holds nothing (junk can’t block real times)', () => {
-    expect(resolveHolds(view, [req('aa', t(8, 3), 100)], NOW).winners).toEqual([]);
+    expect(resolveHolds(view, [req('aa', t(8, 3), S + 0)], NOW).winners).toEqual([]);
   });
   it('a single-use link: only the first request holds, and others see it closed', () => {
     const v = remote(link({ singleUse: true }));
-    const { winners } = resolveHolds(v, [req('aa', t(8, 11), 100), req('bb', t(9, 14), 101)], NOW);
+    const { winners } = resolveHolds(v, [req('aa', t(8, 11), S + 0), req('bb', t(9, 14), S + 1)], NOW);
     expect(winners).toHaveLength(1);
     expect(withHolds(v, winners, new Set(), NOW).closed).toBe(true);
     expect(withHolds(v, winners, new Set([winners[0].pk]), NOW).closed).toBe(false); // the one who booked still sees their booking
   });
   it('requests your app already answered no longer hold anything', () => {
     const v = { ...view, decisions: { ['aa'.padEnd(64, '0')]: { id: 'aa-id', status: 'taken' as const, start: t(8, 11) } } };
-    expect(resolveHolds(v, [req('aa', t(8, 11), 100)], NOW).winners).toEqual([]);
+    expect(resolveHolds(v, [req('aa', t(8, 11), S + 0)], NOW).winners).toEqual([]);
   });
   it('other people’s holds disappear from the times offered; your own stays', () => {
-    const { winners } = resolveHolds(view, [req('aa', t(8, 11), 100)], NOW);
+    const { winners } = resolveHolds(view, [req('aa', t(8, 11), S + 0)], NOW);
     const others = withHolds(view, winners, new Set(), NOW).days[0].slots;
     expect(others).not.toContain(t(8, 11));
     expect(others).not.toContain(t(8, 10, 30)); // a 1-h meeting at 10:30 would run into it
@@ -261,15 +267,134 @@ describe('poll answers', () => {
     expect(responses.map((r) => [r.name, r.cells])).toEqual([['Kai', [t(8, 9)]], ['Jordan', [t(8, 10)]]]);
     expect(changed).toEqual(['Kai', 'Jordan']);
   });
-  it('the same name from another device replaces the earlier answer; an older answer never overwrites a newer', () => {
+  it('one answer per guest key: someone typing an existing name adds their own answer, can’t replace it (L6)', () => {
     const first = mergeResponses(l, [ans('aa', 'Jordan', [t(8, 9)], 100)], offered);
-    const second = mergeResponses({ ...l, responses: first.responses }, [ans('bb', 'jordan', [t(8, 10)], 200)], offered);
-    expect(second.responses.map((r) => r.cells)).toEqual([[t(8, 10)]]);
+    const second = mergeResponses({ ...l, responses: first.responses }, [ans('aa', 'Jordan', [t(8, 9)], 100), ans('bb', 'jordan', [t(8, 10)], 200)], offered);
+    expect(second.responses.map((r) => [r.id[1], r.cells])).toEqual([['a', [t(8, 9)]], ['b', [t(8, 10)]]]);
+    // an older answer never overwrites a newer one from the same key
     expect(mergeResponses({ ...l, responses: second.responses }, [ans('bb', 'jordan', [t(8, 11)], 150)], offered).changed).toEqual([]);
+    // the guest's own update (same key) still replaces their answer
+    const upd = mergeResponses({ ...l, responses: second.responses }, [ans('aa', 'Jordan', [t(8, 11)], 300)], offered);
+    expect(upd.responses.find((r) => r.id === P('aa'))!.cells).toEqual([t(8, 11)]);
+    expect(upd.responses).toHaveLength(2);
+  });
+  it('two devices answering under one name settle: passes over the same inbox stop changing (M10)', () => {
+    const inbox = [ans('aa', 'Jordan', [t(8, 9)], 100), ans('bb', 'Jordan', [t(8, 10)], 200)];
+    let lk = l;
+    const changes: string[][] = [];
+    for (let i = 0; i < 4; i++) {
+      const r = mergeResponses(lk, inbox, offered);
+      changes.push(r.changed);
+      lk = { ...lk, responses: r.responses };
+    }
+    expect(changes.slice(1)).toEqual([[], [], []]);
+    expect(lk.responses.map((r) => r.cells)).toEqual([[t(8, 9)], [t(8, 10)]]);
   });
 });
 
 it('decisions for meetings long past are dropped from what is published', () => {
   const d = { a: { id: 'x', status: 'ok' as const, start: t(1, 10) }, b: { id: 'y', status: 'ok' as const, start: t(8, 10) } };
   expect(Object.keys(liveDecisions(d, 60, NOW))).toEqual(['b']);
+});
+
+describe('a guest’s clock can’t jump the queue or dodge the notice (M4)', () => {
+  const l = link({ durationMin: 60 });
+  const YEAR = 365 * 86_400;
+  const honest = () => req('aa', t(8, 11), sec(NOW), 'aa-id', sec(NOW) - 600); // booked against the version from 10 min ago
+  it('a request claiming to be older than the version it quotes is refused; the honest earlier one gets the slot', () => {
+    const thief = req('bb', t(8, 11), sec(NOW) - YEAR, 'bb-id', sec(NOW) - 600); // quotes a real version, backdates its clock a year
+    const r = planBookings(l, [], [thief, honest()], NOW + 60_000);
+    expect(r.accepts.map((a) => a.pk)).toEqual([P('aa')]);
+    expect(r.decisions[P('bb')].status).toBe('invalid');
+  });
+  it('a made-up version (wrong token) earns no early time: it counts from when the app saw it', () => {
+    const fake: Decoded = { ...req('bb', t(8, 11), sec(NOW) - YEAR), msg: { t: 'book', start: t(8, 11), av: { at: sec(NOW) - YEAR, tok: '0'.repeat(32) } } };
+    const r = planBookings(l, [], [fake, honest()], NOW + 60_000);
+    expect(r.accepts.map((a) => a.pk)).toEqual([P('aa')]);
+    expect(r.decisions[P('bb')].status).toBe('taken');
+  });
+  it('created_at 0 can’t bypass “not sooner than”, nor book a slot already past', () => {
+    const zero: Decoded = { pk: P('cc'), id: 'cc-id', at: 0, msg: { t: 'book', start: t(8, 11) } };
+    expect(planBookings(link({ noticeMin: 24 * 60, singleUse: true }), [], [zero], NOW).decisions[P('cc')].status).toBe('invalid');
+    expect(planBookings(link({ singleUse: true }), [], [zero], t(8, 12)).decisions[P('cc')].status).toBe('invalid'); // the 11:00 slot is past
+  });
+  it('seen live: a request counts from when it arrived (give or take a minute), whatever its clock says', () => {
+    const thief = { ...req('bb', t(8, 11), sec(NOW) - 3600, 'bb-id', sec(NOW) - 3600), seen: sec(NOW) + 120 }; // real token, an hour back; arrived 2 min after
+    const ok = { ...honest(), seen: sec(NOW) };
+    expect(planBookings(l, [], [thief, ok], NOW + 60_000).accepts.map((a) => a.pk)).toEqual([P('aa')]);
+  });
+  it('guest pages don’t let a request with an impossible clock win, so the honest guest isn’t told they lost', () => {
+    const view = remote(l);
+    const thief = req('bb', t(8, 11), sec(NOW) - YEAR, 'bb-id', sec(NOW) - 600);
+    const { winners, losers } = resolveHolds(view, [thief, honest()], NOW);
+    expect(winners.map((w) => w.pk)).toEqual([P('aa')]);
+    expect(losers).toEqual([]);
+    // a forged token for the very version the page has is caught too
+    const v2 = { ...view, pubAt: sec(NOW) - 600, tok: availToken(KEYS.sk, sec(NOW) - 600) };
+    const forged: Decoded = { ...req('bb', t(8, 11), sec(NOW) - 600), msg: { t: 'book', start: t(8, 11), av: { at: sec(NOW) - 600, tok: 'f'.repeat(32) } } };
+    expect(resolveHolds(v2, [forged, honest()], NOW).winners.map((w) => w.pk)).toEqual([P('aa')]);
+  });
+  it('a guest who lost a race is withdrawn only when they book another time, never on its own', () => {
+    const view = remote(l);
+    const first = req('bb', t(8, 11), sec(NOW) - 60, 'bb-id', sec(NOW) - 600);
+    const { losers } = resolveHolds(view, [first, honest()], NOW);
+    const mine = [{ pk: P('aa'), id: 'aa-id' }];
+    expect(toWithdraw(mine, view, losers)).toEqual(mine); // lost: withdrawn when they pick another time
+    const answered = { ...view, decisions: { [P('aa')]: { id: 'aa-id', status: 'ok' as const, start: t(8, 11) } } };
+    expect(toWithdraw(mine, answered, losers)).toEqual([]); // the host's app confirmed it after all: kept
+  });
+  it('the published availability carries its token, and a booking quotes it', () => {
+    const l2 = link();
+    const ev = sealAvail(publicView(l2, [], NOW), l2.nostr!, { noticeMin: 0, singleUse: false, updatedAt: NOW }, 1234);
+    const v = openAvail(ev, refOf(l2.nostr!))!;
+    expect(v.pubAt).toBe(1234);
+    expect(v.tok).toBe(availToken(l2.nostr!.sk, 1234));
+    const b = sealGuestMsg({ t: 'book', start: t(8, 11), av: { at: 1234, tok: v.tok! } }, refOf(l2.nostr!), generateSecretKey(), 1300);
+    expect(openGuestMsg(b, refOf(l2.nostr!))!.msg).toEqual({ t: 'book', start: t(8, 11), av: { at: 1234, tok: v.tok } });
+  });
+});
+
+describe('junk requests can’t make the link too big to open (M8)', () => {
+  const junk = (n: number, start: (i: number) => number, status: Decision['status'] = 'invalid', at = NOW) =>
+    Object.fromEntries(Array.from({ length: n }, (_, i) => [i.toString(16).padStart(64, '0'), { id: 'e'.repeat(64), status, start: start(i), at }]));
+  it('600 requests for a far-future time: none is published, and the availability still opens', () => {
+    const l = link({ decisions: junk(600, () => 9e15) });
+    const dec = publishedDecisions(l, [], NOW);
+    expect(Object.keys(dec)).toHaveLength(0);
+    const ev = sealAvail(publicView(l, [], NOW), l.nostr!, { noticeMin: 0, singleUse: false, updatedAt: NOW, decisions: dec }, sec(NOW));
+    expect(openAvail(ev, refOf(l.nostr!))).not.toBeNull();
+  });
+  it('thousands of refusals of real times: capped (confirmed ones always in), and the message still opens', () => {
+    const ok = { [P('aa')]: { id: 'ok-id', status: 'ok' as const, start: t(8, 11), at: NOW - 86_400_000 } };
+    const l = link({ decisions: { ...junk(3000, () => t(8, 11), 'taken'), ...ok } });
+    const dec = publishedDecisions(l, [], NOW);
+    expect(Object.keys(dec)).toHaveLength(MAX_PUBLISHED);
+    expect(dec[P('aa')].status).toBe('ok');
+    const ev = sealAvail(publicView(l, [], NOW), l.nostr!, { noticeMin: 0, singleUse: false, updatedAt: NOW, decisions: dec }, sec(NOW));
+    expect(ev.content.length).toBeLessThan(120_000);
+    expect(openAvail(ev, refOf(l.nostr!))!.decisions[P('aa')].status).toBe('ok');
+  });
+  it('refusals expire by when they were made, not by the (guest-chosen) meeting time', () => {
+    const l = link({ decisions: { [P('aa')]: { id: 'x', status: 'taken', start: t(12, 11), at: NOW - REFUSAL_KEEP - 1 }, [P('bb')]: { id: 'y', status: 'taken', start: t(12, 11), at: NOW - 1000 } } });
+    expect(Object.keys(publishedDecisions(l, [], NOW))).toEqual([P('bb')]);
+  });
+  it('an unanswered request older than that holds nothing on guest pages (an expired refusal can’t come back as a hold)', () => {
+    const view = { ...remote(link()), updatedAt: NOW };
+    expect(resolveHolds(view, [req('aa', t(8, 11), sec(NOW - REFUSAL_KEEP) - 10)], NOW).winners).toEqual([]);
+  });
+  it('your app prunes what it keeps: junk off the offered times, meetings long over, and a cap', () => {
+    const l = link();
+    const kept = pruneDecisions(l, {
+      ...junk(50, () => 9e15),
+      [P('aa')]: { id: 'a', status: 'ok', start: t(8, 11), at: NOW },
+      [P('bb')]: { id: 'b', status: 'ok', start: t(8, 11) - 40 * 86_400_000, at: NOW },
+      [P('cc')]: { id: 'c', status: 'taken', start: t(8, 11), at: NOW },
+    });
+    expect(Object.keys(kept).sort()).toEqual([P('aa'), P('cc')]);
+    expect(Object.keys(pruneDecisions(l, junk(1500, () => t(8, 11), 'taken')))).toHaveLength(1000);
+  });
+  it('requests for meetings long over are ignored (their answers were forgotten)', () => {
+    const day = epochDay(2026, 8, 1);
+    expect(planBookings(link({ days: [day], firstDay: day, lastDay: day }), [], [req('aa', instantOf(2026, 8, 1, 600, TZ), sec(NOW))], NOW).decisions).toEqual({});
+  });
 });

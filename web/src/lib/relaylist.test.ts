@@ -32,6 +32,12 @@ describe('the guest page talks to current + recently retired relays', () => {
     expect(g).not.toContain(R(21)); // retired more than a year ago
     expect(g.length).toBeLessThanOrEqual(12);
   });
+  it('with many retired, the newest retired are the ones kept (L5)', () => {
+    const retired = [1, 2, 3, 4, 5, 6, 7].map((n) => ({ url: R(20 + n), since: `2026-0${n + 1}-01` })); // R(21) oldest … R(27) newest
+    const g = guestRelays(list({ retired }), '2026-10-10');
+    expect(g).toHaveLength(12);
+    expect(g.slice(7)).toEqual([27, 26, 25, 24, 23].map(R));
+  });
   it('with no list at all it still has the built-in relays', () => {
     expect(guestRelays(null, '2026-10-10')).toEqual(BUILTIN);
   });

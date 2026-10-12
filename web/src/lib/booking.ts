@@ -53,7 +53,7 @@ export interface BookingLink {
    *  published availability (seconds), so the next one is always newer. */
   nostr?: { sk: string; secret: string; lastPub?: number };
   /** Your app's answer to each guest's request (keyed by the guest's key), published back so their page can say. */
-  decisions?: Record<string, { id: string; status: 'ok' | 'taken' | 'busy' | 'closed' | 'invalid' | 'cancelled'; start: number }>;
+  decisions?: Record<string, { id: string; status: 'ok' | 'taken' | 'busy' | 'closed' | 'invalid' | 'cancelled'; start: number; at?: number }>;
   responses: PollResponse[];
 }
 
@@ -70,7 +70,9 @@ export function linkSpan(link: BookingLink) {
 /** An .ics file so a guest can add the meeting to their own calendar. */
 export function icsFor(title: string, start: number, end: number, location?: string) {
   const z = (t: number) => new Date(t).toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
-  const esc = (s: string) => s.replace(/([,;\\])/g, '\\$1');
+  // text values: backslash, comma and semicolon escaped; a line break becomes "\n" (a raw one would start a new
+  // line of the file — a way to slip in lines of your own); carriage returns dropped
+  const esc = (s: string) => s.replace(/([,;\\])/g, '\\$1').replace(/\r/g, '').replace(/\n/g, '\\n');
   return [
     'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Calendar//Booking//EN', 'BEGIN:VEVENT',
     `UID:${start}-${Math.random().toString(36).slice(2)}@calendar`, `DTSTAMP:${z(Date.now())}`,
@@ -106,12 +108,15 @@ export function linkDays(link: BookingLink) {
 
 const overlaps = (a: Interval, b: Interval) => a.start < b.end && b.start < a.end;
 
-/** Cells (or start times) on one day: every CELL_MIN from the window start. */
+/** Cells (or start times) on one day: every CELL_MIN from the window start. A wall time the clocks skip (2:30 AM on
+ *  the day they spring forward) isn't a time at all: it's left out, rather than landing on 3:30 a second time. */
 function cellsOn(link: BookingLink, day: number, length: number) {
   const { y, m, d } = fromEpochDay(day);
   const out: Interval[] = [];
   for (let t = link.windowStart; t + length <= link.windowEnd; t += CELL_MIN) {
     const start = instantOf(y, m, d, t, link.timeZone);
+    const w = wallClock(start, link.timeZone);
+    if (w.d !== d || w.h * 60 + w.min !== t % 1440) continue; // skipped by the clocks
     out.push({ start, end: start + length * MIN });
   }
   return out;
@@ -175,6 +180,18 @@ export function publicView(link: BookingLink, events: CalEvent[], now = Date.now
     finalStart: link.finalStart,
     responses: link.mode === 'poll' ? link.responses.map((r) => ({ name: r.name, cells: r.cells })) : [],
   };
+}
+
+/** A guest's days: the offered times regrouped by the date on the guest's own clock (a host's Thursday afternoon can
+ *  be a guest's Friday morning). `day` is then an epoch day in the guest's zone (`zone`: this device's, if missing). */
+export function guestDays(days: PublicDay[], zone?: string): PublicDay[] {
+  const by = new Map<number, number[]>();
+  for (const s of days.flatMap((d) => d.slots)) {
+    const w = wallClock(s, zone);
+    const k = epochDay(w.y, w.m, w.d);
+    by.set(k, [...(by.get(k) ?? []), s]);
+  }
+  return [...by].sort((a, b) => a[0] - b[0]).map(([day, slots]) => ({ day, slots: [...new Set(slots)].sort((a, b) => a - b) }));
 }
 
 /** Is this start time still open? (Checked again right before a booking is saved.) */

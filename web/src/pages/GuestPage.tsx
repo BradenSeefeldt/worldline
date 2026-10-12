@@ -3,14 +3,16 @@
 // relays is guest/RemoteGuest.tsx; your app's poll results reuse PollGrid.
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { format, formatDistanceToNowStrict } from 'date-fns';
-import { heat, icsFor, meetingAt, type PublicView } from '../lib/booking';
+import { guestDays, heat, icsFor, meetingAt, type PublicView } from '../lib/booking';
 import { fromEpochDay, localZone, zoneAbbr, zoneCity } from '../lib/zone';
 import { cls, fmtTimeRange, fmtTime, fmtTimeBare } from '../lib/format';
 
 const MIN = 60_000;
 
-const dayLabel = (day: number, slots: number[]) => {
-  const ref = slots[0] ?? (() => { const d = fromEpochDay(day); return new Date(d.y, d.m, d.d).getTime(); })();
+/** A guest day's tab label (`day`: an epoch day on the guest's own clock — see `guestDays`). */
+const dayLabel = (day: number) => {
+  const d = fromEpochDay(day);
+  const ref = new Date(d.y, d.m, d.d);
   return { dow: format(ref, 'EEE'), date: format(ref, 'MMM d') };
 };
 
@@ -42,7 +44,7 @@ export function Header({ v, updatedAt }: { v: PublicView; updatedAt?: number }) 
 /** One of this guest's own bookings and what the host's app said about it. */
 export interface MyBooking {
   start: number;
-  status: 'pending' | 'ok' | 'taken' | 'busy' | 'closed' | 'invalid' | 'cancelled' | 'lost';
+  status: 'pending' | 'ok' | 'taken' | 'busy' | 'closed' | 'invalid' | 'cancelled' | 'lost' | 'expired';
 }
 const refused = (s: MyBooking['status']) => s !== 'pending' && s !== 'ok';
 const why: Record<string, string> = {
@@ -51,6 +53,7 @@ const why: Record<string, string> = {
   busy: 'it’s no longer free',
   closed: 'the link stopped taking bookings',
   invalid: 'it isn’t one of the offered times',
+  expired: 'their calendar never confirmed it',
 };
 /** What to tell a guest whose booking isn't going ahead. */
 const notGoing = (b: MyBooking, host: string, closedByOther = false) =>
@@ -65,13 +68,14 @@ export function BookView({ v, mine, updatedAt, onConfirm }: {
   updatedAt?: number;
   onConfirm: (start: number, name: string) => Promise<{ ok: boolean; reason?: string }>;
 }) {
-  const [day, setDay] = useState<number | null>(v.days[0]?.day ?? null);
+  const days = useMemo(() => guestDays(v.days), [v.days]); // tabs by the guest's own dates
+  const [day, setDay] = useState<number | null>(days[0]?.day ?? null);
   const [slot, setSlot] = useState<number | null>(null);
   const [name, setName] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [another, setAnother] = useState(false); // "Book another time" on a reusable link
-  const current = v.days.find((d) => d.day === day) ?? v.days[0];
+  const current = days.find((d) => d.day === day) ?? days[0];
   const last = mine[mine.length - 1];
   const now = Date.now();
 
@@ -131,13 +135,13 @@ export function BookView({ v, mine, updatedAt, onConfirm }: {
     <div className="gp-card">
       <Header v={v} updatedAt={updatedAt} />
       {bad && <p className="gp-error">{notGoing(bad, v.hostName)} Please pick another time.</p>}
-      {!v.days.length ? (
+      {!days.length ? (
         <p className="gp-empty">No open times right now — please check back later.</p>
       ) : (
         <>
           <div className="gp-days" role="tablist">
-            {v.days.map((d) => {
-              const l = dayLabel(d.day, d.slots);
+            {days.map((d) => {
+              const l = dayLabel(d.day);
               return (
                 <button key={d.day} role="tab" aria-selected={d.day === current?.day} className={cls('gp-day', d.day === current?.day && 'on')} onClick={() => { setDay(d.day); setSlot(null); }}>
                   <span className="gp-dow">{l.dow}</span>
@@ -184,7 +188,7 @@ export function Avatar({ name, size = 22 }: { name: string; size?: number }) {
 export function Avatars({ names, max = 5 }: { names: string[]; max?: number }) {
   return (
     <span className="avs">
-      {names.slice(0, max).map((n) => <Avatar key={n} name={n} />)}
+      {names.slice(0, max).map((n, i) => <Avatar key={`${i}-${n}`} name={n} />)}
       {names.length > max && <span className="av more">+{names.length - max}</span>}
     </span>
   );
@@ -447,7 +451,7 @@ export function PollView({ v, others, mine, updatedAt, onSave }: {
     }
   };
   const hours = (cells.size * v.cellMin) / 60;
-  const shown = others.filter((o) => o.name.trim().toLowerCase() !== name.trim().toLowerCase());
+  const shown = others; // everyone else's answers, each by its own key (typing someone's name doesn't hide or replace theirs)
   return (
     <div className="gp-card wide">
       <Header v={v} updatedAt={updatedAt} />
