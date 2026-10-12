@@ -85,6 +85,8 @@ describe.runIf(RUN)('performance with ten years of data', () => {
     big = gen.bigState({ now: NOW_FOR_PERF });
     rows.push({ op: 'generate the dataset (test harness)', data: `${big.events.length} events`, ms: performance.now() - t });
     S.useStore.setState({ ...big, past: [], future: [] });
+    // (PERF_DUMP=<file>: also write the dataset as the app saves it — to load into a browser and time the real UI)
+    if (process.env.PERF_DUMP) writeFileSync(process.env.PERF_DUMP, JSON.stringify({ state: S.useStore.persist.getOptions().partialize!(st()), version: S.useStore.persist.getOptions().version }));
     const h2 = heapMB();
     note('heap: app modules loaded (demo data)', '', `${(h1 - h0).toFixed(0)} MB`);
     note('heap: + ten years of data in the store', `${big.events.length} events`, `${(h2 - h1).toFixed(0)} MB`);

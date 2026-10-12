@@ -31,15 +31,36 @@ export function downloadHabitsCsv() {
 /** Your calendar since `since` (repeating events unrolled) — only events a habit could count: their title has one of
  *  the habits' calendar words. (Unrolling years of every event on each keystroke took over a second.) The sidebar's
  *  two habit pieces ask for the same thing: the last answer is kept and shared. */
-let lastPast: { events: CalEvent[]; words: string; since: number; today: number; out: CalEvent[] } | null = null;
+let lastPast: { events: CalEvent[]; words: string; since: number; today: number; relevant: CalEvent[]; out: CalEvent[] } | null = null;
 function habitEvents(events: CalEvent[], words: string, since: number, today: number): CalEvent[] {
   const c = lastPast;
-  if (c && c.events === events && c.words === words && c.since === since && c.today === today) return c.out;
+  const same = !!c && c.words === words && c.since === since && c.today === today;
+  if (same && c.events === events) return c.out;
   const ws = words ? words.split('\u0001') : [];
   const relevant = ws.length ? events.filter((e) => { const t = (e.title ?? '').toLowerCase(); return ws.some((w) => t.includes(w)); }) : [];
+  // an edit to an event no habit counts (most edits): the same answer as before, so nothing downstream recomputes
+  if (same && relevant.length === c.relevant.length && relevant.every((e, i) => e === c.relevant[i])) {
+    c.events = events;
+    return c.out;
+  }
   const out = relevant.length ? expand(relevant, dateOfDay(since).getTime(), dateOfDay(today + 1).getTime()) : [];
-  lastPast = { events, words, since, today, out };
+  lastPast = { events, words, since, today, relevant, out };
   return out;
+}
+
+/** The habits' stats: the sidebar's badge and card both show them — worked out once for both. */
+let lastStats: { habits: Habit[]; log: HabitLog; past: CalEvent[]; now: number; today: number; stats: HabitStatRow[] } | null = null;
+type HabitStatRow = { h: Habit; auto: ReturnType<typeof calendarCredit>; progress: ReturnType<typeof periodProgress>; met: boolean; rest: boolean; strength: number; streak: number };
+function habitStats(habits: Habit[], log: HabitLog, past: CalEvent[], now: number, today: number): HabitStatRow[] {
+  const c = lastStats;
+  if (c && c.habits === habits && c.log === log && c.past === past && c.now === now && c.today === today) return c.stats;
+  const stats = habits.map((h) => {
+    const auto = calendarCredit(h, past, now);
+    const p = periodProgress(h, log, auto, today);
+    return { h, auto, progress: p, met: p.done >= p.goal, rest: isSkipped(h, log, today), strength: strength(h, log, auto, today), streak: streak(h, log, auto, today) };
+  });
+  lastStats = { habits, log, past, now, today, stats };
+  return stats;
 }
 
 /** Everything the screens show for each habit, worked out once. */
@@ -53,15 +74,7 @@ export function useHabitStats() {
   const since = useMemo(() => Math.min(today - 371, ...habits.map((h) => dayOf(h.createdAt))), [habits, today]);
   const words = habits.map((h) => (h.match ?? '').trim().toLowerCase()).filter(Boolean).join('\u0001');
   const past = useMemo(() => habitEvents(events, words, since, today), [events, words, since, today]);
-  const stats = useMemo(
-    () =>
-      habits.map((h) => {
-        const auto = calendarCredit(h, past, now);
-        const p = periodProgress(h, log, auto, today);
-        return { h, auto, progress: p, met: p.done >= p.goal, rest: isSkipped(h, log, today), strength: strength(h, log, auto, today), streak: streak(h, log, auto, today) };
-      }),
-    [habits, log, past, now, today],
-  );
+  const stats = useMemo(() => habitStats(habits, log, past, now, today), [habits, log, past, now, today]);
   return { stats, active: stats.filter((s) => !s.h.archived), today, log, past };
 }
 export type HabitStat = ReturnType<typeof useHabitStats>['stats'][number];
