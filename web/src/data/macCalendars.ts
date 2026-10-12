@@ -16,6 +16,7 @@ import type { CalEvent, CalendarSource } from './types';
 const HOST = 'worldline-mac-host'; // this Mac's id, to tell its calendars from another Mac's
 const DAY = 86_400_000;
 const MAX_DELETES = 5;
+const MAX_WRITES = 25; // new or changed events saved to the Calendar app in one round
 
 export interface MacCalendar { id: string; title: string; color: string; account: string; writable: boolean }
 export type MacAccess = 'full' | 'writeOnly' | 'denied' | 'restricted' | 'notDetermined';
@@ -118,6 +119,14 @@ async function once() {
     for (const d of deletes) delete plan.known[d.key]; // (unknown again: the next look brings them back)
     useStore.getState().showToast(`Worldline didn’t delete ${deletes.length} events in the Calendar app all at once — they’re coming back here. Delete them in the Calendar app if you meant to.`, false);
     setTimeout(() => void syncMacCalendars(), 1000);
+  }
+
+  // …and the same brake on creating and saving: many at once means something is off (it's never a person typing)
+  const writes = plan.pushes.filter((p) => p.op !== 'delete');
+  if (writes.length > MAX_WRITES) {
+    plan.pushes = [...plan.pushes.filter((p) => p.op === 'delete'), ...writes.slice(0, MAX_WRITES)];
+    for (const p of writes.slice(MAX_WRITES)) if (p.op === 'save') delete plan.known[p.key]; // (looked at again next round)
+    setTimeout(() => void syncMacCalendars(), 5000);
   }
 
   let pushed = false;

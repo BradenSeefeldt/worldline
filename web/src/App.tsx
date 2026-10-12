@@ -142,6 +142,8 @@ export default function App() {
         return e.shiftKey ? st.redo() : st.undo();
       }
       if (mod || e.altKey || st.quickAddOpen) return;
+      // a window open over the app (Settings, a dialog): its own keys only — nothing acts on the calendar behind it
+      if (st.settingsOpen || document.querySelector('[aria-modal="true"]')) return;
       const actions: Record<string, () => void> = {
         t: () => (st.setPage('calendar'), st.goToday()),
         d: () => (st.setPage('calendar'), st.setView('day')),
@@ -153,8 +155,9 @@ export default function App() {
         n: () => st.setQuickAdd(true),
         ArrowLeft: () => st.step(-1),
         ArrowRight: () => st.step(1),
-        Backspace: () => st.selectedId && (st.tasks.some((t) => t.id === st.selectedId) ? st.deleteTask(st.selectedId) : st.deleteEvent(st.selectedId)),
-        Delete: () => st.selectedId && (st.tasks.some((t) => t.id === st.selectedId) ? st.deleteTask(st.selectedId) : st.deleteEvent(st.selectedId)),
+        // (only what's open on the calendar in front of you)
+        Backspace: () => st.page === 'calendar' && st.selectedId && (st.tasks.some((t) => t.id === st.selectedId) ? st.deleteTask(st.selectedId) : st.deleteEvent(st.selectedId)),
+        Delete: () => st.page === 'calendar' && st.selectedId && (st.tasks.some((t) => t.id === st.selectedId) ? st.deleteTask(st.selectedId) : st.deleteEvent(st.selectedId)),
       };
       const fn = actions[e.key.length === 1 ? e.key.toLowerCase() : e.key];
       if (fn) {

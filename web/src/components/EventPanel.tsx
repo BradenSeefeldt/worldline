@@ -1,7 +1,7 @@
 // Details / edit card for the selected event. Edits save as you type — no Save button.
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { addDays, format, startOfDay } from 'date-fns';
-import { isLocked, newEventCalendarId, useStore } from '../data/store';
+import { isLocked, newEventCalendarId, readOnly, useStore } from '../data/store';
 import type { CalEvent, Recurrence } from '../data/types';
 import { MIN } from '../lib/dates';
 import { ALL_DAY_CHOICES, TIMED_CHOICES, alertFor, describeAlert } from '../lib/alerts';
@@ -181,7 +181,7 @@ export function EventPanel() {
           <>
             <span className="panel-cal-dot" />
             <select className="panel-cal" value={ev.calendarId} onChange={(e) => up({ calendarId: e.target.value })}>
-              {calendars.map((c) => (
+              {calendars.filter((c) => c.id === ev.calendarId || !readOnly(c)).map((c) => ( // (never into a read-only one)
                 <option key={c.id} value={c.id}>{c.name}</option>
               ))}
             </select>

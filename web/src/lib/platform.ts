@@ -7,13 +7,12 @@ export const isApp = () => typeof window !== 'undefined' && '__TAURI_INTERNALS__
 /** The text at a URL. The app fetches it natively; a browser page can't read other sites directly, so in development
  *  it goes through the dev server (see vite.config.ts). */
 export async function fetchText(url: string): Promise<string> {
-  let res: Response;
   if (isApp()) {
-    const { fetch } = await import('@tauri-apps/plugin-http');
-    res = await fetch(url, { method: 'GET', headers: { Accept: 'text/calendar, text/plain, */*' } });
-  } else {
-    res = await fetch(`/__fetch?url=${encodeURIComponent(url)}`);
+    // read natively: public addresses only (src-tauri/src/lib.rs → fetch_feed); errors arrive already in words
+    const { invoke } = await import('@tauri-apps/api/core');
+    return invoke<string>('fetch_feed', { url }).catch((e) => Promise.reject(new Error(String(e))));
   }
+  const res = await fetch(`/__fetch?url=${encodeURIComponent(url)}`);
   if (!res.ok) throw new Error(res.status === 404 ? 'not found (404) — check the link' : `the server said ${res.status}`);
   return res.text();
 }
@@ -88,6 +87,11 @@ export const APP_VERSION: string = __APP_VERSION__;
 export async function uninstallApp() {
   const { invoke } = await import('@tauri-apps/api/core');
   await invoke('uninstall');
+}
+/** The Mac's own "Uninstall Worldline?" (lib.rs → confirm_uninstall): true when the person said yes. */
+export async function confirmUninstall(): Promise<boolean> {
+  const { invoke } = await import('@tauri-apps/api/core');
+  return invoke<boolean>('confirm_uninstall');
 }
 
 /** Can this copy fetch calendar links (.ics) itself? The Mac app can (and development, through the dev server); the

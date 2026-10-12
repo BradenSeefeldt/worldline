@@ -181,6 +181,10 @@ pub fn events(from: f64, to: f64, calendar_ids: Vec<String>) -> Vec<EkEvent> {
 fn occurrence(store: &EKEventStore, ext: &str, occ: f64, calendar: &str) -> Option<Retained<EKEvent>> {
   unsafe {
     let first = store.eventWithIdentifier(&ns(ext))?;
+    // only an event in the calendar it's said to be in
+    if first.calendar().map(|c| c.calendarIdentifier().to_string()).as_deref() != Some(calendar) {
+      return None;
+    }
     if occ == 0.0 || !(first.hasRecurrenceRules() || first.isDetached()) {
       return Some(first); // a one-off event: its identifier alone
     }
@@ -205,7 +209,8 @@ fn rule(r: &EkRule) -> Retained<EKRecurrenceRule> {
       _ => EKRecurrenceFrequency::Weekly,
     };
     let end = r.until.map(|u| EKRecurrenceEnd::recurrenceEndWithEndDate(&date(u)));
-    let days: Vec<Retained<EKRecurrenceDayOfWeek>> = r.by_day.iter().map(|d| EKRecurrenceDayOfWeek::dayOfWeek(EKWeekday((d + 1) as isize))).collect();
+    // (weekdays 0–6 only: anything else from synced data is dropped, never handed to EventKit)
+    let days: Vec<Retained<EKRecurrenceDayOfWeek>> = r.by_day.iter().filter(|d| (0..7).contains(*d)).map(|d| EKRecurrenceDayOfWeek::dayOfWeek(EKWeekday((d + 1) as isize))).collect();
     let alloc = EKRecurrenceRule::alloc();
     if days.is_empty() {
       EKRecurrenceRule::initRecurrenceWithFrequency_interval_end(alloc, freq, r.interval.max(1) as _, end.as_deref())

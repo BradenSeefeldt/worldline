@@ -14,7 +14,7 @@ import { downloadHabitsCsv } from './Habits';
 import { ask } from './Confirm';
 import { THEMES, resolveTheme, type ThemeId } from '../lib/theme';
 import { cls, fmtTime, fmtWhen } from '../lib/format';
-import { APP_VERSION, autostart, fetchText, isApp, openExternal, saveFile, uninstallApp } from '../lib/platform';
+import { APP_VERSION, autostart, confirmUninstall, fetchText, isApp, openExternal, saveFile, uninstallApp } from '../lib/platform';
 import { beforeRestore, listSnapshots, replaceSaved, snapshotValue } from '../data/persist';
 import { isNewer, makeBackup, readBackup } from '../lib/backup';
 import { toIcs } from '../lib/icsExport';
@@ -112,7 +112,7 @@ export function Settings() {
   const current = shown.find((s) => s.id === open) ?? shown[0] ?? SECTIONS[0];
   return (
     <div className="ce-scrim st-scrim" onMouseDown={close}>
-      <div className="st" role="dialog" aria-label="Settings" onMouseDown={(e) => e.stopPropagation()}>
+      <div className="st" role="dialog" aria-modal="true" aria-label="Settings" onMouseDown={(e) => e.stopPropagation()}>
         <nav className="st-side">
           <label className="st-search">
             <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden><circle cx="7" cy="7" r="4.5" /><path d="m10.5 10.5 3.5 3.5" /></svg>
@@ -589,13 +589,7 @@ function DataPane() {
     window.location.reload();
   };
   const uninstall = async () => {
-    const ok = await ask({
-      title: 'Uninstall Worldline?',
-      body: 'Worldline quits, and the app and everything it stored — your calendars, tasks, habits, projects, settings and caches — go to one folder in the Trash (you can still get them back until you empty it). Backups and exports you saved yourself are left where they are. Open scheduling links close. Save a backup first if you might want your data later.',
-      confirm: 'Uninstall',
-      danger: true,
-    });
-    if (!ok) return;
+    if (!(await confirmUninstall())) return; // asked by the Mac itself (lib.rs): nothing happens before a yes there
     setMsg({ text: 'Uninstalling…' });
     await autostart.set(false).catch(() => undefined); // remove the login item properly
     // close open scheduling links so guests see "closed" (data/schedSync.ts publishes the notice), then go

@@ -18,10 +18,13 @@ is spelled out in [Syncing: What the relays can learn](sync.md#what-the-relays-c
 
 ## How the app protects itself
 
-- The Mac app's web view runs under a strict Content-Security-Policy: it runs only its own code, and its only network
-  connections are to the relays and the relay list.
-- Backups and exports are written by the native side of the app, to the file you pick in the Save panel. The page
-  can't write files on its own.
+- The Mac app's page (its web view) runs under a strict Content-Security-Policy: only its own code runs, nothing is
+  ever turned from data into code, and the page itself connects only to the relays and the relay list.
+- What the page may ask the Mac to do is kept narrow, so even a mistake that let foreign script run couldn't do much:
+  calendar links are read by the native side, which refuses this Mac and the local network (only public addresses);
+  backups and exports are written by the native side to the file you pick in the Save panel; uninstalling needs a
+  "yes" in the Mac's own dialog. One permission is still broad: the page reads and writes its database through the
+  SQL plugin, which isn't limited to Worldline's own file — the protection there is that nothing foreign can run.
 - Updates are signed, and the app refuses unsigned ones (see [Automatic updates](development.md#automatic-updates)).
 - The web version runs in one tab at a time, so two tabs can't save over each other.
 

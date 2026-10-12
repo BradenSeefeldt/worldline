@@ -3,7 +3,7 @@
 // It works offline: a service worker (sw.js, written after the build with the list of files) keeps every file of
 // the app on the phone; when online it checks for a newer version, used from the next launch.
 import { createHash } from 'node:crypto';
-import { readdirSync, statSync, writeFileSync } from 'node:fs';
+import { readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { defineConfig, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
@@ -31,23 +31,45 @@ const webApp: Plugin = {
     // That halves what installing it downloads (~1.9 → ~1 MB compressed).
     const later = (f: string) => /\.(woff|ttf)$/.test(f) || /city-timezones/.test(f) || f === 'version.json';
     const list = files.filter((f) => f !== 'sw.js' && !later(f)).map((f) => `./${f}`);
-    const version = createHash('sha256').update(list.join('\n') + pkg.version).digest('hex').slice(0, 12);
+    // the version changes whenever any kept file's *contents* change (relays.json's new list included), not only names
+    const hash = createHash('sha256').update(pkg.version);
+    for (const f of list) hash.update(f).update(readFileSync(join(OUT, f)));
+    const version = hash.digest('hex').slice(0, 12);
     writeFileSync(join(OUT, 'sw.js'), `// Keeps Worldline working offline (written by vite.web.config.ts).
 const CACHE = 'worldline-${version}';
 const FILES = ${JSON.stringify(['./', ...list])};
-self.addEventListener('install', (e) => e.waitUntil(caches.open(CACHE).then((c) => c.addAll(FILES)).then(() => self.skipWaiting())));
-self.addEventListener('activate', (e) => e.waitUntil(caches.keys().then((ks) => Promise.all(ks.filter((k) => k !== CACHE).map((k) => caches.delete(k)))).then(() => self.clients.claim())));
+const FRESH = ['relays.json']; // asked for fresh each time (kept for offline): the relay list changes between releases
+// (each copy notes when it was installed on this phone, to tell the newest older one)
+self.addEventListener('install', (e) => e.waitUntil(caches.open(CACHE).then((c) => c.addAll(FILES).then(() => c.put('./__installed', new Response(String(Date.now()))))).then(() => self.skipWaiting())));
+// The previous version's files stay one round, so a page still open from before can load its lazily loaded parts.
+self.addEventListener('activate', (e) => e.waitUntil(caches.keys().then(async (ks) => {
+  const others = ks.filter((k) => k.startsWith('worldline-') && k !== CACHE);
+  const when = await Promise.all(others.map((k) => caches.open(k).then((c) => c.match('./__installed')).then((r) => (r ? r.text() : '0')).then(Number)));
+  const previous = others[when.indexOf(Math.max(...when, -1))];
+  return Promise.all(ks.filter((k) => k !== CACHE && k !== previous).map((k) => caches.delete(k)));
+}).then(() => self.clients.claim())));
+// The network, but not forever: a weak connection ("lie-fi") mustn't stop the app opening, and a server error counts as offline.
+const network = (req, ms) => new Promise((ok, fail) => {
+  const t = setTimeout(() => fail(new Error('slow')), ms);
+  fetch(req).then((res) => (clearTimeout(t), res.ok || res.type === 'opaqueredirect' ? ok(res) : fail(new Error(String(res.status)))), (err) => (clearTimeout(t), fail(err)));
+});
+const kept = (req) => caches.match(req, { ignoreVary: true });
 self.addEventListener('fetch', (e) => {
   const req = e.request;
-  if (req.method !== 'GET' || new URL(req.url).origin !== location.origin) return;
+  const url = new URL(req.url);
+  if (req.method !== 'GET' || url.origin !== location.origin) return;
   if (req.mode === 'navigate') {
-    // the page: the newest when online, the kept copy when not
-    e.respondWith(fetch(req).catch(() => caches.match('./index.html', { ignoreVary: true }).then((r) => r || caches.match('./', { ignoreVary: true }))));
+    // the page: the newest when online (within 3 s), the kept copy when not
+    e.respondWith(network(req, 3000).catch(() => kept('./index.html').then((r) => r || kept('./')).then((r) => r || fetch(req))));
+    return;
+  }
+  if (FRESH.some((f) => url.pathname.endsWith('/' + f))) {
+    e.respondWith(network(req, 4000).then((res) => { const copy = res.clone(); void caches.open(CACHE).then((c) => c.put(req, copy)); return res; }).catch(() => kept(req).then((r) => r || fetch(req))));
     return;
   }
   // by address alone: servers' Vary headers mustn't hide the kept copy; anything fetched later (a lazily loaded part) is kept too
-  e.respondWith(caches.match(req, { ignoreVary: true }).then((hit) => hit || fetch(req).then((res) => {
-    if (res.ok && new URL(req.url).pathname.includes('/assets/')) { const copy = res.clone(); void caches.open(CACHE).then((c) => c.put(req, copy)); }
+  e.respondWith(kept(req).then((hit) => hit || fetch(req).then((res) => {
+    if (res.ok && url.pathname.includes('/assets/')) { const copy = res.clone(); void caches.open(CACHE).then((c) => c.put(req, copy)); }
     return res;
   })));
 });

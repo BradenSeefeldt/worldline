@@ -19,7 +19,8 @@ const due = (now = Date.now()) => {
 // ---- the Mac app
 async function sendToMac() {
   const { invoke } = await import('@tauri-apps/api/core');
-  await invoke('set_alerts', { alerts: due().map(({ key, at, title, body }) => ({ key, at, title, body })) });
+  // (whole milliseconds: the native side reads an integer)
+  await invoke('set_alerts', { alerts: due().map(({ key, at, title, body }) => ({ key, at: Math.round(at), title, body })) });
 }
 
 // ---- the web version

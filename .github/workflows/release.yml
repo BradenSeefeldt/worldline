@@ -46,6 +46,11 @@ jobs:
         env:
           TZ: America/Toronto
 
+      # The web part is built here, without the update-signing key in reach: npm packages' build code never sees it.
+      # (The step below then skips its own web build — "beforeBuildCommand": "" — and only compiles and signs.)
+      - name: Build the web part (no secrets)
+        run: npm run build
+
       - uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5 # v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -64,7 +69,7 @@ jobs:
           releaseDraft: true
           prerelease: false
           includeUpdaterJson: true
-          args: --target universal-apple-darwin --bundles app,dmg --config '{"bundle":{"createUpdaterArtifacts":true}}'
+          args: --target universal-apple-darwin --bundles app,dmg --config '{"bundle":{"createUpdaterArtifacts":true},"build":{"beforeBuildCommand":""}}'
 
       # One download name that never changes, so …/releases/latest/download/Worldline.dmg always gets the newest. The
       # release keeps four files: Worldline.dmg, the signed update (Worldline_universal.app.tar.gz + .sig), latest.json.

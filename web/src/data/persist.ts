@@ -125,7 +125,13 @@ function write(): Promise<void> {
   return chain;
 }
 /** Write anything not yet saved (called when the window hides or closes, before quitting and before a restart). */
-export const flush = () => write();
+export const flush = () => {
+  flushHooks.forEach((fn) => fn()); // (the store's own debounce hands over what it's holding first)
+  return write();
+};
+const flushHooks = new Set<() => void>();
+/** Run before every flush — data/store.ts hands over a save it's still holding. */
+export const onFlush = (fn: () => void) => void flushHooks.add(fn);
 /** Is everything the app holds saved (nothing waiting, nothing being written, the last write worked)? */
 export const allSaved = () => !pending && !busy && !failing && !loadProblem && !readOnly;
 

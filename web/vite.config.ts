@@ -8,8 +8,11 @@ import { landing } from './vite.landing.ts';
 // the Mac app fetches them itself).
 const devFetch = {
   name: 'dev-fetch',
-  configureServer(server: { middlewares: { use: (path: string, fn: (req: { url?: string }, res: { statusCode: number; setHeader: (k: string, v: string) => void; end: (s: string) => void }) => void) => void } }) {
+  configureServer(server: { middlewares: { use: (path: string, fn: (req: { url?: string; socket?: { remoteAddress?: string } }, res: { statusCode: number; setHeader: (k: string, v: string) => void; end: (s: string) => void }) => void) => void } }) {
     server.middlewares.use('/__fetch', async (req, res) => {
+      // only for this Mac's own browser — `--host` shows the dev app on the Wi-Fi, but it mustn't be anyone's proxy
+      const from = req.socket?.remoteAddress ?? '';
+      if (!/^(127\.|::1$|::ffff:127\.)/.test(from)) return void ((res.statusCode = 403), res.end('local only'));
       const url = new URL(req.url ?? '', 'http://x').searchParams.get('url') ?? '';
       if (!/^https?:\/\//i.test(url)) return void ((res.statusCode = 400), res.end('bad url'));
       try {

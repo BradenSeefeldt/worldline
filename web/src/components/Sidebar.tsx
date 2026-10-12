@@ -84,6 +84,8 @@ function MiniMonth() {
                 busy.has(t) && 'busy',
               )}
               onClick={() => (useStore.getState().setPage('calendar'), goTo(t))}
+              aria-label={format(d, 'EEEE MMMM d')}
+              aria-current={isSameDay(d, today) ? 'date' : undefined}
             >
               <span className="mini-num">{d.getDate()}</span>
             </button>

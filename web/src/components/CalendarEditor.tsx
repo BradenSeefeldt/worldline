@@ -4,7 +4,7 @@
 // read-only) or an imported .ics file (copied in as your own, editable).
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { formatDistanceToNow } from 'date-fns';
-import { CALENDAR_COLORS, useStore } from '../data/store';
+import { CALENDAR_COLORS, readOnly, useStore } from '../data/store';
 import { cls } from '../lib/format';
 import { Close, Trash } from './Icons';
 
@@ -25,7 +25,7 @@ export function CalendarEditor({ id, onClose, mode: startMode = 'new' }: { id: s
   const [color, setColor] = useState(existing?.color ?? unused);
   const [makeDefault, setMakeDefault] = useState(existing ? existing.id === defaultId : false);
   const [confirming, setConfirming] = useState(false);
-  const others = calendars.filter((c) => c.id !== id);
+  const others = calendars.filter((c) => c.id !== id && !readOnly(c)); // (where its events may go: never a read-only calendar)
   const [moveTo, setMoveTo] = useState<string>(others[0]?.id ?? '');
   const [fate, setFate] = useState<'move' | 'delete'>('move');
   const count = existing ? events.filter((e) => e.calendarId === existing.id).length : 0;
@@ -236,7 +236,7 @@ export function CalendarEditor({ id, onClose, mode: startMode = 'new' }: { id: s
                   <Trash /> Unsubscribe
                 </button>
               ) : (
-                <button className="ce-btn subtle-danger" onClick={() => setConfirming(true)} disabled={!others.length} title={others.length ? '' : 'You need at least one calendar'}>
+                <button className="ce-btn subtle-danger" onClick={() => setConfirming(true)} disabled={!others.length} title={others.length ? '' : 'Keep at least one calendar you can add events to'}>
                   <Trash /> Delete…
                 </button>
               )}

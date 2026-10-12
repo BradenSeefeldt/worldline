@@ -5,6 +5,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperti
 import { format } from 'date-fns';
 import { CALENDAR_COLORS, useStore } from '../data/store';
 import { expand } from '../lib/recurrence';
+import type { CalEvent } from '../data/types';
 import {
   HABIT_TEMPLATES, SKIP, amountOn, bestStreak, calendarCredit, canMatch, firstDay, habitsCsv, dateOfDay, dayOf, dayValue, describeAmount, describeGoal, isSkipped,
   periodProgress, strength, strengthSeries, streak, sumBetween, totals, weekStart, weekdayRates, yearGrid, yearWeeks,
@@ -27,6 +28,20 @@ export function downloadHabitsCsv() {
   return saveFile(`habits-${format(now, 'yyyy-MM-dd')}.csv`, csv, 'text/csv'); // the Save panel in the Mac app
 }
 
+/** Your calendar since `since` (repeating events unrolled) — only events a habit could count: their title has one of
+ *  the habits' calendar words. (Unrolling years of every event on each keystroke took over a second.) The sidebar's
+ *  two habit pieces ask for the same thing: the last answer is kept and shared. */
+let lastPast: { events: CalEvent[]; words: string; since: number; today: number; out: CalEvent[] } | null = null;
+function habitEvents(events: CalEvent[], words: string, since: number, today: number): CalEvent[] {
+  const c = lastPast;
+  if (c && c.events === events && c.words === words && c.since === since && c.today === today) return c.out;
+  const ws = words ? words.split('\u0001') : [];
+  const relevant = ws.length ? events.filter((e) => { const t = (e.title ?? '').toLowerCase(); return ws.some((w) => t.includes(w)); }) : [];
+  const out = relevant.length ? expand(relevant, dateOfDay(since).getTime(), dateOfDay(today + 1).getTime()) : [];
+  lastPast = { events, words, since, today, out };
+  return out;
+}
+
 /** Everything the screens show for each habit, worked out once. */
 export function useHabitStats() {
   const habits = useStore((s) => s.habits);
@@ -36,7 +51,8 @@ export function useHabitStats() {
   const today = dayOf(now);
   // Your calendar since the oldest habit began (repeating events unrolled), for habits your calendar ticks.
   const since = useMemo(() => Math.min(today - 371, ...habits.map((h) => dayOf(h.createdAt))), [habits, today]);
-  const past = useMemo(() => expand(events, dateOfDay(since).getTime(), dateOfDay(today + 1).getTime()), [events, since, today]);
+  const words = habits.map((h) => (h.match ?? '').trim().toLowerCase()).filter(Boolean).join('\u0001');
+  const past = useMemo(() => habitEvents(events, words, since, today), [events, words, since, today]);
   const stats = useMemo(
     () =>
       habits.map((h) => {
@@ -166,6 +182,7 @@ export function HabitsCardBody({ onNew }: { onNew: () => void }) {
                 className={cls('hb-btn', keptToday && 'on')}
                 role="checkbox"
                 aria-checked={keptToday}
+                aria-label={h.kind === 'avoid' ? `${h.title}: kept it today` : `${h.title}: done today`}
                 title={h.kind === 'avoid' ? (keptToday ? 'Kept it today — tap if you slipped' : 'Slipped today — tap to undo') : keptToday ? 'Done today — tap to undo' : 'Mark done today'}
                 onClick={() => st().setHabitAmount(h.id, today, h.kind === 'avoid' ? (keptToday ? 1 : 0) : keptToday ? 0 : 1)}
               >
@@ -378,9 +395,9 @@ function AmountRow({ h, day, today, log }: { h: Habit; day: number; today: numbe
   return (
     <div className="hc-amount">
       <span>{day === today ? 'Today' : format(dateOfDay(day), 'EEE MMM d')}</span>
-      <button className="hc-step" onClick={() => st().setHabitAmount(h.id, day, Math.max(0, amount - step))} aria-label={`Minus ${step}`}>−</button>
-      <input className="hc-num" type="number" min={0} value={amount || ''} placeholder="0" onChange={(e) => st().setHabitAmount(h.id, day, Math.max(0, Number(e.target.value) || 0))} />
-      <button className="hc-step" onClick={() => st().setHabitAmount(h.id, day, amount + step)} aria-label={`Plus ${step}`}>+</button>
+      <button className="hc-step" onClick={() => st().setHabitAmount(h.id, day, Math.max(0, amount - step))} aria-label={`${h.title}: ${step} less`}>−</button>
+      <input className="hc-num" type="number" min={0} value={amount || ''} placeholder="0" aria-label={`${h.title}, ${day === today ? 'today' : format(dateOfDay(day), 'EEEE MMMM d')}${h.unit ? ` (${h.unit})` : ''}`} onChange={(e) => st().setHabitAmount(h.id, day, Math.max(0, Number(e.target.value) || 0))} />
+      <button className="hc-step" onClick={() => st().setHabitAmount(h.id, day, amount + step)} aria-label={`${h.title}: ${step} more`}>+</button>
       <span className="hc-unit">{h.unit || ''}{h.period === 'day' ? ` / ${h.goal}` : ''}</span>
       {h.period === 'day' && (
         <button className={cls('hc-rest', raw < 0 && 'on')} onClick={() => st().setHabitAmount(h.id, day, raw < 0 ? 0 : SKIP)} title="Sick, travelling…: doesn't break the streak or lower strength">

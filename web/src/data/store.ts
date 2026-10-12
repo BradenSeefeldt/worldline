@@ -1,7 +1,7 @@
 // Central app state. Views read from here and call these actions; later the event
 // actions will also talk to the NAS server (which syncs with Google Calendar).
 import { create } from 'zustand';
-import { createJSONStorage, persist } from 'zustand/middleware';
+import { createJSONStorage, persist, type PersistStorage, type StorageValue } from 'zustand/middleware';
 import { addDays, addMonths, startOfDay, startOfMonth } from 'date-fns';
 import type { CalEvent, CalendarSource, Range, ViewMode } from './types';
 import { DEFAULT_CALENDARS, DEMO_HABIT_IDS, makeDemoEvents, makeDemoHabits, makeDemoProjects, makeDemoTasks } from './mock';
@@ -19,7 +19,7 @@ import { newLinkKeys, type Accept, type Decision } from '../lib/schedwire';
 import { endSeries, removeEvent, updateEvent, type Scope } from '../lib/mutate';
 import { normalizeFeedUrl, parseIcs } from '../lib/ics';
 import { fetchText, canFetchFeeds } from '../lib/platform';
-import { appStorage, markLoadProblem } from './persist';
+import { appStorage, markLoadProblem, onFlush } from './persist';
 import { fmtWhen } from '../lib/format';
 import { STORE_VERSION } from './storeVersion';
 import type { UpdateStatus } from '../lib/updates';
@@ -35,8 +35,20 @@ export const readOnly = (c: CalendarSource | undefined) => !!c && (!!c.url || (!
 /** Calendar for new events: the starred default, unless it's hidden. */
 export const newEventCalendarId = (s: { calendars: CalendarSource[]; defaultCalendarId: string }) => {
   const mine = s.calendars.filter((c) => !readOnly(c));
-  return (mine.find((c) => c.id === s.defaultCalendarId && c.visible) ?? mine.find((c) => c.visible) ?? mine[0] ?? s.calendars[0]).id;
+  // (there's always a writable one — withWritable() — but drawing must never throw if not)
+  return (mine.find((c) => c.id === s.defaultCalendarId && c.visible) ?? mine.find((c) => c.visible) ?? mine[0])?.id ?? FALLBACK_CALENDAR.id;
 };
+/** Where an event aimed at `id` can go: there if it exists and you can write to it, else the calendar for new events. */
+export const safeTarget = (s: { calendars: CalendarSource[]; defaultCalendarId: string }, id: string) => {
+  const c = s.calendars.find((x) => x.id === id);
+  return c && !readOnly(c) ? id : newEventCalendarId(s);
+};
+/** The calendar a new install starts with; put back whenever no calendar you can write to is left. */
+export const FALLBACK_CALENDAR: CalendarSource = { id: 'personal', name: 'Personal', color: '#2f7cf6', visible: true, account: 'Local' };
+/** At least one calendar you can add events to: otherwise new events would land in a read-only one (and be wiped at
+ *  its next refresh) or nowhere (and drawing would fail). */
+export const withWritable = (calendars: CalendarSource[]) =>
+  calendars.some((c) => !readOnly(c)) ? calendars : [...calendars.filter((c) => c.id !== FALLBACK_CALENDAR.id), FALLBACK_CALENDAR];
 /** Is this event from a subscribed (read-only) calendar? */
 export const isLocked = (s: { events: CalEvent[]; calendars: CalendarSource[] }, id: string) => {
   const ev = resolveEvent(s.events, id);
@@ -313,7 +325,71 @@ const initialView: ViewMode = window.innerWidth < 700 ? '3day' : 'week';
 const today = startOfDay(new Date()).getTime();
 let lastEdit = { key: '', time: 0 };
 let flashTimer = 0;
-let draftPast = 0; // undo-stack height when the pending event was made
+let lastStep: { at: number; to: number; view: ViewMode } | null = null; // ‹ › while the view is still sliding
+let draftSnap: Snapshot | null = null; // the undo step made when the pending event was made (found by itself: trimming shifts heights)
+
+// Saving, cheaply. zustand hands over the saved part of the state on every change — a toast, a zoom tick, each
+// pointer move of a drag, each keystroke — and turning all of it into text took ~16 ms with years of data. So: a change
+// that touched nothing saved is skipped (the same objects as last time), and the text is made once things settle
+// (250 ms), not on every change. Quitting or hiding the window flushes it at once (persist.ts → onFlush).
+const json = createJSONStorage(appStorage)!;
+let lastSaved: Record<string, unknown> | null = null;
+let held: { name: string; value: StorageValue<unknown> } | null = null;
+let heldTimer: ReturnType<typeof setTimeout> | undefined;
+const handOver = () => {
+  clearTimeout(heldTimer);
+  const h = held;
+  held = null;
+  if (h) void json.setItem(h.name, h.value);
+};
+onFlush(handOver);
+const savedStorage: PersistStorage<unknown> = {
+  getItem: (name) => json.getItem(name),
+  removeItem: (name) => json.removeItem(name),
+  setItem: (name, value) => {
+    const state = value.state as Record<string, unknown>;
+    if (lastSaved && Object.keys(state).every((k) => state[k] === lastSaved![k])) return; // nothing saved changed
+    lastSaved = state;
+    held = { name, value };
+    clearTimeout(heldTimer);
+    heldTimer = setTimeout(handOver, 250);
+  },
+};
+
+/** The fields the app saves (persist → partialize) — the only ones loading may set. */
+const SAVED = ['calendars', 'events', 'view', 'hourH', 'defaultCalendarId', 'skipped', 'dismissed', 'homeZone', 'showHomeHours', 'showDeadlines', 'showTasks', 'collapsed', 'sideOrder', 'tasks', 'habits', 'habitLog', 'habitNotes', 'projects', 'threads', 'projectLog', 'page', 'theme', 'links', 'myName', 'macKnown'] as const;
+const LISTS = new Set(['calendars', 'events', 'skipped', 'dismissed', 'sideOrder', 'tasks', 'habits', 'projects', 'threads', 'projectLog', 'links']);
+const MAPS = new Set(['collapsed', 'habitLog', 'habitNotes', 'macKnown']);
+const isObj = (x: unknown): x is Record<string, unknown> => !!x && typeof x === 'object' && !Array.isArray(x);
+const num = (x: unknown) => typeof x === 'number' && Number.isFinite(x);
+/** Saved data → only valid fields and records (anything else keeps the app's current value). Exported for tests. */
+export function cleanSaved(persisted: unknown, current: Pick<State, 'view' | 'hourH' | 'page'>): Partial<State> {
+  if (!isObj(persisted)) return {};
+  const out: Record<string, unknown> = {};
+  for (const k of SAVED) {
+    if (!(k in persisted)) continue;
+    const v = persisted[k];
+    if (LISTS.has(k)) {
+      if (!Array.isArray(v)) continue;
+      out[k] = k === 'sideOrder' ? v.filter((x) => typeof x === 'string') : v.filter((x) => isObj(x) || (k === 'skipped' || k === 'dismissed'));
+    } else if (MAPS.has(k)) {
+      if (isObj(v)) out[k] = v;
+    } else out[k] = v;
+  }
+  const ok = <T,>(k: string, valid: (x: unknown) => boolean, d: T) => (k in out && !valid(out[k]) ? (out[k] = d) : undefined);
+  if (Array.isArray(out.events)) out.events = (out.events as Record<string, unknown>[]).filter((e) => typeof e.id === 'string' && typeof e.calendarId === 'string' && num(e.start) && num(e.end));
+  if (Array.isArray(out.tasks)) out.tasks = (out.tasks as Record<string, unknown>[]).filter((t) => typeof t.id === 'string' && typeof t.title === 'string');
+  if (Array.isArray(out.habits)) out.habits = (out.habits as Record<string, unknown>[]).filter((h) => typeof h.id === 'string');
+  for (const k of ['projects', 'threads', 'projectLog', 'links'] as const) if (Array.isArray(out[k])) out[k] = (out[k] as Record<string, unknown>[]).filter((x) => typeof x.id === 'string');
+  if (Array.isArray(out.calendars)) out.calendars = withWritable((out.calendars as Record<string, unknown>[]).filter((c) => typeof c.id === 'string' && typeof c.name === 'string') as unknown as CalendarSource[]);
+  ok('view', (x) => ['day', '3day', 'week', 'month'].includes(x as string), current.view);
+  ok('page', (x) => ['calendar', 'habits', 'projects'].includes(x as string), current.page);
+  ok('hourH', (x) => num(x) && (x as number) >= HOUR_H_RANGE[0] && (x as number) <= HOUR_H_RANGE[1], current.hourH);
+  for (const k of ['defaultCalendarId', 'homeZone', 'theme', 'myName'] as const) ok(k, (x) => typeof x === 'string', undefined);
+  for (const k of ['showHomeHours', 'showDeadlines', 'showTasks'] as const) ok(k, (x) => typeof x === 'boolean', undefined);
+  for (const k of Object.keys(out)) if (out[k] === undefined) delete out[k];
+  return out as Partial<State>;
+}
 
 export const useStore = create<State>()(
   persist(
@@ -328,6 +404,14 @@ export const useStore = create<State>()(
         lastEdit = { key: coalesceKey ?? '', time: t };
         set((s) => ({ past: [...s.past.slice(-49), snap(s)], future: [] }));
       };
+      /** A change that isn't an undo step (showing / hiding a calendar, a subscription's refresh, a Mac calendar coming
+       *  or going) is made in the undo history too — otherwise ⌘Z on an older edit would bring the old calendars back. */
+      type Cal = Pick<Snapshot, 'events' | 'calendars'>;
+      const beyondUndo = (fn: (x: Cal) => Partial<Cal>) =>
+        set((s) => {
+          const apply = <T extends Cal>(x: T): T => ({ ...x, ...fn(x) });
+          return { ...fn(s), past: s.past.map(apply), future: s.future.map(apply) };
+        });
 
       return {
         calendars: DEFAULT_CALENDARS,
@@ -383,9 +467,11 @@ export const useStore = create<State>()(
         goToday: () => get().goTo(Date.now()),
         step: (dir) => {
           const { view, visibleRange, goTo } = get();
-          const base = visibleRange.start;
-          if (view === 'month') goTo(addMonths(startOfMonth(base), dir).getTime());
-          else goTo(addDays(base, dir * DAYS_IN_VIEW[view]).getTime());
+          // clicks during the slide count from where the last one was going (the range on screen hasn't moved yet)
+          const base = lastStep && Date.now() - lastStep.at < 700 && lastStep.view === view ? lastStep.to : visibleRange.start;
+          const to = view === 'month' ? addMonths(startOfMonth(base), dir).getTime() : addDays(base, dir * DAYS_IN_VIEW[view]).getTime();
+          lastStep = { at: Date.now(), to, view };
+          goTo(to);
         },
         openDay: (date, view = 'day') => set((s) => ({ view, nav: { date, seq: s.nav.seq + 1, smooth: false } })),
         setVisibleRange: (r) => {
@@ -413,14 +499,15 @@ export const useStore = create<State>()(
         refreshCalendar: async (id) => {
           const cal = get().calendars.find((c) => c.id === id);
           if (!cal?.url || !canFetchFeeds()) return; // the iPhone / web version: your Mac keeps it up to date, through sync
-          const patch = (p: Partial<CalendarSource>) => set((s) => ({ calendars: s.calendars.map((c) => (c.id === id ? { ...c, ...p } : c)) }));
+          const patch = (p: Partial<CalendarSource>) => beyondUndo((x) => ({ calendars: x.calendars.map((c) => (c.id === id ? { ...c, ...p } : c)) }));
           try {
             const text = await fetchText(cal.url);
             if (!/BEGIN:VCALENDAR/i.test(text)) throw new Error("that link isn't a calendar (.ics) — look for an “iCal” or “subscribe” link");
             const now = Date.now();
             const feed = parseIcs(text, id, now - 365 * 86_400_000, now + 2 * 365 * 86_400_000);
             if (!get().calendars.some((c) => c.id === id)) return; // unsubscribed meanwhile
-            set((s) => ({ events: [...s.events.filter((e) => e.calendarId !== id), ...feed.events.map(encodeEvent)] }));
+            const fresh = feed.events.map(encodeEvent);
+            beyondUndo((x) => ({ events: [...x.events.filter((e) => e.calendarId !== id), ...fresh] }));
             patch({ lastSync: Date.now(), syncError: undefined, ...(cal.autoName && feed.name ? { name: feed.name } : {}) });
           } catch (e) {
             patch({ syncError: e instanceof Error ? e.message : String(e) });
@@ -449,18 +536,21 @@ export const useStore = create<State>()(
           record(`cal:${id}:${Object.keys(patch).sort().join()}`);
           set((s) => ({ calendars: s.calendars.map((c) => (c.id === id ? { ...c, ...patch, ...(patch.name !== undefined ? { autoName: false } : {}) } : c)) }));
         },
-        addMacCalendar: (c) => set((s) => ({ calendars: s.calendars.some((x) => x.id === c.id) ? s.calendars.map((x) => (x.id === c.id ? { ...x, ...c } : x)) : [...s.calendars, c] })),
-        removeMacCalendar: (id) =>
-          set((s) => ({
-            calendars: s.calendars.filter((c) => c.id !== id),
-            events: s.events.filter((e) => e.calendarId !== id),
-            ...(s.defaultCalendarId === id ? { defaultCalendarId: s.calendars.find((c) => c.id !== id && !readOnly(c))?.id ?? s.defaultCalendarId } : {}),
-          })),
+        addMacCalendar: (c) => beyondUndo((x) => ({ calendars: x.calendars.some((y) => y.id === c.id) ? x.calendars.map((y) => (y.id === c.id ? { ...y, ...c } : y)) : [...x.calendars, c] })),
+        removeMacCalendar: (id) => {
+          beyondUndo((x) => ({ calendars: withWritable(x.calendars.filter((c) => c.id !== id)), events: x.events.filter((e) => e.calendarId !== id) }));
+          set((s) => (s.defaultCalendarId === id || !s.calendars.some((c) => c.id === s.defaultCalendarId) ? { defaultCalendarId: newEventCalendarId({ calendars: s.calendars, defaultCalendarId: '' }) } : {}));
+        },
         deleteCalendar: (id, moveTo) => {
           const s0 = get();
-          if (s0.calendars.length <= 1) return;
           const cal = s0.calendars.find((c) => c.id === id);
           if (!cal) return;
+          // its events move only into a calendar you can write to (a subscription's refresh would wipe them)
+          if (moveTo && (moveTo === id || readOnly(s0.calendars.find((c) => c.id === moveTo)) || !s0.calendars.some((c) => c.id === moveTo))) return;
+          if (!s0.calendars.some((c) => c.id !== id && !readOnly(c))) {
+            get().showToast('Keep at least one calendar you can add events to', false);
+            return;
+          }
           const count = s0.events.filter((e) => e.calendarId === id).length;
           record();
           set((s) => {
@@ -468,10 +558,13 @@ export const useStore = create<State>()(
             const events = moveTo
               ? s.events.map((e) => (e.calendarId === id ? { ...e, calendarId: moveTo } : e))
               : s.events.filter((e) => e.calendarId !== id);
+            const fallback = moveTo ?? newEventCalendarId({ calendars, defaultCalendarId: s.defaultCalendarId === id ? '' : s.defaultCalendarId });
             return {
               calendars,
               events,
-              defaultCalendarId: s.defaultCalendarId === id ? (moveTo ?? calendars[0].id) : s.defaultCalendarId,
+              defaultCalendarId: s.defaultCalendarId === id ? fallback : s.defaultCalendarId,
+              // scheduling links: meetings go somewhere that exists, and the deleted calendar no longer counts as busy
+              links: s.links.map((l) => (l.calendarId === id || l.blockingCalendars.includes(id) ? { ...l, calendarId: l.calendarId === id ? fallback : l.calendarId, blockingCalendars: l.blockingCalendars.filter((c) => c !== id) } : l)),
               selectedId: null,
             };
           });
@@ -517,7 +610,7 @@ export const useStore = create<State>()(
           if (!link) return [];
           const evs: CalEvent[] = accepts.map((a) => ({
             id: newId(),
-            calendarId: link.calendarId,
+            calendarId: safeTarget(get(), link.calendarId), // (its calendar may be gone or read-only now)
             title: a.name ? `${link.title} · ${a.name}` : link.title,
             start: a.start,
             end: a.start + link.durationMin * 60_000,
@@ -558,7 +651,7 @@ export const useStore = create<State>()(
           const id = newId();
           const names = link.responses.map((r) => r.name).join(', ');
           const ev: CalEvent = {
-            id, calendarId: link.calendarId, title: link.title, start, end: start + link.durationMin * 60_000, allDay: false,
+            id, calendarId: safeTarget(get(), link.calendarId), title: link.title, start, end: start + link.durationMin * 60_000, allDay: false,
             location: link.location, notes: names ? `Scheduled with ${names} through your “${link.title}” poll.` : undefined,
             bookedVia: link.id, createdAt: Date.now(),
           };
@@ -603,8 +696,10 @@ export const useStore = create<State>()(
           get().showToast(`Deleted task “${t.title}”`);
         },
         toggleSection: (key) => set((s) => ({ collapsed: { ...s.collapsed, [key]: !s.collapsed[key] } })),
-        toggleCalendar: (id) =>
-          set((s) => ({ calendars: s.calendars.map((c) => (c.id === id ? { ...c, visible: !c.visible } : c)) })),
+        toggleCalendar: (id) => {
+          const visible = !get().calendars.find((c) => c.id === id)?.visible;
+          beyondUndo((x) => ({ calendars: x.calendars.map((c) => (c.id === id ? { ...c, visible } : c)) }));
+        },
         setDefaultCalendar: (defaultCalendarId) => set({ defaultCalendarId }),
         showToast: (text, undo = true, editId) => set({ toast: { id: Date.now(), text, undo, editId } }),
         hideToast: () => set({ toast: null }),
@@ -618,7 +713,7 @@ export const useStore = create<State>()(
           // Leaving an unconfirmed new event throws it away, along with its undo steps (as if it never happened).
           const { pendingId } = get();
           if (pendingId && pendingId !== id) {
-            set((s) => ({ events: s.events.filter((e) => e.id !== pendingId), past: s.past.slice(0, draftPast), pendingId: null, selectedId: null }));
+            set((s) => ({ events: s.events.filter((e) => e.id !== pendingId), past: draftSnap && s.past.includes(draftSnap) ? s.past.slice(0, s.past.lastIndexOf(draftSnap)) : s.past, pendingId: null, selectedId: null }));
           }
           const { selectedId, events } = get();
           // Leaving an event that was never named: give it a default title (not an undo step).
@@ -652,12 +747,17 @@ export const useStore = create<State>()(
         createEvent: (e) => {
           record();
           const id = newId();
+          const target = get().calendars.find((c) => c.id === e.calendarId);
+          if (!target || readOnly(target)) e = { ...e, calendarId: newEventCalendarId(get()) }; // (never into a read-only one)
           // Timed series repeat on the clock of the zone they're created in; all-day events are stored as dates.
           const ev = encodeEvent({ ...e, id, createdAt: Date.now(), ...(e.recurrence && !e.allDay && !e.timeZone ? { timeZone: localZone() } : {}) });
           set((s) => ({ events: [...s.events, ev] }));
           return id;
         },
-        setPage: (page) => set({ page }),
+        setPage: (page) => {
+          if (page !== get().page) get().select(null); // (what was selected on the calendar isn't in front of you any more)
+          set({ page });
+        },
         openPane: (v) =>
           set(({ projectNav: { hist, i } }) => {
             const c = hist[i];
@@ -795,7 +895,10 @@ export const useStore = create<State>()(
         },
         setTheme: (theme) => set({ theme }),
         setSettings: (patch) => set((x) => ({ settings: normalizeSettings({ ...x.settings, ...patch }) })),
-        openSettings: (settingsOpen) => set({ settingsOpen }),
+        openSettings: (settingsOpen) => {
+          if (settingsOpen) get().select(null);
+          set({ settingsOpen });
+        },
         setUpdate: (update) => set({ update }),
         setSync: (patch) => set((x) => ({ sync: { ...x.sync, ...patch } })),
         applySynced: (patch) => {
@@ -832,7 +935,8 @@ export const useStore = create<State>()(
           record();
           set((s) => {
             const { [id]: _gone, ...habitLog } = s.habitLog;
-            return { habits: s.habits.filter((x) => x.id !== id), habitLog };
+            const { [id]: _notes, ...habitNotes } = s.habitNotes;
+            return { habits: s.habits.filter((x) => x.id !== id), habitLog, habitNotes };
           });
           get().showToast(`Deleted habit “${h.title}”`);
         },
@@ -846,7 +950,7 @@ export const useStore = create<State>()(
           });
         },
         setHabitAmount: (id, day, amount) => {
-          record();
+          record(`habit:${id}:${day}`); // (typing "12" is one undo step, not two)
           set((s) => {
             const days = { ...(s.habitLog[id] ?? {}) };
             if (amount > 0) days[day] = amount;
@@ -856,8 +960,8 @@ export const useStore = create<State>()(
         },
         startDraft: (e) => {
           get().select(null);
-          draftPast = get().past.length;
           const id = get().createEvent(e);
+          draftSnap = get().past[get().past.length - 1] ?? null;
           set({ pendingId: id, selectedId: id });
           return id;
         },
@@ -865,7 +969,7 @@ export const useStore = create<State>()(
           const id = get().pendingId;
           if (!id) return;
           // Making it and the edits before confirming are one undo step: ⌘Z takes the whole event away.
-          set((s) => ({ pendingId: null, past: s.past.slice(0, draftPast + 1) }));
+          set((s) => ({ pendingId: null, past: draftSnap && s.past.includes(draftSnap) ? s.past.slice(0, s.past.lastIndexOf(draftSnap) + 1) : s.past }));
           get().select(null);
           get().flash(id);
         },
@@ -873,6 +977,13 @@ export const useStore = create<State>()(
           if (isLocked(get(), id)) {
             lockedToast(get, id);
             return id;
+          }
+          if (patch.calendarId !== undefined) {
+            const to = get().calendars.find((c) => c.id === patch.calendarId);
+            if (!to || readOnly(to)) {
+              get().showToast(`${to?.name ?? 'That calendar'} is read-only — events can’t be moved into it`, false);
+              return id;
+            }
           }
           record(coalesce ? `${id}:${Object.keys(patch).sort().join()}` : undefined);
           const r = updateEvent(get().events, id, patch, scope, newId);
@@ -912,6 +1023,7 @@ export const useStore = create<State>()(
           set((s) => ({
             skipped: [...s.skipped.slice(-199), ...gone.map((e) => ({ key: seriesKey(e.title), at: e.start }))],
             events,
+            tasks: s.tasks.filter((t) => !t.parentId || !removeIds.includes(t.parentId)), // a dropped deadline's checklist goes with it
             selectedId: s.selectedId && removeIds.includes(s.selectedId) ? null : s.selectedId,
           }));
         },
@@ -923,6 +1035,7 @@ export const useStore = create<State>()(
         },
         dismissSuggestion: (id) => set((s) => ({ dismissed: [...s.dismissed.slice(-299), id] })),
         undo: () => {
+          if (get().pendingId) return get().select(null); // a draft open: ⌘Z takes it away (it was never kept)
           const { past, future, selectedId } = get();
           if (!past.length) return;
           const prev = past[past.length - 1];
@@ -936,6 +1049,7 @@ export const useStore = create<State>()(
           });
         },
         redo: () => {
+          if (get().pendingId) get().select(null); // (a draft open: it goes first — never kept by accident)
           const { past, future, selectedId } = get();
           if (!future.length) return;
           const next = future[0];
@@ -952,7 +1066,7 @@ export const useStore = create<State>()(
     },
     {
       name: 'calendar-v1',
-      storage: createJSONStorage(appStorage), // the Mac app: a SQLite file; a browser: localStorage (data/persist.ts)
+      storage: savedStorage, // the Mac app: a SQLite file; a browser: IndexedDB (data/persist.ts) — see savedStorage
       version: STORE_VERSION,
       // v1: the demo habits gained years of history (only swapped while they're the untouched demo set).
       // v2: Projects became pages you write in (About, steps, waiting-on and notes folded into editor documents).
@@ -975,10 +1089,9 @@ export const useStore = create<State>()(
         if (error) markLoadProblem(`Your saved data couldn’t be loaded (${String((error as Error)?.message ?? error).slice(0, 160)}).`);
       },
       // settings saved by an older version (or none): fill in the rest from the defaults
-      merge: (persisted, current) => {
-        const p = (persisted ?? {}) as Partial<State>;
-        return { ...current, ...p, settings: normalizeSettings(p.settings) };
-      },
+      // Saved data (or a restored backup) → state: only the saved fields, each checked — a damaged or hand-edited file
+      // must not replace the app's own functions or leave a record that crashes drawing on every launch.
+      merge: (persisted, current) => ({ ...current, ...cleanSaved(persisted, current), settings: normalizeSettings((persisted as Partial<State> | undefined)?.settings) }),
       partialize: (s) => ({
         calendars: s.calendars,
         events: s.events,

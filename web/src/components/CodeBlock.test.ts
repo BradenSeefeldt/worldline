@@ -25,3 +25,11 @@ describe('which language, when none is chosen', () => {
     expect(guessLanguage('$ ssh cluster\n$ cd ~/runs/big && sbatch run.sh\nSubmitted batch job 4815162')).toBe('shell');
   });
 });
+
+it('a long block isn’t re-judged on every keystroke (only its start is looked at, and the answer is kept)', () => {
+  const long = Array.from({ length: 2000 }, (_, i) => `x_${i} = np.sqrt(${i}) * 2  # step ${i}`).join('\n');
+  guessLanguage(long);
+  const t0 = performance.now();
+  for (let i = 0; i < 20; i++) guessLanguage(long + `\ny = ${i}`); // typing at the end: the start is unchanged
+  expect((performance.now() - t0) / 20).toBeLessThan(2);
+});

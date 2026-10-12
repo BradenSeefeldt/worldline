@@ -57,6 +57,7 @@ export interface Plan {
 
 /** Worldline's calendar id for a Mac calendar. */
 export const calendarIdFor = (macId: string) => `mac:${macId}`;
+export const isMacCalendarId = (id: string) => id.startsWith('mac:');
 export const keyOf = (ext: { id: string; occ: number }) => `${ext.id}|${ext.occ}`;
 const DAY = 86_400_000;
 
@@ -132,7 +133,9 @@ export function reconcile(
   const fromW = new Map<string, CalEvent>();
   for (const e of events) {
     if (!macCals.has(e.calendarId)) {
-      if (e.ext) out.set(e.id, { ...e, ext: undefined }); // moved out of a Mac calendar: it's Worldline's own now
+      // Moved into one of Worldline's own calendars: it's Worldline's now. (A Mac calendar merely left out of this round
+      // — another Mac's, or one sitting a round out — keeps its events' ties: losing them made duplicates.)
+      if (e.ext && !isMacCalendarId(e.calendarId)) out.set(e.id, { ...e, ext: undefined });
       continue;
     }
     if (!e.ext) {

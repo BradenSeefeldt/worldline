@@ -1,5 +1,5 @@
 // The native side of the app: a window showing the web app, plus plugins — sql (the SQLite database the app saves
-// to), http (fetching calendar links), opener (links → browser, folders → Finder), dialog (the Save panel for backups
+// to), fetch_feed below (reading calendar links: public addresses only), opener (links → browser, folders → Finder), dialog (the Save panel for backups
 // and exports), autostart (Settings → Open at login), updater + process (download a signed new version, restart into it).
 // Reminders: the web app sends the alerts due in the next day (set_alerts, again whenever something changes); a thread
 // here shows each one at its time as a Mac notification — native, so they arrive on time even while the window is
@@ -85,6 +85,72 @@ async fn ek_delete(ext: String, occ: f64, calendar: String) -> Result<(), String
   blocking(move || eventkit::delete(ext, occ, calendar)).await?
 }
 
+/// Read a calendar link (.ics) for a subscription. Only public web addresses — never this Mac or the local network
+/// (the page can't use this to reach a router, a printer or a dev server), at most 20 MB, 30 s.
+#[tauri::command]
+async fn fetch_feed(url: String) -> Result<String, String> {
+  use std::net::{IpAddr, ToSocketAddrs};
+  use tauri_plugin_http::reqwest;
+  fn public(ip: IpAddr) -> bool {
+    match ip {
+      IpAddr::V4(v) => {
+        let o = v.octets();
+        !(v.is_private() || v.is_loopback() || v.is_link_local() || v.is_unspecified() || v.is_broadcast() || v.is_documentation() || (o[0] == 100 && (64..128).contains(&o[1])) || o[0] == 0)
+      }
+      IpAddr::V6(v) => {
+        let s = v.segments()[0];
+        if let Some(m) = v.to_ipv4_mapped() {
+          return public(IpAddr::V4(m));
+        }
+        !(v.is_loopback() || v.is_unspecified() || (s & 0xfe00) == 0xfc00 || (s & 0xffc0) == 0xfe80)
+      }
+    }
+  }
+  let u = reqwest::Url::parse(&url).map_err(|_| "that isn't a web address".to_string())?;
+  if !matches!(u.scheme(), "http" | "https") {
+    return Err("only http(s) calendar links can be read".into());
+  }
+  let host = u.host_str().ok_or("that link has no server in it")?.to_string();
+  let port = u.port_or_known_default().unwrap_or(443);
+  let addrs: Vec<IpAddr> = tauri::async_runtime::spawn_blocking(move || (host.as_str(), port).to_socket_addrs().map(|a| a.map(|x| x.ip()).collect()))
+    .await
+    .map_err(|e| e.to_string())?
+    .map_err(|_| "couldn't find that server (check the link, or the internet connection)".to_string())?;
+  if addrs.is_empty() || !addrs.into_iter().all(public) {
+    return Err("that address is on this Mac or the local network — only public calendar links can be read".into());
+  }
+  let client = reqwest::Client::builder()
+    .timeout(std::time::Duration::from_secs(30))
+    // a redirect may not lead somewhere private either (a name is checked again when it's fetched next time)
+    .redirect(reqwest::redirect::Policy::custom(|a| {
+      let private = match a.url().host() {
+        Some(url::Host::Ipv4(v)) => !public(IpAddr::V4(v)),
+        Some(url::Host::Ipv6(v)) => !public(IpAddr::V6(v)),
+        Some(url::Host::Domain(d)) => d == "localhost" || d.ends_with(".local") || d.ends_with(".localhost"),
+        None => true,
+      };
+      if private || a.previous().len() > 5 { a.stop() } else { a.follow() }
+    }))
+    .build()
+    .map_err(|e| e.to_string())?;
+  let res = client.get(u).header("Accept", "text/calendar, text/plain, */*").send().await.map_err(|e| format!("couldn't reach it ({})", e.without_url()))?;
+  let status = res.status();
+  if status.as_u16() == 404 {
+    return Err("not found (404) — check the link".into());
+  }
+  if !status.is_success() {
+    return Err(format!("the server said {}", status.as_u16()));
+  }
+  if res.content_length().unwrap_or(0) > 20_000_000 {
+    return Err("that calendar is too big (over 20 MB)".into());
+  }
+  let bytes = res.bytes().await.map_err(|e| e.to_string())?;
+  if bytes.len() > 20_000_000 {
+    return Err("that calendar is too big (over 20 MB)".into());
+  }
+  Ok(String::from_utf8_lossy(&bytes).into_owned())
+}
+
 /// Settings → Alerts → Send a test alert.
 #[tauri::command]
 fn test_alert(app: tauri::AppHandle, title: String, body: String) -> Result<(), String> {
@@ -162,8 +228,32 @@ fn menu(app: &tauri::AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
 /// Settings → Data & Backups → Uninstall: quit, then (once this process has exited, so nothing writes the files back)
 /// move the app and everything it ever created into one folder in the Trash — recoverable until the Trash is emptied.
 /// Files the person saved themselves (backups, exports) are not touched.
+static UNINSTALL_OK_AT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+/// Settings → Uninstall asks here first, natively: only the person can say yes (whatever the page does). A yes is good
+/// for two minutes — long enough for the page to close scheduling links and the login item, then call `uninstall`.
+#[tauri::command]
+async fn confirm_uninstall(app: tauri::AppHandle) -> bool {
+  use tauri_plugin_dialog::{MessageDialogButtons, MessageDialogKind};
+  let sure = app
+    .dialog()
+    .message("Worldline quits, then the app and everything it saved — calendars, tasks, habits, projects, settings — go to one folder in the Trash (recoverable until you empty it). Backups and exports you saved yourself stay. Open scheduling links close.")
+    .title("Uninstall Worldline?")
+    .kind(MessageDialogKind::Warning)
+    .buttons(MessageDialogButtons::OkCancelCustom("Move to Trash".into(), "Cancel".into()))
+    .blocking_show();
+  if sure {
+    UNINSTALL_OK_AT.store(now_ms() as u64, std::sync::atomic::Ordering::SeqCst);
+  }
+  sure
+}
+
 #[tauri::command]
 fn uninstall(app: tauri::AppHandle) -> Result<(), String> {
+  let ok_at = UNINSTALL_OK_AT.load(std::sync::atomic::Ordering::SeqCst) as i64;
+  if ok_at == 0 || now_ms() - ok_at > 120_000 {
+    return Err("Not confirmed".into());
+  }
   let home = std::env::var("HOME").map_err(|e| e.to_string())?;
   let id = app.config().identifier.clone();
   let lib = format!("{home}/Library");
@@ -214,7 +304,6 @@ fn uninstall(app: tauri::AppHandle) -> Result<(), String> {
 pub fn run() {
   tauri::Builder::default()
     .plugin(tauri_plugin_sql::Builder::default().build())
-    .plugin(tauri_plugin_http::init())
     .plugin(tauri_plugin_opener::init())
     .plugin(tauri_plugin_dialog::init())
     .plugin(tauri_plugin_autostart::init(tauri_plugin_autostart::MacosLauncher::LaunchAgent, None))
@@ -223,7 +312,7 @@ pub fn run() {
     .plugin(tauri_plugin_notification::init())
     .manage(AlertState::default())
     .invoke_handler(tauri::generate_handler![
-      save_file, quit_now, uninstall, set_alerts, test_alert,
+      save_file, quit_now, confirm_uninstall, uninstall, set_alerts, test_alert, fetch_feed,
       #[cfg(target_os = "macos")] ek_status,
       #[cfg(target_os = "macos")] ek_request,
       #[cfg(target_os = "macos")] ek_calendars,

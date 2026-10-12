@@ -39,14 +39,24 @@ lowlight.registerAlias({ bash: ['sh', 'zsh'], python: ['py', 'python3'], shell: 
 /** What "Auto" chooses between: real languages and terminal sessions. (Loose formats — INI, Markdown, plain text,
  *  diff, LaTeX — match nearly anything, so a Python snippet came out as "INI": those are picked by hand.) */
 const AUTO = ['python', 'bash', 'shell', 'c', 'cpp', 'fortran', 'julia', 'r', 'javascript', 'typescript', 'rust', 'sql', 'json', 'yaml', 'makefile'];
-/** lowlight for the editor: its own "Auto" uses the same short list. */
-const editorLowlight = { ...lowlight, highlightAuto: (value: string, options?: { subset?: string[] }) => lowlight.highlightAuto(value, { ...options, subset: AUTO }) };
-
-/** The language lowlight would pick for this text (none chosen). */
+/** The language lowlight would pick for this text (none chosen). Judged on the first few thousand characters, and
+ *  remembered: guessing over a whole long block on every keystroke took a quarter of a second. */
+const SAMPLE = 4000;
+let lastGuess = { sample: '\u0000', language: null as string | null };
 export function guessLanguage(text: string): string | null {
-  const r = lowlight.highlightAuto(text, { subset: AUTO });
-  return (r.data as { language?: string } | undefined)?.language ?? null;
+  const sample = text.slice(0, SAMPLE);
+  if (sample !== lastGuess.sample) {
+    const r = lowlight.highlightAuto(sample, { subset: AUTO });
+    lastGuess = { sample, language: (r.data as { language?: string } | undefined)?.language ?? null };
+  }
+  return lastGuess.language;
 }
+
+/** lowlight for the editor: its "Auto" guesses once (as above), then colours the whole block in that language. */
+const editorLowlight = {
+  ...lowlight,
+  highlightAuto: (value: string) => lowlight.highlight(guessLanguage(value) ?? 'plaintext', value),
+};
 
 /** A code block on screen: a bar (language, Copy) above the code. Drawn directly, not with React: it must exist the
  *  moment the block does — typing ``` makes one mid-keystroke, and a view drawn a moment later reads to the editor as

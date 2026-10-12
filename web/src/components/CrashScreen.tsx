@@ -1,6 +1,8 @@
-// If something in the interface throws while drawing, show what happened and a Reload button instead of a blank
-// window. Your data is saved as you go, so reloading loses nothing.
+// If something in the interface throws while drawing, show what happened instead of a blank window: Reload (your data
+// is saved as you go), and — if it keeps happening — the ways back the recovery screen offers (a daily snapshot, a
+// backup file, undoing the last restore).
 import { Component, type ReactNode } from 'react';
+import { Recovery } from './Recovery';
 
 export class CrashScreen extends Component<{ children: ReactNode }, { error: Error | null }> {
   state = { error: null as Error | null };
@@ -13,18 +15,6 @@ export class CrashScreen extends Component<{ children: ReactNode }, { error: Err
   render() {
     const e = this.state.error;
     if (!e) return this.props.children;
-    return (
-      <div className="rc">
-        <div className="rc-card">
-          <h1>Something went wrong</h1>
-          <p>Worldline hit a problem drawing this screen. Everything you’d done is saved — reloading is safe.</p>
-          <pre className="rc-err">{String(e.message || e)}</pre>
-          <div className="rc-actions">
-            <button className="ce-btn primary" onClick={() => window.location.reload()}>Reload</button>
-            <button className="ce-btn" onClick={() => void navigator.clipboard?.writeText(`${e.message}\n${e.stack ?? ''}`)}>Copy details</button>
-          </div>
-        </div>
-      </div>
-    );
+    return <Recovery reason="Worldline hit a problem drawing this screen." crash={e} />;
   }
 }

@@ -2707,3 +2707,8 @@ html.in-app .sidebar .mini { top: calc(8px - env(safe-area-inset-top)); }
 .pj-code .hljs-deletion, .pj-code .hljs-symbol, .pj-code .hljs-bullet, .pj-code .hljs-tag, .pj-code .hljs-name { color: var(--m); }
 .pj-code .hljs-meta .hljs-keyword, .pj-code .hljs-meta.prompt_ { color: var(--c); } /* a terminal's "$" / ">>>" */
 @media (hover: none) { .pj-code pre code { font-size: 13px; } }
+/* Touch screens: small controls get a finger-sized tap area (about 44 pt) without looking bigger */
+@media (hover: none) and (pointer: coarse) {
+  .tk-check, .hb-btn { position: relative; }
+  .tk-check::before, .hb-btn::before { content: ''; position: absolute; inset: -11px; }
+}

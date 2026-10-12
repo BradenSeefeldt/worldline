@@ -129,4 +129,10 @@ describe('what is never touched', () => {
     expect(p.events).toEqual([expect.objectContaining({ id: s.events[0].id, start: t(22, 9) })]);
     expect(p.pushes).toEqual([]);
   });
+  it('a Mac calendar left out of a round (another Mac’s, or one sitting it out) keeps its events tied: no duplicates', () => {
+    const s = imported([mac()]);
+    const p = reconcile(s.events, [], s.known, new Map(), W, decodeEvent); // (no calendars in step this round)
+    expect(p.events).toEqual(s.events);
+    expect(p.pushes).toEqual([]);
+  });
 });

@@ -7,6 +7,14 @@ import { OpenElsewhere, Recovery } from './components/Recovery';
 import { CrashScreen } from './components/CrashScreen';
 import { isApp, routeLinksToBrowser } from './lib/platform';
 import { runScheduling } from './data/schedSync';
+
+const devNetwork = () => {
+  try {
+    return localStorage.getItem('wl-dev-network') === '1';
+  } catch {
+    return false;
+  }
+};
 import './styles.css';
 import { flushSync, resumeSync } from './data/syncEngine';
 import { runAlerts } from './data/alerts';
@@ -95,7 +103,8 @@ void Promise.all([loaded, ownTab()]).then(([, mine]) => {
   const st = useStore.getState();
   if (st.settings.startPage !== 'last') st.setPage(st.settings.startPage);
   if (st.settings.startPage === 'calendar') st.goToday();
-  st.setView(window.innerWidth < 700 && st.settings.startView === 'week' ? '3day' : st.settings.startView);
+  // (a window opened hidden reports no width: judge by the screen then, or a Mac would start in 3 Day)
+  st.setView((window.innerWidth || screen.width) < 700 && st.settings.startView === 'week' ? '3day' : st.settings.startView);
   // A file dropped anywhere but a drop area (Import a file) does nothing — left alone, the page would be replaced by
   // the file. Drop areas handle their own events first.
   const strayFile = (e: DragEvent) => {
@@ -107,7 +116,8 @@ void Promise.all([loaded, ownTab()]).then(([, mine]) => {
   window.addEventListener('drop', strayFile);
   // Scheduling links are answered by the Mac app (one device answering keeps bookings and availability consistent);
   // the iPhone / web version shows and copies them. Development runs it too, for testing.
-  if (isApp() || import.meta.env.DEV) void runScheduling(); // data/schedSync.ts
+  // (development publishes to the public relays only when asked: localStorage 'wl-dev-network' = '1')
+  if (isApp() || (import.meta.env.DEV && devNetwork())) void runScheduling(); // data/schedSync.ts
   void resumeSync(); // syncing between your devices, if this one is set up (data/syncEngine.ts)
   runAlerts(); // reminders (data/alerts.ts)
   runMacCalendars(); // the Mac app: calendars on this Mac, kept in step both ways (data/macCalendars.ts)

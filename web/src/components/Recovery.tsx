@@ -1,14 +1,17 @@
 // Shown instead of the app when the saved data couldn't be loaded (data/persist.ts): nothing has been changed or
 // written over. Bring back a daily snapshot or a backup file, or start over (the unreadable copy stays kept aside).
 import { useEffect, useRef, useState } from 'react';
-import { listSnapshots, replaceSaved, snapshotValue, startOverKeepingUnreadable } from '../data/persist';
+import { beforeRestore, listSnapshots, replaceSaved, snapshotValue, startOverKeepingUnreadable } from '../data/persist';
 import { readBackup } from '../lib/backup';
 import { isApp } from '../lib/platform';
 import { STORE_VERSION } from '../data/storeVersion';
 
 const KEY = 'calendar-v1';
 
-export function Recovery({ reason }: { reason: string }) {
+/** `crash`: the app opened but drawing failed (components/CrashScreen.tsx) — the same ways back, plus Reload. */
+export function Recovery({ reason, crash }: { reason: string; crash?: Error }) {
+  const [undo, setUndo] = useState<string | null>(null);
+  useEffect(() => void beforeRestore(KEY).then(setUndo), []);
   const [days, setDays] = useState<string[]>([]);
   const [day, setDay] = useState('');
   const [msg, setMsg] = useState('');
@@ -34,8 +37,21 @@ export function Recovery({ reason }: { reason: string }) {
   return (
     <div className="rc">
       <div className="rc-card">
-        <h1>Worldline couldn’t open your data</h1>
-        <p>{reason} Nothing has been changed or written over.</p>
+        <h1>{crash ? 'Something went wrong' : 'Worldline couldn’t open your data'}</h1>
+        <p>{reason} {crash ? 'Everything you’d done is saved — try Reload first; if this keeps happening, go back to a snapshot or a backup.' : 'Nothing has been changed or written over.'}</p>
+        {crash && <pre className="rc-err">{String(crash.message || crash)}</pre>}
+        {crash && (
+          <div className="rc-actions">
+            <button className="ce-btn primary" onClick={() => window.location.reload()}>Reload</button>
+            <button className="ce-btn" onClick={() => void navigator.clipboard?.writeText(`${crash.message}\n${crash.stack ?? ''}`)}>Copy details</button>
+          </div>
+        )}
+        {undo && (
+          <div className="rc-row">
+            <span>Undo the last restore (go back to just before it):</span>
+            <button className="ce-btn" onClick={() => void replaceSaved(KEY, undo).then(done)}>Undo restore</button>
+          </div>
+        )}
         {isApp() && days.length > 0 && (
           <div className="rc-row">
             <span>Go back to a daily snapshot:</span>
@@ -50,7 +66,7 @@ export function Recovery({ reason }: { reason: string }) {
         </div>
         {msg && <p className="rc-msg">{msg}</p>}
         <div className="rc-row rc-last">
-          <span>Or start over with an empty calendar (the unreadable data is kept aside, not deleted).</span>
+          <span>Or start over with an empty calendar ({crash ? 'what you have now' : 'the unreadable data'} is kept aside, not deleted).</span>
           <button className="ce-btn subtle-danger" onClick={() => void startOverKeepingUnreadable(KEY).then(done)}>Start over</button>
         </div>
       </div>

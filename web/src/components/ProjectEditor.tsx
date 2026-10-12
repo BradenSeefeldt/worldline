@@ -177,7 +177,8 @@ export function DocEditor({ doc, onChange, placeholder, className, autoFocus, on
     setMath(null);
     if (!ed || !m || latex === null || latex === m.latex) return;
     const node = ed.state.doc.nodeAt(m.pos);
-    if (!node) return;
+    // (the document may have changed meanwhile — sync, ⌘Z: only an equation still at that spot is changed)
+    if (!node || !/math/i.test(node.type.name)) return;
     if (!latex.trim()) ed.chain().focus().deleteRange({ from: m.pos, to: m.pos + node.nodeSize }).run();
     else if (m.block) ed.chain().focus().updateBlockMath({ latex, pos: m.pos }).run();
     else ed.chain().focus().updateInlineMath({ latex, pos: m.pos }).run();
