@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { format, isSameDay, addDays, startOfDay } from 'date-fns';
 import { useStore } from '../data/store';
 import { useNow } from '../lib/hooks';
+import { asButton } from '../lib/a11y';
 import { cls, fmtTime } from '../lib/format';
 import { bucketTasks, doneStats, dueOf, overdueDays, stripTaskPrefix, taskFromParsed, type Task } from '../lib/tasks';
 import { parseQuick } from '../lib/quickparse';
@@ -39,6 +40,7 @@ export function TaskRow({ t, now, leaving, parentTitle, block, onTick }: {
     <div
       className={cls('tk', done && 'done', leaving && 'leaving', t.id === selectedId && 'selected', t.id === flashId && 'flash')}
       onClick={() => !justDragged() && useStore.getState().toggleSelect(t.id)}
+      {...asButton(`Task: ${t.title}${due ? `, ${due.text ?? due}` : ''}`, () => useStore.getState().toggleSelect(t.id))}
       onPointerDown={(e) => !t.done && startBlockDrag(e, { kind: 'task', id: t.id, title: t.title })}
       title="Click to edit · drag onto the calendar to block out time"
     >

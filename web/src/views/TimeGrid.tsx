@@ -12,6 +12,7 @@ import { allDays, weekdaysOnly, type Slots } from '../lib/slots';
 import { assignLanes, layoutDay } from '../lib/layout';
 import { useElementSize, useNow } from '../lib/hooks';
 import { cls, fmtHour, fmtTime, fmtTimeRange } from '../lib/format';
+import { asButton } from '../lib/a11y';
 import { wallClock, zoneAbbr, zoneCity } from '../lib/zone';
 import { URGENCY_COLOR, countdown, runwayStart, urgency } from '../lib/deadlines';
 import { taskAsEvent } from '../lib/tasks';
@@ -601,6 +602,7 @@ export function TimeGrid({ days }: { days: number }) {
               <div
                 key={ev.id}
                 className={cls('ad-bar', ev.id === selectedId && 'selected', ev.end <= now && 'past', ev.id === flashId && 'flash', ev.start < dayStart(a) && 'cont-l', ev.end > dayEnd(b) && 'cont-r')}
+                {...asButton(`${ev.title}, all day, ${format(ev.start, 'EEEE MMMM d')}`, () => useStore.getState().toggleSelect(ev.id))}
                 style={{
                   left: colLeft(a) + 2,
                   width: (b - a + 1) * colW - 4,
@@ -670,6 +672,7 @@ export function TimeGrid({ days }: { days: number }) {
                   <div
                     key={ev.id}
                     data-ev={ev.id}
+                    {...asButton(`${ev.title || 'New Event'}, ${format(ev.start, 'EEEE MMMM d')}, ${fmtTimeRange(ev.start, ev.end)}`, () => useStore.getState().toggleSelect(ev.id))}
                     className={cls(
                       'ev',
                       short && 'short',

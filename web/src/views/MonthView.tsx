@@ -9,6 +9,7 @@ import { MIN, TOTAL_WEEKS, atMinutes, clamp, dateAt, dayIndex, dayStart, isWeeke
 import { assignLanes } from '../lib/layout';
 import { useElementSize, useMediaQuery, useNow } from '../lib/hooks';
 import { cls, fmtTimeShort } from '../lib/format';
+import { asButton } from '../lib/a11y';
 import { URGENCY_COLOR, urgency } from '../lib/deadlines';
 import { taskAsEvent } from '../lib/tasks';
 import { prefs } from '../lib/prefs';
@@ -201,6 +202,7 @@ export function MonthView() {
                       '--c': color,
                     } as CSSProperties}
                     onClick={() => useStore.getState().toggleSelect(ev.id)}
+                    {...asButton(`${ev.title || 'New Event'}, ${format(ev.start, 'EEEE MMMM d')}${ev.allDay ? '' : `, ${fmtTimeShort(ev.start)}`}`, () => useStore.getState().toggleSelect(ev.id))}
                     onDoubleClick={(e) => {
                       if (ev.kind !== 'task') return;
                       e.stopPropagation();
