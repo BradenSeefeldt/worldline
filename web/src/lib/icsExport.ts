@@ -3,7 +3,7 @@
 // event), on the wall clock of their zone, so a weekly 3 PM Toronto meeting is still 3 PM Toronto wherever it's opened.
 import type { CalEvent } from '../data/types';
 import { decodeEvent } from './recurrence';
-import { wallClock } from './zone';
+import { decodeDay, encodeDay, wallClock } from './zone';
 
 const DAY_CODES = ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'];
 const pad = (n: number, w = 2) => String(n).padStart(w, '0');
@@ -14,8 +14,10 @@ const esc = (s: string) => s.replace(/\\/g, '\\\\').replace(/\n/g, '\\n').replac
 /** Lines over 75 characters continue on the next line, indented (RFC 5545). */
 const fold = (line: string) => line.length <= 75 ? line : line.match(/.{1,74}/g)!.map((p, i) => (i ? ' ' + p : p)).join('\r\n');
 
+// Start and end come decoded (all-day ones at local midnights); the occurrence keys in EXDATE and RECURRENCE-ID are
+// stored dates (UTC midnights), so they're decoded here, or west of UTC they'd be written a day early.
 function stamp(e: CalEvent, prop: 'DTSTART' | 'DTEND' | 'RECURRENCE-ID' | 'EXDATE', t: number, tz?: string) {
-  if (e.allDay) return `${prop};VALUE=DATE:${date(t)}`;
+  if (e.allDay) return `${prop};VALUE=DATE:${date(prop === 'DTSTART' || prop === 'DTEND' ? t : decodeDay(t))}`;
   if (tz) return `${prop};TZID=${tz}:${local(t, tz)}`;
   return `${prop}:${utc(t)}`;
 }
@@ -34,11 +36,20 @@ export function toIcs(name: string, events: CalEvent[], color?: string): string 
     if (e.url) out.push(`URL:${e.url}`);
     if (e.recurrence) {
       const r = e.recurrence;
-      const parts = [`FREQ=${r.freq.toUpperCase()}`, ...(r.interval > 1 ? [`INTERVAL=${r.interval}`] : []), ...(r.byDay?.length ? [`BYDAY=${r.byDay.map((d) => DAY_CODES[d]).join(',')}`] : []), ...(r.until ? [`UNTIL=${utc(r.until)}`] : [])];
+      // (an all-day series ends on a date: UNTIL=YYYYMMDD, as RFC 5545 requires with a DATE start)
+      const until = r.until === undefined ? [] : [`UNTIL=${e.allDay ? date(r.until) : utc(r.until)}`];
+      const parts = [`FREQ=${r.freq.toUpperCase()}`, ...(r.interval > 1 ? [`INTERVAL=${r.interval}`] : []), ...(r.byDay?.length ? [`BYDAY=${r.byDay.map((d) => DAY_CODES[d]).join(',')}`] : []), ...until];
       out.push(`RRULE:${parts.join(';')}`);
-      for (const x of e.exdates ?? []) out.push(stamp(e, 'EXDATE', x, tz));
+      // A moved occurrence is its own RECURRENCE-ID event below; listing it as skipped too would hide it on reading back.
+      const key = (x: number) => (e.allDay ? encodeDay(decodeDay(x)) : x);
+      const moved = new Set(list.filter((x) => x.seriesId === e.id && x.originalStart !== undefined).map((x) => key(x.originalStart!)));
+      for (const x of e.exdates ?? []) if (!moved.has(key(x))) out.push(stamp(e, 'EXDATE', x, tz));
     }
-    if (e.seriesId && e.originalStart !== undefined) out.push(stamp(e, 'RECURRENCE-ID', e.originalStart, tz));
+    if (e.seriesId && e.originalStart !== undefined) {
+      // the occurrence it replaces, written as its series writes its days (a date, or a time on the series' clock)
+      const master = list.find((m) => m.id === e.seriesId);
+      out.push(master ? stamp(master, 'RECURRENCE-ID', e.originalStart, zoneOf(master)) : stamp(e, 'RECURRENCE-ID', e.originalStart, tz));
+    }
     out.push('END:VEVENT');
   }
   out.push('END:VCALENDAR');

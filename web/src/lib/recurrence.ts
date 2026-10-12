@@ -22,10 +22,32 @@ export function splitOccurrenceId(id: string) {
   return { masterId: id.slice(0, i), start: +id.slice(i + 1) };
 }
 
+// An all-day series ends on a date, not at an instant: its `until` is stored like its days (UTC midnight of the last
+// day) and shown as the last moment of that day here, so it ends on the same day wherever you are. Older versions
+// saved an instant (the end of that day where it was made); those still read, as the day they fall on here.
+const isDayKey = (t: number) => t % DAY === 0;
+const endOfDay = (key: number) => {
+  const { y, m, d } = fromEpochDay(Math.round(key / DAY));
+  return new Date(y, m, d + 1).getTime() - 1;
+};
+const dayKeyOf = (t: number) => {
+  const w = wallClock(t);
+  return Date.UTC(w.y, w.m, w.d);
+};
+/** The last day an all-day series can fall on (epoch day). */
+const lastDay = (until: number) => Math.round((isDayKey(until) ? until : dayKeyOf(until)) / DAY);
+/** A rule's `until` as an instant here: the last possible start (for an all-day series, the end of its last day). */
+export const untilInstant = (r: Recurrence) => (r.until === undefined ? undefined : isDayKey(r.until) ? endOfDay(r.until) : r.until);
+
+const mapUntil = (e: CalEvent, f: (u: number) => number): CalEvent =>
+  e.recurrence?.until === undefined ? e : { ...e, recurrence: { ...e.recurrence, until: f(e.recurrence.until) } };
+
 /** All-day events as stored → as shown (local midnights). Timed events are unchanged. */
-export const decodeEvent = (e: CalEvent): CalEvent => (e.allDay ? { ...e, start: decodeDay(e.start), end: decodeDay(e.end) } : e);
+export const decodeEvent = (e: CalEvent): CalEvent =>
+  e.allDay ? mapUntil({ ...e, start: decodeDay(e.start), end: decodeDay(e.end) }, (u) => (isDayKey(u) ? endOfDay(u) : u)) : e;
 /** As shown → as stored. Only ever call on decoded (local) values. */
-export const encodeEvent = (e: CalEvent): CalEvent => (e.allDay ? { ...e, start: encodeDay(e.start), end: encodeDay(e.end) } : e);
+export const encodeEvent = (e: CalEvent): CalEvent =>
+  e.allDay ? mapUntil({ ...e, start: encodeDay(e.start), end: encodeDay(e.end) }, (u) => (isDayKey(u) ? u : dayKeyOf(u))) : e;
 
 const weekdayOf = (e: number) => (((e + 4) % 7) + 7) % 7; // epoch day 0 (1970-01-01) was a Thursday
 const weekOf = (e: number) => Math.floor((e + 3) / 7); // Monday-based weeks
@@ -86,11 +108,13 @@ export function occurrences(master: CalEvent, from: number, to: number): CalEven
   const a = Math.max(b.m0, day(from - Math.max(b.span, b.days * DAY)) - 1);
   const z = day(to) + 1;
   const skip = skipSet(master);
+  const last = r.until !== undefined && master.allDay ? lastDay(r.until) : undefined; // all-day: compared as dates
   const out: CalEvent[] = [];
   for (let e = a; e <= z; e++) {
+    if (last !== undefined && e > last) break;
     if (!occursOn(r, b, e)) continue;
     const { occ, key } = makeOccurrence(master, b, e);
-    if (r.until !== undefined && occ.start > r.until) break;
+    if (r.until !== undefined && !master.allDay && occ.start > r.until) break;
     if (skip.has(key) || occ.end <= from || occ.start >= to) continue;
     out.push(occ);
   }
@@ -150,6 +174,6 @@ export function describeRecurrence(r: Recurrence, start: number) {
   }
   if (r.freq === 'monthly') s += ` on the ${format(start, 'do')}`;
   if (r.freq === 'yearly') s += ` on ${format(start, 'MMM d')}`;
-  if (r.until !== undefined) s += ` · until ${format(r.until, 'MMM d')}`;
+  if (r.until !== undefined) s += ` · until ${format(untilInstant(r)!, 'MMM d')}`;
   return s;
 }

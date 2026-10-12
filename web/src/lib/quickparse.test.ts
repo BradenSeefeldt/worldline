@@ -3,6 +3,7 @@
 import { describe, expect, it } from 'vitest';
 import { format } from 'date-fns';
 import { parseQuick } from './quickparse';
+import { encodeEvent, expand } from './recurrence';
 import { DEFAULT_CALENDARS } from '../data/mock';
 
 const NOW = new Date(2026, 9, 7, 19, 10);
@@ -208,5 +209,25 @@ describe('parseQuick — deadlines', () => {
     expect(r('Dinner hosted by Sam friday').deadline).toBeUndefined();
     expect(r('Lunch with Sam tomorrow').deadline).toBeUndefined();
     expect(r('Dinner hosted by Sam friday').title).toBe('Dinner hosted by Sam');
+  });
+});
+
+describe('parseQuick — counts and dates that need care', () => {
+  const occ = (s: string, now = NOW) => {
+    const p = parseQuick(s, DEFAULT_CALENDARS, now);
+    const e = encodeEvent({ id: 'q', calendarId: 'c', title: p.title, start: +p.start, end: +p.end, allDay: p.allDay, recurrence: p.recurrence });
+    return expand([e], now.getTime(), now.getTime() + 6 * 365 * 86_400_000).map((x) => format(x.start, 'MMM d yyyy'));
+  };
+  it('M14: “every other month … for 3 times” makes 3, counting only the months it falls in', () => {
+    expect(occ('Review every other month on the 5th for 3 times')).toEqual(['Nov 5 2026', 'Jan 5 2027', 'Mar 5 2027']);
+    expect(occ('Board meeting every 2 years on mar 3 for 3 times')).toEqual(['Mar 3 2027', 'Mar 3 2029', 'Mar 3 2031']);
+  });
+  it('L10: “the 31st” in a 30-day month and “feb 29” in a non-leap year roll forward to the next real one', () => {
+    const nov5 = new Date(2026, 10, 5, 19, 10);
+    const rent = parseQuick('rent the 31st', DEFAULT_CALENDARS, nov5);
+    expect([rent.title, format(rent.start, 'yyyy-MM-dd'), rent.allDay]).toEqual(['Rent', '2026-12-31', true]);
+    const party = parseQuick('party feb 29', DEFAULT_CALENDARS, NOW);
+    expect([party.title, format(party.start, 'yyyy-MM-dd'), party.allDay]).toEqual(['Party', '2028-02-29', true]);
+    expect(format(parseQuick('party on the 30th', DEFAULT_CALENDARS, new Date(2027, 1, 3)).start, 'yyyy-MM-dd')).toBe('2027-03-30');
   });
 });

@@ -2,7 +2,7 @@
 // Only the columns near the viewport are actually drawn ("virtualized"), so scrolling
 // sideways through days is continuous and cheap. Header and hour gutter are CSS-sticky.
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
-import { addDays, format, startOfWeek } from 'date-fns';
+import { format, startOfWeek } from 'date-fns';
 import { DRAFT_ID, HOUR_H_RANGE, isLocked, newEventCalendarId, useStore } from '../data/store';
 import { useEventsIn } from '../data/useEvents';
 import type { CalEvent } from '../data/types';
@@ -259,7 +259,8 @@ export function TimeGrid({ days }: { days: number }) {
   const computePreview = (d: Drag, x: number, y: number): Preview => {
     const { day, min } = slotAt(x, y);
     if (d.kind === 'move') {
-      const start = addDays(d.origStart, day - d.day0).getTime() + snap(min - d.min0) * MIN;
+      // real days between the columns (with weekends hidden, Friday → Monday is 3), and the time on the wall clock
+      const start = D.shiftWall(d.origStart, S.toDay(day) - S.toDay(d.day0), snap(min - d.min0));
       return { id: d.id!, start, end: start + (d.origEnd - d.origStart) };
     }
     if (d.kind === 'resize') {

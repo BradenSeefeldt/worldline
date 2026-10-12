@@ -1,6 +1,5 @@
 // Time zones. The calendar is always drawn in this computer's current zone; these helpers
 // name zones, compare them, and convert all-day dates so they don't shift when you travel.
-import { TZDate } from '@date-fns/tz';
 
 const DAY = 86_400_000;
 
@@ -19,10 +18,24 @@ export function zoneAbbr(tz: string, t = Date.now()) {
   return gb.startsWith('GMT') || gb.startsWith('UTC') ? us.replace('GMT', 'UTC') : gb;
 }
 
+// A zone's clock is read through Intl, never through this computer's own zone, so every device gets the same answer
+// (one formatter per zone, kept: making them is the slow part).
+const clocks = new Map<string, Intl.DateTimeFormat>();
+const clock = (tz: string) => {
+  let f = clocks.get(tz);
+  if (!f) {
+    f = new Intl.DateTimeFormat('en-US', { timeZone: tz, hourCycle: 'h23', year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric', second: 'numeric' });
+    clocks.set(tz, f);
+  }
+  return f;
+};
+
 /** Offset from UTC in minutes at instant t (e.g. Toronto in summer → -240). */
 export function zoneOffset(tz: string, t = Date.now()) {
-  const z = new TZDate(t, tz);
-  return Math.round((Date.UTC(z.getFullYear(), z.getMonth(), z.getDate(), z.getHours(), z.getMinutes()) - Math.floor(t / 60_000) * 60_000) / 60_000);
+  const p: Record<string, number> = {};
+  for (const x of clock(tz).formatToParts(t)) if (x.type !== 'literal') p[x.type] = +x.value;
+  const wall = Date.UTC(p.year, p.month - 1, p.day, p.hour % 24, p.minute, p.second);
+  return Math.round((wall - Math.floor(t / 1000) * 1000) / 60_000);
 }
 
 /** "UTC−4", "UTC+5:30" */
@@ -34,16 +47,31 @@ export function fmtOffset(minutes: number) {
 
 /** Wall-clock parts of instant t in zone tz (this computer's zone if tz is missing). */
 export function wallClock(t: number, tz?: string) {
-  const d = tz && tz !== localZone() ? new TZDate(t, tz) : new Date(t);
-  return { y: d.getFullYear(), m: d.getMonth(), d: d.getDate(), h: d.getHours(), min: d.getMinutes(), wd: d.getDay() };
+  if (!tz || tz === localZone()) {
+    const d = new Date(t);
+    return { y: d.getFullYear(), m: d.getMonth(), d: d.getDate(), h: d.getHours(), min: d.getMinutes(), wd: d.getDay() };
+  }
+  const d = new Date(t + zoneOffset(tz, t) * 60_000); // its UTC fields are the wall clock in tz
+  return { y: d.getUTCFullYear(), m: d.getUTCMonth(), d: d.getUTCDate(), h: d.getUTCHours(), min: d.getUTCMinutes(), wd: d.getUTCDay() };
 }
 
-/** The instant of a wall-clock time in zone tz. */
+/**
+ * The instant of a wall-clock time in zone tz. A time that happens twice (the hour repeated when the clocks go back)
+ * is the first of the two; a time that doesn't exist (skipped when they go forward) is read with the offset from
+ * before the change, so 2:30 becomes 3:30. That is the rule JavaScript itself uses for this computer's zone, and
+ * here it's worked out from the zone's offsets alone, so every device, whatever its own zone, gets the same instant
+ * (an exception saved on one device must match its occurrence on another).
+ */
 export function instantOf(y: number, m: number, d: number, minutes: number, tz?: string) {
-  if (tz && tz !== localZone()) return new TZDate(y, m, d, Math.floor(minutes / 60), minutes % 60, tz).getTime();
-  const x = new Date(y, m, d);
-  x.setHours(0, minutes, 0, 0);
-  return x.getTime();
+  if (!tz || tz === localZone()) {
+    const x = new Date(y, m, d);
+    x.setHours(0, minutes, 0, 0);
+    return x.getTime();
+  }
+  const wall = Date.UTC(y, m, d, 0, minutes); // the wall clock read as if it were UTC
+  const before = zoneOffset(tz, wall - DAY), after = zoneOffset(tz, wall + DAY); // the offsets either side of any change
+  const fits = [before, after].map((o) => wall - o * 60_000).filter((t) => zoneOffset(tz, t) * 60_000 === wall - t);
+  return fits.length ? Math.min(...fits) : wall - before * 60_000;
 }
 
 // ---- all-day events are dates, not instants ---------------------------------------------
