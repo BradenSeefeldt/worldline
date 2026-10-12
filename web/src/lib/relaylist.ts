@@ -52,9 +52,13 @@ export function parseRelayList(raw: unknown): RelayList | null {
 
 const daysBetween = (a: string, b: string) => (Date.parse(b) - Date.parse(a)) / 86_400_000;
 
-/** The guest page: the current relays, then ones retired within a year, then the built-in ones — at most 12. */
+/** The guest page: the current relays, then ones retired within a year (newest first: an app that missed the latest
+ *  change is the likeliest still to use them), then the built-in ones — at most 12. */
 export function guestRelays(list: RelayList | null, today: string): string[] {
-  const recent = (list?.retired ?? []).filter((r) => daysBetween(r.since, today) <= RETIRED_DAYS).map((r) => r.url);
+  const recent = (list?.retired ?? [])
+    .filter((r) => daysBetween(r.since, today) <= RETIRED_DAYS)
+    .sort((a, b) => (a.since < b.since ? 1 : a.since > b.since ? -1 : 0))
+    .map((r) => r.url);
   return uniq([...(list?.relays ?? []), ...recent, ...BUILTIN]).slice(0, GUEST_MAX);
 }
 

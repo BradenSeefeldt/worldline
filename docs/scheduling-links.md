@@ -9,13 +9,16 @@ phone or computer: the address opens a page on this project's GitHub Pages, and 
 on their own (see [How links work between people](#how-links-work-between-people) below). Links are answered by the
 Mac app.
 
-- **Booking link** (like Calendly): the guest sees open times in their own time zone, picks one and
+- **Booking link** (like Calendly): the guest sees open times in their own time zone (the day tabs are their own
+  dates: a Toronto afternoon can be a Tokyo guest's next morning), picks one and
   clicks **Confirm** — a name is optional, no email, no account. The time is held for them at once (nobody else can
   take it), and your Worldline adds the meeting as soon as it's running (a toast says who booked); their page then
   says **Confirmed**. Two people clicking the same time: the earlier one gets it, the other is told right away. Defaults: no buffer, bookable any time, **single use** — after one booking
   the link closes itself (switch it off for a reusable link like office hours).
-- **Group poll** (like when2meet): people enter a name and paint when they're free (one answer per name; they can
-  come back and change it). Answers arrive in your results window by themselves.
+- **Group poll** (like when2meet): people enter a name and paint when they're free. One answer per person — per
+  browser, really: they can come back and change it from the browser they answered in. Someone typing a name that's
+  already there adds their own answer beside it; nobody can replace someone else's answer by typing their name
+  (answering again from a second device also adds a second answer). Answers arrive in your results window by themselves.
   Each day is one continuous column like the week view; every half-hour row is labelled beside its box
   ("9 AM", "9:30"), with solid lines on the hour. Your busy time is one dark hatched **Unavailable**
   block per stretch. The guest's picks are solid green with a ✓; other people's answers are a faint
@@ -61,8 +64,14 @@ candidates left), the Action opens an issue instead. Run it by hand from the Act
   calendar changes and every 3 hours while Worldline runs, so guests see current times.
 - **A booking or poll answer** is a message signed by a throwaway key made in the guest's browser, encrypted with the
   link's key. That's what lets other guests see a time is held. A booking's name is sealed a second time, to your
-  link key only, so other guests see *that* a time is taken, not by whom. Worldline answers each request
-  (confirmed / taken / you're busy then) in its next published free/busy, which is how the guest's page knows.
+  link key only, so other guests see *that* a time is taken, not by whom. A booking also quotes the version of your
+  free/busy it was made against (its time and a token only Worldline can make), so a guest can't claim to have asked
+  before they could have seen the times. Worldline answers each request
+  (confirmed / taken / you're busy then) in its next published free/busy, which is how the guest's page knows (the
+  page remembers the answer once it has seen it). Refusals are published for two weeks after Worldline makes them,
+  and only for times the link offers; at most 200 answers go out at once (confirmed ones first), so a flood of junk
+  requests can't make the link too big to open. Worldline keeps at most 1,000 answers per link and forgets answers
+  about meetings more than 30 days over (requests that old are ignored).
 - **What relays see:** random-looking keys and tags, ciphertext, timestamps. Not who you are, not who booked, not
   when. Each link has its own keys, so your links can't be tied to each other.
 - **Forgeries:** only your app can change a link's availability (it's signed); only someone with the link can book
@@ -77,10 +86,10 @@ candidates left), the Action opens an issue instead. Run it by hand from the Act
 | A relay deletes old messages | Worldline re-sends your availability every 3 h while it runs; a guest's page re-sends that guest's own booking each time they open it. All seven would have to drop the same booking before your Worldline next runs for it to be lost. |
 | Worldline is closed for days or weeks | Bookings wait on the relays and are collected the next time it opens (a meeting already past is still added, “while you were away”). Guests see the last published times, with “Times last updated 5 days ago” after a day; held times stay held for other guests in the meantime. On the Mac, closing the window keeps Worldline running (⌘Q quits), so this mostly doesn't arise. |
 | You became busy at a held time before Worldline saw the booking (a subscribed calendar changed) | Worldline refuses it and tells you (toast); the guest's page says the time is no longer free and offers others. Their only way to hear is that page — there's no email, by design. |
-| Two guests click the same time | Earliest request wins (ties: smaller message id), the same rule on every page and in Worldline. The second sees “someone else booked it first” within seconds. |
-| A clock is wrong | Times are absolute instants, so time zones and the guest's clock don't affect what's shown. Worldline's published versions always count up even if this Mac's clock was set back. A guest whose clock runs fast is treated as asking now (can't dodge “not sooner than 4 h”). |
-| A guest has an old link | Deleted or replaced: the page says “This link is closed”. Mangled (cut short when pasted): the page says the address is incomplete instead of guessing. |
-| Someone who has the link misbehaves | Like any Calendly link, they can book; a flood of fake holds would block times until you look. Delete the link or give it a **New address**. People who don't have the link can do nothing. |
+| Two guests click the same time | Earliest request wins (ties: smaller message id), the same rule on every page and in Worldline. The second sees “someone else booked it first” within seconds; their request is withdrawn only if they then pick another time — until then Worldline's answer is what counts, and it may still confirm theirs (see the next row). |
+| A clock is wrong (or forged) | Times are absolute instants, so time zones and the guest's clock don't affect what's shown. Worldline's published versions always count up even if this Mac's clock was set back. A guest whose clock runs fast is treated as asking now (can't dodge “not sooner than 4 h”). A guest's clock is never believed further back than the version of your times it quotes; a request quoting no genuine version counts from when Worldline saw it; one claiming to be older than the version it quotes is refused. While Worldline is running it sees requests arrive, and each counts from when it arrived (give or take a minute), so nobody can jump the queue by backdating. Guest pages make the checks they can (a request older than the version it quotes holds nothing) and otherwise go by the guest's clock until Worldline answers. A request that reaches Worldline late (a relay that was down) counts from when it arrived. |
+| A guest has an old link | Deleted or replaced: the page says “This link is closed”. That notice is kept (beside your data, through restarts) and sent again until at least one relay takes it, so a link deleted or given a new address while offline is shown closed once Worldline is back online. Mangled (cut short when pasted): the page says the address is incomplete instead of guessing. (The address's “#…” must look like a link — it always starts “A” then Q–Z or a–f — so the landing page's own “#features” link just shows the landing page.) |
+| Someone who has the link misbehaves | Like any Calendly link, they can book; a flood of fake holds would block times until you look. Delete the link or give it a **New address**. A flood of junk requests can't make the link unopenable (answers published are capped; see above), and an unanswered request more than two weeks older than your last publish holds nothing. People who don't have the link can do nothing. |
 
 Logic and tests: [`web/src/lib/schedwire.ts`](../web/src/lib/schedwire.ts) (keys, address, encryption, who gets a
 slot — `schedwire.test.ts`), [`web/src/data/schedSync.ts`](../web/src/data/schedSync.ts) (Worldline's side),

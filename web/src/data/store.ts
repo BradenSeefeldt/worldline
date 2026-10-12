@@ -15,7 +15,7 @@ import { encodeEvent, resolveEvent } from '../lib/recurrence';
 import { encodeDay, localZone } from '../lib/zone';
 import type { Task } from '../lib/tasks';
 import { isFinished, newLink, type BookingLink, type LinkMode, type PollResponse } from '../lib/booking';
-import { newLinkKeys, type Accept, type Decision } from '../lib/schedwire';
+import { newLinkKeys, pruneDecisions, type Accept, type Decision } from '../lib/schedwire';
 import { endSeries, removeEvent, updateEvent, type Scope } from '../lib/mutate';
 import { normalizeFeedUrl, parseIcs } from '../lib/ics';
 import { fetchText, canFetchFeeds } from '../lib/platform';
@@ -631,7 +631,7 @@ export const useStore = create<State>()(
             links: x.links.map((l) =>
               l.id !== linkId
                 ? l
-                : { ...l, bookings: [...l.bookings, ...bookings], decisions: { ...l.decisions, ...decisions }, ...(l.singleUse && last ? { closed: true, finalStart: last.start } : {}) },
+                : { ...l, bookings: [...l.bookings, ...bookings], decisions: pruneDecisions(l, { ...l.decisions, ...decisions }), ...(l.singleUse && last ? { closed: true, finalStart: last.start } : {}) },
             ),
           }));
           return evs.map((e) => e.id);
