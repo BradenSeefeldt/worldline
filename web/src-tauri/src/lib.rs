@@ -85,27 +85,45 @@ async fn ek_delete(ext: String, occ: f64, calendar: String) -> Result<(), String
   blocking(move || eventkit::delete(ext, occ, calendar)).await?
 }
 
+/// An address on the public internet — not this Mac, the local network, or a reserved range.
+fn is_public_ip(ip: std::net::IpAddr) -> bool {
+  use std::net::IpAddr;
+  match ip {
+    IpAddr::V4(v) => {
+      let o = v.octets();
+      !(v.is_private() || v.is_loopback() || v.is_link_local() || v.is_unspecified() || v.is_broadcast() || v.is_documentation() || (o[0] == 100 && (64..128).contains(&o[1])) || o[0] == 0)
+    }
+    IpAddr::V6(v) => {
+      let s = v.segments()[0];
+      if let Some(m) = v.to_ipv4_mapped() {
+        return is_public_ip(IpAddr::V4(m));
+      }
+      !(v.is_loopback() || v.is_unspecified() || (s & 0xfe00) == 0xfc00 || (s & 0xffc0) == 0xfe80)
+    }
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::is_public_ip;
+  #[test]
+  fn only_public_addresses() {
+    for a in ["8.8.8.8", "142.250.80.46", "2606:4700::1111"] {
+      assert!(is_public_ip(a.parse().unwrap()), "{a} is public");
+    }
+    for a in ["127.0.0.1", "10.0.0.103", "192.168.1.1", "172.16.5.4", "169.254.169.254", "100.64.0.1", "0.0.0.0", "::1", "fe80::1", "fd00::1", "::ffff:192.168.1.1"] {
+      assert!(!is_public_ip(a.parse().unwrap()), "{a} is not public");
+    }
+  }
+}
+
 /// Read a calendar link (.ics) for a subscription. Only public web addresses — never this Mac or the local network
 /// (the page can't use this to reach a router, a printer or a dev server), at most 20 MB, 30 s.
 #[tauri::command]
 async fn fetch_feed(url: String) -> Result<String, String> {
   use std::net::{IpAddr, ToSocketAddrs};
   use tauri_plugin_http::reqwest;
-  fn public(ip: IpAddr) -> bool {
-    match ip {
-      IpAddr::V4(v) => {
-        let o = v.octets();
-        !(v.is_private() || v.is_loopback() || v.is_link_local() || v.is_unspecified() || v.is_broadcast() || v.is_documentation() || (o[0] == 100 && (64..128).contains(&o[1])) || o[0] == 0)
-      }
-      IpAddr::V6(v) => {
-        let s = v.segments()[0];
-        if let Some(m) = v.to_ipv4_mapped() {
-          return public(IpAddr::V4(m));
-        }
-        !(v.is_loopback() || v.is_unspecified() || (s & 0xfe00) == 0xfc00 || (s & 0xffc0) == 0xfe80)
-      }
-    }
-  }
+  const public: fn(IpAddr) -> bool = is_public_ip;
   let u = reqwest::Url::parse(&url).map_err(|_| "that isn't a web address".to_string())?;
   if !matches!(u.scheme(), "http" | "https") {
     return Err("only http(s) calendar links can be read".into());
