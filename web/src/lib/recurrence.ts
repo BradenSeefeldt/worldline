@@ -11,7 +11,7 @@
 // key in `exdates` and a normal event with `seriesId`/`originalStart` takes its place.
 import { format } from 'date-fns';
 import type { CalEvent, Recurrence } from '../data/types';
-import { decodeDay, encodeDay, epochDay, fromEpochDay, instantOf, wallClock } from './zone';
+import { decodeDay, encodeDay, epochDay, fromEpochDay, instantOf, localZone, wallClock } from './zone';
 
 const DAY = 86_400_000;
 
@@ -96,8 +96,28 @@ function makeOccurrence(master: CalEvent, b: ReturnType<typeof basis>, e: number
 /** The occurrence keys a series skips, tolerant of keys saved by older versions. */
 const skipSet = (master: CalEvent) => new Set((master.exdates ?? []).map((x) => (master.allDay ? encodeDay(decodeDay(x)) : x)));
 
-/** Occurrences of one series that overlap [from, to). */
-export function occurrences(master: CalEvent, from: number, to: number): CalEvent[] {
+// Unrolling a long series takes a while (a daily habit over ten years is 3,650 days to check), and every view asks
+// again whenever any event changes. Records are never changed in place (an edit makes a new object), so a series'
+// occurrences are kept per series object and range — and per time zone, since they're placed on this device's clock.
+const unrolled = new WeakMap<CalEvent, { from: number; to: number; zone: string; out: CalEvent[] }[]>();
+const KEEP_RANGES = 8;
+let zoneNow = '';
+const deviceZone = () => localZone();
+
+/** Occurrences of one series that overlap [from, to). (The array is shared: don't change it.) */
+export function occurrences(master: CalEvent, from: number, to: number, zone = deviceZone()): CalEvent[] {
+  const kept = unrolled.get(master);
+  const hit = kept?.find((k) => k.from === from && k.to === to && k.zone === zone);
+  if (hit) return hit.out;
+  const out = unroll(master, from, to);
+  const list = kept ?? [];
+  list.unshift({ from, to, zone, out });
+  if (list.length > KEEP_RANGES) list.length = KEEP_RANGES;
+  if (!kept) unrolled.set(master, list);
+  return out;
+}
+
+function unroll(master: CalEvent, from: number, to: number): CalEvent[] {
   const r = master.recurrence;
   if (!r) return [];
   const b = basis(master);
@@ -124,8 +144,9 @@ export function occurrences(master: CalEvent, from: number, to: number): CalEven
 /** Everything to show in [from, to): one-off events plus generated occurrences, in local time. */
 export function expand(events: CalEvent[], from: number, to: number): CalEvent[] {
   const out: CalEvent[] = [];
+  zoneNow = deviceZone(); // (once per call, not per series)
   for (const raw of events) {
-    if (raw.recurrence) out.push(...occurrences(raw, from, to));
+    if (raw.recurrence) for (const o of occurrences(raw, from, to, zoneNow)) out.push(o);
     else {
       const e = decodeEvent(raw);
       if (e.start < to && e.end > from) out.push(e);

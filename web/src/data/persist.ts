@@ -206,8 +206,8 @@ export async function startOverKeepingUnreadable(key: string) {
   loadProblem = null;
 }
 
-/** Copies kept aside by starting over pile up only if it happens again and again: the newest 5 are kept. */
-const KEEP_ASIDE = 5;
+/** Copies kept aside by starting over pile up only if it happens again and again: the newest 3 are kept. */
+const KEEP_ASIDE = 3;
 async function tidyKeptAside(key: string) {
   if (!isApp()) return; // (the browser keeps them in IndexedDB: rare, and small next to the app's data)
   const keys = await native<string[]>('db_keys', { prefix: `${key}${UNREADABLE}-` }).catch(() => [] as string[]);

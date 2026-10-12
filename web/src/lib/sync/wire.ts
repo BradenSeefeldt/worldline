@@ -19,6 +19,8 @@ const CHUNK = 24_000; // raw bytes per piece: base64 twice (inside, then the enc
 export const UPDATE_TTL = 30 * 86_400; // seconds an update is kept (a snapshot covers anything older)
 /** The largest message read: anything bigger is ignored (a sender splits what's bigger into pieces). */
 export const MAX_CONTENT = 100_000;
+/** The most pieces a snapshot is read in (a 2,000-piece snapshot is ~48 MB compressed: decades of data). */
+export const MAX_PIECES = 2000;
 
 /** The message format. A message from a newer format is not read; the app says to update instead. */
 export const WIRE_VERSION = 1;
@@ -156,7 +158,7 @@ export async function openMessage(ev: Event, keys: SyncKeys, now = Date.now()): 
   if (typeof body?.v === 'number' && body.v > WIRE_VERSION) return { kind: 'newer', device: ev.pubkey, at: ev.created_at };
   try {
     if (typeof body.u === 'string') return { kind: 'update', device: ev.pubkey, at: ev.created_at, data: await unsquash(unb64(body.u)) };
-    if (typeof body.s === 'string' && typeof body.c === 'string' && Number.isInteger(body.i) && Number.isInteger(body.n) && body.n! > 0 && body.n! <= 400 && body.i! < body.n!)
+    if (typeof body.s === 'string' && typeof body.c === 'string' && Number.isInteger(body.i) && Number.isInteger(body.n) && body.n! > 0 && body.n! <= MAX_PIECES && body.i! < body.n!)
       return { kind: 'piece', device: ev.pubkey, at: ev.created_at, snap: body.s, i: body.i!, n: body.n!, data: unb64(body.c) };
   } catch {
     return null;
@@ -171,6 +173,7 @@ export class SnapshotAssembler {
   async add(p: Extract<Opened, { kind: 'piece' }>): Promise<Uint8Array | null> {
     const key = `${p.device}:${p.snap}`;
     if (this.done.has(key)) return null;
+    if (!this.parts.has(key) && this.parts.size >= 20) this.parts.delete(this.parts.keys().next().value!); // (unfinished ones: the oldest go)
     const cur = this.parts.get(key) ?? { n: p.n, at: p.at, pieces: Array.from({ length: p.n }, () => undefined as Uint8Array | undefined) }; // filled, not holes (.some skips holes)
     if (cur.n !== p.n) return null;
     cur.pieces[p.i] = p.data;

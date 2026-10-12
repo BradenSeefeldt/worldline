@@ -28,7 +28,10 @@ function stamp(e: CalEvent, prop: 'DTSTART' | 'DTEND' | 'RECURRENCE-ID' | 'EXDAT
 /** `events`: as stored (all-day ones as dates). Tasks, deadlines and generated occurrences are left out. */
 export function toIcs(name: string, events: CalEvent[], color?: string): string {
   const list = events.map(decodeEvent).filter((e) => !e.kind && !(e.seriesId && e.originalStart === undefined));
-  const zoneOf = (e: CalEvent) => (e.recurrence || e.seriesId) && !e.allDay ? e.timeZone ?? list.find((m) => m.id === e.seriesId)?.timeZone : undefined;
+  const byId = new Map(list.map((e) => [e.id, e]));
+  const movedOf = new Map<string, CalEvent[]>(); // series → its moved occurrences
+  for (const x of list) if (x.seriesId && x.originalStart !== undefined) movedOf.set(x.seriesId, [...(movedOf.get(x.seriesId) ?? []), x]);
+  const zoneOf = (e: CalEvent) => (e.recurrence || e.seriesId) && !e.allDay ? e.timeZone ?? (e.seriesId ? byId.get(e.seriesId)?.timeZone : undefined) : undefined;
   const out = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Worldline//Calendar//EN', 'CALSCALE:GREGORIAN', `X-WR-CALNAME:${esc(name)}`, ...(color ? [`X-APPLE-CALENDAR-COLOR:${color}`] : [])];
   for (const e of list) {
     const tz = zoneOf(e);
@@ -45,12 +48,12 @@ export function toIcs(name: string, events: CalEvent[], color?: string): string 
       out.push(`RRULE:${parts.join(';')}`);
       // A moved occurrence is its own RECURRENCE-ID event below; listing it as skipped too would hide it on reading back.
       const key = (x: number) => (e.allDay ? encodeDay(decodeDay(x)) : x);
-      const moved = new Set(list.filter((x) => x.seriesId === e.id && x.originalStart !== undefined).map((x) => key(x.originalStart!)));
+      const moved = new Set((movedOf.get(e.id) ?? []).map((x) => key(x.originalStart!)));
       for (const x of e.exdates ?? []) if (!moved.has(key(x))) out.push(stamp(e, 'EXDATE', x, tz));
     }
     if (e.seriesId && e.originalStart !== undefined) {
       // the occurrence it replaces, written as its series writes its days (a date, or a time on the series' clock)
-      const master = list.find((m) => m.id === e.seriesId);
+      const master = byId.get(e.seriesId);
       out.push(master ? stamp(master, 'RECURRENCE-ID', e.originalStart, zoneOf(master)) : stamp(e, 'RECURRENCE-ID', e.originalStart, tz));
     }
     out.push('END:VEVENT');

@@ -3,8 +3,10 @@
 // plugin, so nothing moves. The page gets only these few fixed operations: read, write or remove one value by key, and
 // list or read the daily snapshots. It can't run SQL of its own or open any other file.
 //   kv        (key TEXT PRIMARY KEY, value TEXT NOT NULL, updated INTEGER NOT NULL)
-//   snapshots (day TEXT PRIMARY KEY, value TEXT NOT NULL) — the day's first save, the newest 14 days kept
-use rusqlite::{params, Connection, OptionalExtension};
+//   snapshots (day TEXT PRIMARY KEY, value TEXT NOT NULL) — the day's first save, the newest 14 days kept; written
+//             compressed (gzip, stored as a blob: a tenth of the size), older ones as plain text — both read back
+use rusqlite::{params, types::ValueRef, Connection, OptionalExtension};
+use std::io::{Read, Write};
 use std::path::PathBuf;
 use std::sync::Mutex;
 
@@ -68,8 +70,13 @@ impl Db {
         "INSERT INTO kv (key, value, updated) VALUES (?1, ?2, ?3) ON CONFLICT(key) DO UPDATE SET value = ?2, updated = ?3",
         params![key, value, now],
       )?;
-      if let Some(day) = snapshot {
-        tx.execute("INSERT OR IGNORE INTO snapshots (day, value) VALUES (?1, ?2)", params![day, value])?;
+      // (only the day's first save: checked first, so the other saves don't compress megabytes for nothing)
+      let have: bool = match snapshot {
+        Some(day) => tx.query_row("SELECT 1 FROM snapshots WHERE day = ?1", [day], |_| Ok(())).optional()?.is_some(),
+        None => true,
+      };
+      if let (Some(day), false) = (snapshot, have) {
+        tx.execute("INSERT INTO snapshots (day, value) VALUES (?1, ?2)", params![day, gzip(value)])?;
         tx.execute(
           "DELETE FROM snapshots WHERE day NOT IN (SELECT day FROM snapshots ORDER BY day DESC LIMIT ?1)",
           [SNAPSHOT_DAYS],
@@ -111,8 +118,28 @@ impl Db {
     if !valid_day(day) {
       return Err("bad day".into());
     }
-    self.with(|c| c.query_row("SELECT value FROM snapshots WHERE day = ?1", [day], |r| r.get(0)).optional())
+    self.with(|c| {
+      c.query_row("SELECT value FROM snapshots WHERE day = ?1", [day], |r| {
+        Ok(match r.get_ref(0)? {
+          ValueRef::Blob(b) => gunzip(b),
+          ValueRef::Text(t) => Some(String::from_utf8_lossy(t).into_owned()),
+          _ => None,
+        })
+      })
+      .optional()
+      .map(Option::flatten)
+    })
   }
+}
+
+fn gzip(s: &str) -> Vec<u8> {
+  let mut e = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::fast());
+  let _ = e.write_all(s.as_bytes());
+  e.finish().unwrap_or_default()
+}
+fn gunzip(b: &[u8]) -> Option<String> {
+  let mut out = String::new();
+  flate2::read::GzDecoder::new(b).read_to_string(&mut out).ok().map(|_| out)
 }
 
 #[cfg(test)]
@@ -151,6 +178,11 @@ mod tests {
     db.set("calendar-v1", "two", 2, Some("2026-10-01")).unwrap(); // the day's first save is the snapshot
     assert_eq!(db.get("calendar-v1").unwrap().as_deref(), Some("two"));
     assert_eq!(db.snapshot("2026-10-01").unwrap().as_deref(), Some("one"));
+    let big = format!("{{\"state\":{{\"events\":[{}]}}}}", "{\"id\":\"e\",\"title\":\"Group meeting\"},".repeat(20_000));
+    db.set("calendar-v1", &big, 2, Some("2026-09-30")).unwrap();
+    assert_eq!(db.snapshot("2026-09-30").unwrap().as_deref(), Some(big.as_str())); // compressed, read back the same
+    let stored: i64 = db.with(|c| c.query_row("SELECT length(value) FROM snapshots WHERE day = '2026-09-30'", [], |r| r.get(0))).unwrap();
+    assert!(stored * 20 < big.len() as i64, "kept compressed ({stored} bytes)");
     for d in 2..=20 {
       db.set("calendar-v1", &format!("v{d}"), d, Some(&format!("2026-10-{d:02}"))).unwrap();
     }

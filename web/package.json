@@ -16,7 +16,8 @@
     "build:guest": "vite build --config vite.guest.config.ts",
     "build:web": "vite build --config vite.web.config.ts",
     "preview:site": "vite preview --config vite.guest.config.ts --port 4175 --strictPort --host",
-    "preview:web": "vite preview --config vite.web.config.ts --port 4174 --strictPort --host"
+    "preview:web": "vite preview --config vite.web.config.ts --port 4174 --strictPort --host",
+    "test:perf": "PERF=1 TZ=America/Toronto vitest run src/perf --silent=false"
   },
   "dependencies": {
     "@date-fns/tz": "^1.5.0",

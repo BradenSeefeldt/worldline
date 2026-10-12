@@ -219,18 +219,19 @@ describe('saving the document on this device', () => {
     useStore.getState().startFresh();
     const e = startEngine({ secret: newSecret(), device: newDeviceKey() }, r, 'create');
     await e.flush();
-    const before = mem.get('worldline-sync-doc');
-    expect(before).toBeTruthy();
+    const onDisk = () => `${mem.get('worldline-sync-doc')}|${mem.get('worldline-sync-doc-log') ?? ''}`; // (the document + its log)
+    const before = onDisk();
+    expect(mem.get('worldline-sync-doc')).toBeTruthy();
     failAppSaves = true;
     try {
       useStore.setState({ events: [ev('unsaved', 'Not saved yet')] });
       await e.flush();
-      expect(mem.get('worldline-sync-doc')).toBe(before);
+      expect(onDisk()).toBe(before);
     } finally {
       failAppSaves = false;
     }
     await e.flush();
-    expect(mem.get('worldline-sync-doc')).not.toBe(before);
+    expect(onDisk()).not.toBe(before);
     e.stop();
   });
 });
@@ -474,5 +475,30 @@ describe('a message the relays keep refusing', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe('saving the document with years of data', () => {
+  it('adds only what changed to a log, writes it whole again once the log is long, and reads both back', async () => {
+    const g = await group([ev('e1', 'One'), ev('e2', 'Two')]);
+    await g.e.flush();
+    const whole = mem.get('worldline-sync-doc')!;
+    expect(mem.get('worldline-sync-doc-log') ?? '[]').toBe('[]');
+    for (let i = 0; i < 3; i++) {
+      useStore.getState().updateEvent('e1', { title: `One, take ${i}` });
+      await sleep(30);
+      await g.e.flush();
+    }
+    expect(mem.get('worldline-sync-doc')).toBe(whole); // not rewritten
+    const log = JSON.parse(mem.get('worldline-sync-doc-log')!) as string[];
+    expect(log.length).toBe(3);
+    expect(log.every((u) => u.length < 400)).toBe(true); // small updates, not the document
+    g.e.stop();
+    // the next launch reads the document plus its log
+    const cfg = (await readConfig())!;
+    const again = startEngine(cfg, g.r, 'resume');
+    await again.flush();
+    expect((readDoc(again.doc) as Synced).events.find((x) => x.id === 'e1')?.title).toBe('One, take 2');
+    again.stop();
   });
 });

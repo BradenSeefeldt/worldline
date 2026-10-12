@@ -136,3 +136,15 @@ describe('what is never touched', () => {
     expect(p.pushes).toEqual([]);
   });
 });
+
+describe('what Worldline remembers about the Mac’s events', () => {
+  it('forgets occurrences and one-off events long before the window (it would grow forever)', () => {
+    const old = Date.UTC(2020, 0, 1);
+    const win = { from: Date.UTC(2026, 6, 1), to: Date.UTC(2027, 9, 1) };
+    const known = { 'S1|1577836800000': 'fp', 'O1|0': 'fp', 'O2|0': 'fp' };
+    const events = [{ id: 'w1', calendarId: 'mac:ICLOUD-1', title: 'Old', start: old, end: old + 3_600_000, allDay: false, ext: { id: 'O1', occ: 0 } }];
+    const plan = reconcile(events, [], known, new Map([['mac:ICLOUD-1', 'ICLOUD-1']]), win, (e) => e);
+    expect(plan.known).toEqual({});
+    expect(plan.events).toHaveLength(1); // the event itself stays (your history)
+  });
+});

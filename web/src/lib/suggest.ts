@@ -115,7 +115,9 @@ export function suggest(
   const dismissed = new Set(opts.dismissed ?? []);
   const visible = new Set(calendars.filter((c) => c.visible).map((c) => c.id));
   const deadlines = events.filter((e) => e.kind === 'deadline' && !e.done);
-  events = events.filter((e) => e.kind !== 'deadline'); // patterns and clashes are about meetings
+  // patterns and clashes are about meetings, and only the last 10 weeks and the week ahead count (the callers may hand
+  // over far more: going through a year of events for nothing took a quarter of a second)
+  events = events.filter((e) => e.kind !== 'deadline' && e.end > nowMs - (HISTORY_DAYS + 2) * DAY && e.start < horizon + 3 * DAY);
   const calName = (id: string) => calendars.find((c) => c.id === id)?.name;
   const upcoming = events.filter((e) => e.end > nowMs && e.start < horizon && visible.has(e.calendarId));
   const series = findSeries(events.filter((e) => visible.has(e.calendarId)), now);

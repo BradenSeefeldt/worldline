@@ -1,7 +1,7 @@
 import { useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { addDays, addMonths, format, isSameDay, isSameMonth, startOfDay, startOfMonth, startOfWeek } from 'date-fns';
 import { useStore } from '../data/store';
-import { useEventsIn } from '../data/useEvents';
+import { useDeadlinesIn, useEventsIn } from '../data/useEvents';
 import { weekNumber, weekStart } from '../lib/dates';
 import { useNow } from '../lib/hooks';
 import { cls, fmtTime } from '../lib/format';
@@ -232,7 +232,7 @@ function Deadlines() {
   const showOnCalendar = useStore((s) => s.showDeadlines);
   const now = useNow(60_000);
   const today0 = startOfDay(now).getTime();
-  const events = useEventsIn(today0 - 120 * 86_400_000, today0 + 400 * 86_400_000);
+  const events = useDeadlinesIn(today0 - 120 * 86_400_000, today0 + 400 * 86_400_000);
   const [showAll, setShowAll] = useState(false);
   const list = useMemo(() => events.filter((e) => e.kind === 'deadline' && !e.done).sort((a, b) => a.start - b.start), [events]);
   const tasks = useStore((s) => s.tasks);

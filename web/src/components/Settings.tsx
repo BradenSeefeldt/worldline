@@ -1,7 +1,7 @@
 // Settings, like the Mac's System Settings: sections on the left (with a search box), the chosen section's settings
 // on the right as rounded groups of rows — a name and a line of explanation, the control beside it.
 // Opens from ⚙ Settings in the sidebar or ⌘, (App.tsx). The settings themselves: data/settings.ts.
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { Suspense, lazy, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { formatDistanceToNow } from 'date-fns';
 import { useStore } from '../data/store';
 import type { AppSettings, StartPage } from '../data/settings';
@@ -23,7 +23,8 @@ import { canUpdate, checkForUpdate, restartToUpdate } from '../lib/updates';
 import { notificationAccess, testAlert } from '../data/alerts';
 import { askMacAccess, macAccess, macCalendarList, macHost, showMacCalendar, type MacAccess, type MacCalendar } from '../data/macCalendars';
 import { ALL_DAY_CHOICES, TIMED_CHOICES } from '../lib/alerts';
-import { SyncSettings } from './SyncSettings';
+// (loaded when opened: it carries the QR code maker and reader, which nothing else needs)
+const SyncSettings = lazy(() => import('./SyncSettings').then((m) => ({ default: m.SyncSettings })));
 
 const REPO = 'BradenSeefeldt/worldline';
 const STORE_KEY = 'calendar-v1';
@@ -142,7 +143,11 @@ export function Settings() {
             {current.id === 'alerts' && <AlertsPane />}
             {current.id === 'habits' && <HabitsPane />}
             {current.id === 'scheduling' && <SchedulingPane />}
-            {current.id === 'sync' && <SyncSettings />}
+            {current.id === 'sync' && (
+              <Suspense fallback={null}>
+                <SyncSettings />
+              </Suspense>
+            )}
             {current.id === 'data' && <DataPane />}
             {current.id === 'about' && <About />}
           </div>

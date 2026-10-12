@@ -5861,6 +5861,7 @@ name = "worldline"
 version = "0.10.0"
 dependencies = [
  "block2",
+ "flate2",
  "log",
  "objc2",
  "objc2-app-kit",

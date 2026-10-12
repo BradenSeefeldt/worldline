@@ -35,6 +35,10 @@ import { isApp } from '../lib/platform';
 
 const CONFIG = 'worldline-sync'; // SyncConfig — beside the app's data, never in a backup
 const DOC = 'worldline-sync-doc'; // the shared document, as Yjs bytes (base64)
+const DOC_LOG = 'worldline-sync-doc-log'; // changes since DOC was last written whole (JSON list of base64 updates)
+const LOG_MAX = 1_000_000; // once the log is this long (characters), the document is written whole again
+/** Forget the saved document (and its log). */
+const dropDoc = () => Promise.all([sideStore.del(DOC), sideStore.del(DOC_LOG)]);
 const HOUR = 3_600_000;
 const DAY = 24 * HOUR;
 const SNAPSHOT_EVERY = 6 * HOUR;
@@ -206,12 +210,21 @@ export function startEngine(cfg: SyncConfig, transport: Transport, mode: 'resume
     }
   }
 
-  /** Save the document — only once the app's data is saved at least as far (see the top of the file). */
-  async function saveDoc() {
+  /** Save the document — only once the app's data is saved at least as far (see the top of the file). With years of
+   *  data the document is megabytes, so a save normally only adds what changed since the last one to a log; the
+   *  whole document is written again (and the log emptied) once the log grows past LOG_MAX. One save at a time. */
+  let saving: Promise<void> = Promise.resolve();
+  let savedSV: Uint8Array | undefined; // (state vector) what's on disk: DOC plus the log
+  let log: string[] = [];
+  let logSize = 0;
+  const saveDoc = () => (saving = saving.then(saveDocOnce, saveDocOnce));
+  async function saveDocOnce() {
     clearTimeout(saveTimer);
     if (stopped || paused) return;
     if (applyTimer !== undefined) applyRemote(); // what arrived goes into the app's data first
-    const bytes = Y.encodeStateAsUpdate(doc);
+    const whole = !savedSV || logSize > LOG_MAX;
+    const bytes = whole ? Y.encodeStateAsUpdate(doc) : Y.encodeStateAsUpdate(doc, savedSV);
+    const sv = Y.encodeStateVector(doc);
     const joined = joining && joinApplied;
     const sent = { sent: acked && b64(acked), unsent: pendingLocal() };
     await flushStore();
@@ -226,7 +239,18 @@ export function startEngine(cfg: SyncConfig, transport: Transport, mode: 'resume
       await writeConfig(cfg).catch(() => undefined);
       if (stopped || paused) return;
     }
-    const ok = await sideStore.set(DOC, b64(bytes)).then(() => true, () => false);
+    let ok: boolean;
+    if (whole) {
+      // (the log is emptied after the whole document is written: a crash in between only applies it twice — harmless)
+      ok = await sideStore.set(DOC, b64(bytes)).then(() => true, () => false);
+      if (ok && logSize) ok = await sideStore.del(DOC_LOG).then(() => true, () => false);
+      if (ok) (log = []), (logSize = 0);
+    } else if (bytes.length > 2 && !sameVector(sv, savedSV!)) {
+      const next = [...log, b64(bytes)];
+      ok = await sideStore.set(DOC_LOG, JSON.stringify(next)).then(() => true, () => false);
+      if (ok) (log = next), (logSize += next[next.length - 1].length);
+    } else ok = true; // nothing new
+    if (ok) savedSV = sv;
     if (ok && joined && !stopped && cfg.joining !== false) {
       cfg.joining = false;
       cfg.joined = true;
@@ -317,6 +341,7 @@ export function startEngine(cfg: SyncConfig, transport: Transport, mode: 'resume
   // ---- incoming messages (stored ones first, then live)
   const onEvent = async (ev: Event) => {
     if (seen.has(ev.id) || stopped || paused) return;
+    if (seen.size >= 20_000) seen.delete(seen.values().next().value!); // (the oldest: a message seen again is harmless)
     seen.add(ev.id);
     const m = await openMessage(ev, keys, clock());
     if (!m || stopped || paused) return;
@@ -377,6 +402,7 @@ export function startEngine(cfg: SyncConfig, transport: Transport, mode: 'resume
   // ---- start
   const ready = (async () => {
     const saved = await sideStore.get(DOC).catch(() => null);
+    const savedLog = saved ? await sideStore.get(DOC_LOG).catch(() => null) : null;
     if (stopped) return;
     // a join cut short (offline, or closed before the group's data was saved here), or a device that joined and lost
     // its document: carry on joining — only a device that started the group may start an empty document
@@ -386,7 +412,20 @@ export function startEngine(cfg: SyncConfig, transport: Transport, mode: 'resume
       cfg.joining = true;
       void writeConfig(cfg);
     }
-    if (saved && mode === 'resume') Y.applyUpdate(doc, unb64(saved), 'load');
+    if (saved && mode === 'resume') {
+      Y.applyUpdate(doc, unb64(saved), 'load');
+      try {
+        log = JSON.parse(savedLog ?? '[]') as string[];
+        for (const u of log) Y.applyUpdate(doc, unb64(u), 'load');
+        logSize = savedLog?.length ?? 0; // (the log carries on from here)
+      } catch {
+        // a damaged log: what of it could be read stays applied (anything missing comes back from the relays), and the
+        // next save writes the document whole
+        log = [];
+        logSize = Infinity;
+      }
+      savedSV = Y.encodeStateVector(doc);
+    }
     if (docSchema(doc) > SYNC_SCHEMA) return pause();
     if (mode === 'create' || (mode === 'resume' && docIsEmpty(doc))) writeLocal(doc, null, prev, 'local'); // this device's data starts the group
     else if (mode === 'resume') {
@@ -429,6 +468,8 @@ export function startEngine(cfg: SyncConfig, transport: Transport, mode: 'resume
     set({ on: false, state: 'off' });
   }
 }
+
+const sameVector = (a: Uint8Array, b: Uint8Array) => a.length === b.length && a.every((x, i) => x === b[i]);
 
 let deviceIds = new Map<string, string>();
 async function deviceId(cfg: SyncConfig) {
@@ -483,7 +524,7 @@ onDataReplaced((reloading) =>
     const cfg = await readConfig();
     if (!cfg) return;
     const next: SyncConfig = { ...cfg, joining: true, sent: undefined, unsent: undefined };
-    await sideStore.del(DOC);
+    await dropDoc();
     await writeConfig(next);
     if (r && !reloading) await run(next, 'join');
   })()),
@@ -517,7 +558,7 @@ if (typeof document !== 'undefined' && typeof window !== 'undefined') {
 /** Turn sync on with this device's data as the starting point; returns the secret (for the pairing code). */
 export async function createSync(): Promise<string> {
   const cfg: SyncConfig = { secret: newSecret(), device: newDeviceKey() };
-  await sideStore.del(DOC);
+  await dropDoc();
   await writeConfig(cfg);
   await run(cfg, 'create');
   return cfg.secret;
@@ -526,7 +567,7 @@ export async function createSync(): Promise<string> {
 /** Join another device's sync (the secret from its pairing code): this device's own data is replaced by the group's. */
 export async function joinSync(secret: string) {
   const cfg: SyncConfig = { secret, device: newDeviceKey(), joining: true };
-  await sideStore.del(DOC);
+  await dropDoc();
   await writeConfig(cfg);
   await run(cfg, 'join');
 }
@@ -537,7 +578,7 @@ export async function leaveSync() {
   running?.transport.close?.();
   running = null;
   await sideStore.del(CONFIG);
-  await sideStore.del(DOC);
+  await dropDoc();
 }
 
 /** The pairing code of this device's group (to show again). */

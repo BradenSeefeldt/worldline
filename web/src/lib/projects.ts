@@ -328,8 +328,9 @@ export function search(w: World, q: string, projectId?: string): Hit[] {
     for (const i of p.ideas ?? []) add(p.id, `Idea · ${p.title}`, i.text);
     for (const x of p.pins ?? []) add(p.id, `Pin · ${p.title}`, `${x.label} — ${x.href}`);
   }
+  const owners = new Map<string, { title: string }>([...w.projects, ...w.threads].map((x) => [x.id, x]));
   for (const e of w.projectLog) {
-    const owner = w.threads.find((t) => t.id === e.parentId) ?? w.projects.find((p) => p.id === e.parentId);
+    const owner = owners.get(e.parentId);
     if (owner) add(e.parentId, owner.title, docText(e.doc), e.at);
   }
   return hits;

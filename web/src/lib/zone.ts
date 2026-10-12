@@ -3,7 +3,13 @@
 
 const DAY = 86_400_000;
 
-export const localZone = () => Intl.DateTimeFormat().resolvedOptions().timeZone;
+/** This device's zone now. (Asked of Intl at most once a second: it's slow, and called for every event drawn.) */
+let zoneSeen = { at: -Infinity, tz: '' };
+export const localZone = () => {
+  const now = Date.now();
+  if (now - zoneSeen.at > 1000 || now < zoneSeen.at) zoneSeen = { at: now, tz: Intl.DateTimeFormat().resolvedOptions().timeZone };
+  return zoneSeen.tz;
+};
 
 /** "America/Toronto" → "Toronto", "America/Argentina/Buenos_Aires" → "Buenos Aires" */
 export const zoneCity = (tz: string) => tz.split('/').pop()!.replace(/_/g, ' ');
@@ -30,8 +36,25 @@ const clock = (tz: string) => {
   return f;
 };
 
-/** Offset from UTC in minutes at instant t (e.g. Toronto in summer → -240). */
+/** Offset from UTC in minutes at instant t (e.g. Toronto in summer → -240). Clocks change on a quarter hour, so the
+ *  answer is kept per zone and quarter hour (reading a feed asks thousands of times). */
+const offsets = new Map<string, number>();
+const Q = 15 * 60_000;
 export function zoneOffset(tz: string, t = Date.now()) {
+  if (tz === 'UTC' || tz === 'Etc/UTC') return 0;
+  if (t % Q === 0 || !Number.isFinite(t)) return offsetAt(tz, t);
+  const k = `${tz}|${Math.floor(t / Q)}`;
+  let o = offsets.get(k);
+  if (o === undefined) {
+    const a = offsetAt(tz, Math.floor(t / Q) * Q);
+    // (kept only when the quarter hour has one offset throughout — not across an old zone's odd-second change)
+    if (a !== offsetAt(tz, Math.floor(t / Q) * Q + Q - 1000)) return offsetAt(tz, t);
+    if (offsets.size > 100_000) offsets.clear();
+    offsets.set(k, (o = a));
+  }
+  return o;
+}
+function offsetAt(tz: string, t: number) {
   const p: Record<string, number> = {};
   for (const x of clock(tz).formatToParts(t)) if (x.type !== 'literal') p[x.type] = +x.value;
   const wall = Date.UTC(p.year, p.month - 1, p.day, p.hour % 24, p.minute, p.second);
@@ -69,6 +92,7 @@ export function instantOf(y: number, m: number, d: number, minutes: number, tz?:
     return x.getTime();
   }
   const wall = Date.UTC(y, m, d, 0, minutes); // the wall clock read as if it were UTC
+  if (tz === 'UTC' || tz === 'Etc/UTC') return wall;
   const before = zoneOffset(tz, wall - DAY), after = zoneOffset(tz, wall + DAY); // the offsets either side of any change
   const fits = [before, after].map((o) => wall - o * 60_000).filter((t) => zoneOffset(tz, t) * 60_000 === wall - t);
   return fits.length ? Math.min(...fits) : wall - before * 60_000;

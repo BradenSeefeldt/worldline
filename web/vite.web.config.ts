@@ -26,10 +26,10 @@ const webApp: Plugin = {
     const files: string[] = [];
     const walk = (d: string) => readdirSync(d).forEach((f) => (statSync(join(d, f)).isDirectory() ? walk(join(d, f)) : files.push(relative(OUT, join(d, f)))));
     walk(OUT);
-    // Kept on the phone up front: everything the app needs offline — but not KaTeX's .woff / .ttf fonts (Safari uses the
-    // .woff2 copies) or the city list behind the time-zone search (loaded only when that opens; kept once fetched).
-    // That halves what installing it downloads (~1.9 → ~1 MB compressed).
-    const later = (f: string) => /\.(woff|ttf)$/.test(f) || /city-timezones/.test(f) || f === 'version.json';
+    // Kept on the phone up front: everything the app needs offline — but not KaTeX's fonts (fetched, and then kept, the
+    // first time an equation is shown; offline before that, equations show in the system's fonts), the city list behind
+    // the time-zone search (loaded only when that opens; kept once fetched).
+    const later = (f: string) => /\.(woff2?|ttf)$/.test(f) || /city-timezones/.test(f) || f === 'version.json';
     const list = files.filter((f) => f !== 'sw.js' && !later(f)).map((f) => `./${f}`);
     // the version changes whenever any kept file's *contents* change (relays.json's new list included), not only names
     const hash = createHash('sha256').update(pkg.version);

@@ -28,6 +28,7 @@ const timers = new Map<string, ReturnType<typeof setTimeout>>();
 const shown = new Set<string>();
 async function show(a: Alert) {
   if (shown.has(a.key)) return;
+  if (shown.size > 1000) shown.clear(); // (only ever needed for alerts due in the last few minutes)
   shown.add(a.key);
   useStore.getState().showToast(`🔔 ${a.title} · ${a.body}`, false);
   if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {

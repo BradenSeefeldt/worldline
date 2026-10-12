@@ -4,7 +4,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { format, startOfWeek } from 'date-fns';
 import { DRAFT_ID, HOUR_H_RANGE, isLocked, newEventCalendarId, useStore } from '../data/store';
-import { useEventsIn } from '../data/useEvents';
+import { useDeadlinesIn, useEventsIn } from '../data/useEvents';
 import type { CalEvent } from '../data/types';
 import * as D from '../lib/dates';
 import { MIN, clamp, minutesOfDay } from '../lib/dates';
@@ -172,7 +172,7 @@ export function TimeGrid({ days }: { days: number }) {
   const allDayH = Math.max(1, Math.min(lanesInView, MAX_ALLDAY_LANES)) * LANE_H + 8;
 
   // ---- deadline ribbons: each open deadline's runway (default 2 weeks), drawn ahead of time ----
-  const ahead = useEventsIn(rangeStart, rangeEnd + 120 * 86_400_000);
+  const ahead = useDeadlinesIn(rangeStart, rangeEnd + 120 * 86_400_000);
   const ribbons = useMemo(() => {
     const items = ahead
       .filter((e) => e.kind === 'deadline' && !e.done && showDeadlines)

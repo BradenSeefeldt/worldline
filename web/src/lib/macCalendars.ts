@@ -177,6 +177,18 @@ export function reconcile(
       delete nextKnown[key];
     }
   }
+  // Occurrences long before the window are never compared again (the Mac isn't asked about them): what they looked
+  // like is forgotten, or it would pile up for every meeting ever had.
+  for (const key of Object.keys(nextKnown)) {
+    const occ = Number(key.slice(key.lastIndexOf('|') + 1));
+    if (occ > 0) {
+      if (occ < window.from - 30 * DAY) delete nextKnown[key];
+    } else if (!fromM.has(key)) {
+      // a one-off: forgotten once it's long past here, or gone from both sides
+      const w = fromW.get(key);
+      if (!w || (w.allDay ? decode(w) : w).end < window.from - 30 * DAY) delete nextKnown[key];
+    }
+  }
   return { events: [...out.values()], pushes, known: nextKnown };
 }
 
