@@ -44,7 +44,10 @@ jobs:
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git checkout -b relays/auto-update
-          git commit -am "Relay list: swap out relays that stopped working"
+          # only the relay list: anything else changed by the run (a dependency's install step, say) is never committed
+          git add public/relays.json
+          git diff --cached --quiet && { echo "relays.json didn't change"; exit 1; }
+          git commit -m "Relay list: swap out relays that stopped working"
           git push -f "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git" relays/auto-update
           gh pr create --head relays/auto-update --title "Relay list: swap out relays that stopped working" --body-file relay-report.md \
             || gh pr edit relays/auto-update --body-file relay-report.md

@@ -29,19 +29,9 @@ const browserGet = async (key: string): Promise<string | null> => {
 const browserSet = (key: string, value: string) => (hasIdb ? idbSet(key, value) : Promise.resolve(localStorage.setItem(key, value)));
 const browserDel = (key: string) => (hasIdb ? idbDel(key) : Promise.resolve(localStorage.removeItem(key)));
 
-type Db = { execute: (sql: string, args?: unknown[]) => Promise<unknown>; select: <T>(sql: string, args?: unknown[]) => Promise<T> };
-let db: Promise<Db> | null = null;
-const open = () =>
-  (db ??= (async () => {
-    const { default: Database } = await import('@tauri-apps/plugin-sql');
-    const d = (await Database.load('sqlite:worldline.db')) as unknown as Db;
-    await d.execute('CREATE TABLE IF NOT EXISTS kv (key TEXT PRIMARY KEY, value TEXT NOT NULL, updated INTEGER NOT NULL)');
-    await d.execute('CREATE TABLE IF NOT EXISTS snapshots (day TEXT PRIMARY KEY, value TEXT NOT NULL)');
-    return d;
-  })().catch((e) => {
-    db = null; // try opening again next time
-    throw e;
-  }));
+// The Mac app's database (src-tauri/src/db.rs): a few fixed native operations on worldline.db — the page can't run
+// SQL of its own or open any other file.
+const native = async <T,>(cmd: string, args?: Record<string, unknown>) => (await import('@tauri-apps/api/core')).invoke<T>(cmd, args);
 
 const BEFORE_RESTORE = '-before-restore'; // key suffix: what the last restore replaced
 const UNREADABLE = '-unreadable'; // key suffix: saved data that couldn't be read, kept aside
@@ -64,26 +54,11 @@ export function readable(value: string): boolean {
 
 // ---- the two places data can live: the database (the app) or localStorage (a browser)
 const kv = {
-  get: async (key: string): Promise<string | null> => {
-    if (!isApp()) return browserGet(key);
-    const d = await open();
-    return (await d.select<{ value: string }[]>('SELECT value FROM kv WHERE key = $1', [key]))[0]?.value ?? null;
-  },
-  set: async (key: string, value: string, snapshot = false) => {
-    if (!isApp()) return browserSet(key, value);
-    const d = await open();
-    await d.execute('INSERT INTO kv (key, value, updated) VALUES ($1, $2, $3) ON CONFLICT(key) DO UPDATE SET value = $2, updated = $3', [key, value, Date.now()]);
-    if (!snapshot) return;
-    // the day's first save also keeps a snapshot; the newest 14 days are kept
-    const day = new Date().toISOString().slice(0, 10);
-    await d.execute('INSERT OR IGNORE INTO snapshots (day, value) VALUES ($1, $2)', [day, value]);
-    await d.execute('DELETE FROM snapshots WHERE day NOT IN (SELECT day FROM snapshots ORDER BY day DESC LIMIT 14)');
-  },
-  del: async (key: string) => {
-    if (!isApp()) return browserDel(key);
-    const d = await open();
-    await d.execute('DELETE FROM kv WHERE key = $1', [key]);
-  },
+  get: async (key: string): Promise<string | null> => (isApp() ? ((await native<string | null>('db_get', { key })) ?? null) : browserGet(key)),
+  // (snapshot: the day's first save is also kept as that day's snapshot; the newest 14 days are kept)
+  set: async (key: string, value: string, snapshot = false) =>
+    isApp() ? native<void>('db_set', { key, value, snapshot: snapshot ? new Date().toISOString().slice(0, 10) : null }) : browserSet(key, value),
+  del: async (key: string) => (isApp() ? native<void>('db_del', { key }) : browserDel(key)),
 };
 
 // ---- saving: batched (typing fires many changes), retried if it fails, one write at a time (in order) so a slow or
@@ -199,17 +174,10 @@ export const onDataReplaced = (fn: (reloading: boolean) => Promise<void> | void)
 export const dataReplaced = (reloading = false) => Promise.all([...replacedListeners].map((fn) => fn(reloading))).then(() => undefined);
 
 /** The daily snapshots kept in the database (newest first). The Mac app only. */
-export async function listSnapshots(): Promise<string[]> {
-  if (!isApp()) return [];
-  const d = await open();
-  return (await d.select<{ day: string }[]>('SELECT day FROM snapshots ORDER BY day DESC')).map((r) => r.day);
-}
+export const listSnapshots = async (): Promise<string[]> => (isApp() ? native<string[]>('db_snapshots') : []);
 
 /** A snapshot's saved state, as stored. */
-export async function snapshotValue(day: string): Promise<string | null> {
-  const d = await open();
-  return (await d.select<{ value: string }[]>('SELECT value FROM snapshots WHERE day = $1', [day]))[0]?.value ?? null;
-}
+export const snapshotValue = async (day: string): Promise<string | null> => (await native<string | null>('db_snapshot', { day })) ?? null;
 
 /** Replace everything with what was saved (a snapshot, a backup's state, or an undo), keeping what it replaces so the
  *  restore can be undone. The caller reloads the app afterwards. */
@@ -234,7 +202,16 @@ export async function startOverKeepingUnreadable(key: string) {
   const cur = await kv.get(key).catch(() => null);
   if (cur !== null) await kv.set(`${key}${UNREADABLE}-${new Date().toISOString()}`, cur); // never over an earlier copy kept aside
   await kv.del(key).catch(() => undefined);
+  await tidyKeptAside(key);
   loadProblem = null;
+}
+
+/** Copies kept aside by starting over pile up only if it happens again and again: the newest 5 are kept. */
+const KEEP_ASIDE = 5;
+async function tidyKeptAside(key: string) {
+  if (!isApp()) return; // (the browser keeps them in IndexedDB: rare, and small next to the app's data)
+  const keys = await native<string[]>('db_keys', { prefix: `${key}${UNREADABLE}-` }).catch(() => [] as string[]);
+  for (const k of keys.sort().slice(0, -KEEP_ASIDE)) await kv.del(k).catch(() => undefined);
 }
 
 if (isApp()) {

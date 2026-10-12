@@ -38,7 +38,8 @@ async function probe(url: string): Promise<Probe> {
     if (!(await query({ kinds: [30078], until: now - 180 * 86400, limit: 1 }))) return { ok: false, ms: Date.now() - t0, why: 'keeps nothing older than 180 days' };
     return { ok: true, ms: Date.now() - t0 };
   } catch (e) {
-    return { ok: false, ms: Date.now() - t0, why: String((e as Error).message ?? e).slice(0, 80) };
+    // (a relay's own words end up in a pull request: plain letters only — no links, markdown or table breaks)
+    return { ok: false, ms: Date.now() - t0, why: String((e as Error).message ?? e).replace(/[^\w .,:'()-]/g, ' ').slice(0, 80) };
   } finally {
     try { relay?.close(); } catch { /* already closed */ }
   }

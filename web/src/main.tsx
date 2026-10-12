@@ -117,7 +117,7 @@ void Promise.all([loaded, ownTab()]).then(([, mine]) => {
   // Scheduling links are answered by the Mac app (one device answering keeps bookings and availability consistent);
   // the iPhone / web version shows and copies them. Development runs it too, for testing.
   // (development publishes to the public relays only when asked: localStorage 'wl-dev-network' = '1')
-  if (isApp() || (import.meta.env.DEV && devNetwork())) void runScheduling(); // data/schedSync.ts
+  if (import.meta.env.DEV ? devNetwork() : isApp()) void runScheduling(); // data/schedSync.ts
   void resumeSync(); // syncing between your devices, if this one is set up (data/syncEngine.ts)
   runAlerts(); // reminders (data/alerts.ts)
   runMacCalendars(); // the Mac app: calendars on this Mac, kept in step both ways (data/macCalendars.ts)

@@ -11,6 +11,20 @@ import { instantOf, wallClock, zoneOffset } from './zone';
 
 const DAY = 86_400_000;
 
+// A feed is someone else's file: a repeat rule like "every second since 1970" would take hours to expand (and the
+// app would hang), so only rules that can't run away are expanded — nothing more often than hourly (an hourly one only
+// from close to the window), at most 5,000 occurrences per series and 50,000 events per feed.
+const MAX_PER_SERIES = 5_000;
+export const MAX_FEED_EVENTS = 50_000;
+type RuleOpts = ReturnType<typeof RRule.parseString>;
+function tame(o: RuleOpts, dtstart: number, from: number): boolean {
+  const n = (x: unknown) => (x == null ? 1 : Array.isArray(x) ? x.length : 1);
+  if (o.freq === undefined || o.freq > RRule.HOURLY) return false; // MINUTELY, SECONDLY
+  if (o.freq === RRule.HOURLY && from - dtstart > 400 * DAY) return false;
+  return n(o.byhour) * n(o.byminute) * n(o.bysecond) <= 24 && (o.interval ?? 1) >= 1 && (o.interval ?? 1) <= 10_000;
+}
+const upTo = (_: Date, i: number) => i < MAX_PER_SERIES;
+
 export interface IcsCalendar {
   name?: string; // X-WR-CALNAME
   color?: string; // X-APPLE-CALENDAR-COLOR (when present)
@@ -113,8 +127,9 @@ function zonesFromVtimezones(all: Prop[], from: number, to: number): Map<string,
         const rule = get('RRULE');
         if (rule) {
           try {
-            walls = new RRule({ ...RRule.parseString(rule.replace(/^RRULE:/i, '')), dtstart: new Date(start) })
-              .between(new Date(lo), new Date(hi), true).map((x) => x.getTime());
+            const o = RRule.parseString(rule.replace(/^RRULE:/i, ''));
+            if (!tame(o, start, lo)) throw new Error('not expanded');
+            walls = new RRule({ ...o, dtstart: new Date(start) }).between(new Date(lo), new Date(hi), true, upTo).map((x) => x.getTime());
             if (start < lo) walls.unshift(start); // (when it began, for zones that have since stopped changing)
           } catch { /* keep DTSTART alone */ }
         }
@@ -277,12 +292,14 @@ export function parseIcs(text: string, calendarId: string, from: number, to: num
       const c = wallClock(t, zone === 'UTC' ? 'UTC' : zone);
       return { allDay: start.allDay, y: c.y, m: c.m, d: c.d, minutes: c.h * 60 + c.min, tz: start.tz };
     };
+    if (cal.events.length >= MAX_FEED_EVENTS) break;
     let opts;
     try {
       opts = RRule.parseString(rule.replace(/^RRULE:/i, ''));
     } catch {
       continue;
     }
+    if (!tame(opts, floating(start), floating(toWall(from)))) continue;
     if (opts.until) {
       // UNTIL is an instant (…Z), a date or a wall-clock time; bring it onto the same floating clock (inclusive).
       // A date means through the end of that day, for a timed series too. An instant ending an all-day series
@@ -298,7 +315,7 @@ export function parseIcs(text: string, calendarId: string, from: number, to: num
     const skip = new Set(whens(v.filter((p) => p.name === 'EXDATE'), defaultTz).map(keyOf));
     const extra = whens(v.filter((p) => p.name === 'RDATE'), defaultTz);
     const a = floating(toWall(from)) - 2 * DAY, b = floating(toWall(to)) + 2 * DAY;
-    const occ: When[] = rr.between(new Date(a), new Date(b), true).map((d) => ({
+    const occ: When[] = rr.between(new Date(a), new Date(b), true, upTo).map((d) => ({
       allDay: start.allDay, y: d.getUTCFullYear(), m: d.getUTCMonth(), d: d.getUTCDate(), minutes: d.getUTCHours() * 60 + d.getUTCMinutes(), tz: start.tz,
     }));
     const used = new Set<string>();
@@ -329,6 +346,7 @@ export function parseIcs(text: string, calendarId: string, from: number, to: num
       if (e && inWindow(e)) cal.events.push(e);
     }
   }
+  if (cal.events.length > MAX_FEED_EVENTS) cal.events.length = MAX_FEED_EVENTS;
   return cal;
 }
 

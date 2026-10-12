@@ -39,7 +39,8 @@ const HOUR = 3_600_000;
 const DAY = 24 * HOUR;
 const SNAPSHOT_EVERY = 6 * HOUR;
 const MARGIN = DAY; // asking for "what's new since …" starts this much earlier (other devices' clocks may be off)
-const SETTLE = 10_000; // after the relays say they've sent what they had stored: time to open and apply it
+const SETTLE = 10_000;
+const MAX_TRIES = 6; // a message connected relays refused this many times is left to the next snapshot // after the relays say they've sent what they had stored: time to open and apply it
 
 export interface SyncConfig {
   secret: string; // the group's secret (hex) — what the pairing code carries
@@ -108,10 +109,12 @@ export function startEngine(cfg: SyncConfig, transport: Transport, mode: 'resume
   let paused = false; // a newer Worldline's data: nothing is read, written or saved until this device is updated
   let outgoing: Uint8Array[] = []; // changes made here, not yet sealed into messages
   let unsent: Event[] = []; // messages no relay has taken yet: tried again as they are, never merged with newer changes
+  const tries = new Map<string, number>(); // (message id) times relays that were connected refused it
+  let failedRounds = 0; // sends in a row that didn't all go out: the next try waits longer (15 s, 30 s, … 15 min)
   let inFlight = false;
   let sending: Promise<void> = Promise.resolve();
   let acked: Uint8Array | undefined = cfg.sent ? unb64(cfg.sent) : undefined; // (state vector) everything up to this is on the relays
-  let joining = mode === 'join';
+  let joining = mode === 'join' || !!cfg.joining;
   let joinApplied = false; // (joining) the group's data has been shown here
   let sendTimer: ReturnType<typeof setTimeout> | undefined;
   let saveTimer: ReturnType<typeof setTimeout> | undefined;
@@ -144,8 +147,10 @@ export function startEngine(cfg: SyncConfig, transport: Transport, mode: 'resume
   const unsubStore = useStore.subscribe((s) => {
     if (stopped || paused) return;
     const next = pick(s as unknown as Record<string, unknown>);
-    if (applying) {
-      prev = next; // the change came from the document itself
+    if (applying || (joining && !joinApplied)) {
+      // the change came from the document itself — or this device is joining: its own data is about to be replaced
+      // by the group's, and nothing of it goes into the document meanwhile
+      prev = next;
       return;
     }
     if ((Object.keys(next) as (keyof Synced)[]).every((k) => k === 'settings' ? JSON.stringify(next.settings) === JSON.stringify(prev.settings) : next[k] === prev[k])) return;
@@ -248,12 +253,30 @@ export function startEngine(cfg: SyncConfig, transport: Transport, mode: 'resume
       set({ state: 'sending' });
       const ok = await Promise.all(todo.map((ev) => t.send(ev).catch(() => false)));
       if (stopped || paused) return;
-      unsent = [...todo.filter((_, i) => !ok[i]), ...unsent]; // keep those; try again shortly
+      // A relay that was connected and still didn't take a message refused it. One refused again and again (too big,
+      // or not allowed there) is given up on: what it carried goes out in the next snapshot instead, soon.
+      const connected = t.health ? t.health().some((h) => h.ok) : false;
+      let gaveUp = false;
+      const failed = todo.filter((ev, i) => {
+        if (ok[i]) return void tries.delete(ev.id);
+        const n = connected ? (tries.get(ev.id) ?? 0) + 1 : (tries.get(ev.id) ?? 0);
+        if (n < MAX_TRIES) return tries.set(ev.id, n), true;
+        tries.delete(ev.id);
+        gaveUp = true;
+        return false;
+      });
+      unsent = [...failed, ...unsent]; // keep those; try again later
+      if (gaveUp) {
+        changedSinceSnapshot = true;
+        clearTimeout(snapTimer);
+        snapTimer = setTimeout(() => void snapshot(), 30_000);
+      }
       if (unsent.length) {
         set({ state: 'offline' });
-        sendTimer = setTimeout(() => void send(), 15_000);
+        sendTimer = setTimeout(() => void send(), Math.min(15_000 * 2 ** failedRounds++, 15 * 60_000));
         return;
       }
+      failedRounds = 0;
       set({ state: 'synced', lastOut: clock() });
     } finally {
       inFlight = false;
@@ -269,12 +292,18 @@ export function startEngine(cfg: SyncConfig, transport: Transport, mode: 'resume
   async function snapshot() {
     if (stopped || paused) return;
     if (changedSinceSnapshot || clock() - (cfg.snapAt ?? 0) > 7 * DAY) {
+      const sv = Y.encodeStateVector(doc);
       const pieces = await sealSnapshot(Y.encodeStateAsUpdate(doc), keys, cfg.device, clock());
       const results = await Promise.all(pieces.map((p) => t.publish(p).catch(() => 0)));
       if (stopped || paused) return;
       if (results.every((n) => n > 0)) {
         changedSinceSnapshot = false;
         cfg.snapAt = clock();
+        acked = sv; // everything in the document then is on the relays now (in the snapshot)
+        if (!pendingLocal()) {
+          cfg.sent = b64(sv);
+          cfg.unsent = false;
+        }
         void writeConfig(cfg);
       }
     }

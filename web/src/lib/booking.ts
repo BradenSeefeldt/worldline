@@ -199,10 +199,29 @@ export function stillOpen(link: BookingLink, events: CalEvent[], start: number, 
   return publicView(link, events, now).days.some((d) => d.slots.includes(start));
 }
 
+/** `stillOpen` for many start times (your app deciding a batch of requests): the link's times and your busy times are
+ *  worked out once, then each start is a lookup. `withBusy` false: offered at all, with enough notice. */
+export function openChecker(link: BookingLink, events: CalEvent[]) {
+  const length = link.mode === 'book' ? link.durationMin : CELL_MIN;
+  const cells = new Map<number, Interval>();
+  for (const day of linkDays(link)) for (const c of cellsOn(link, day, length)) cells.set(c.start, c);
+  const busy = busyFor(link, events);
+  return (start: number, now: number, withBusy = true) => {
+    const c = cells.get(start);
+    if (!c || start < now + link.noticeMin * MIN) return false;
+    return !withBusy || !busy.some((b) => overlaps(b, c));
+  };
+}
+
 /** Poll: who's free in each cell. */
 export function heat(responses: PollResponse[] | { name: string; cells: number[] }[]) {
   const m = new Map<number, string[]>();
-  for (const r of responses) for (const c of r.cells) m.set(c, [...(m.get(c) ?? []), r.name]);
+  for (const r of responses)
+    for (const c of r.cells) {
+      const names = m.get(c);
+      if (names) names.push(r.name);
+      else m.set(c, [r.name]);
+    }
   return m;
 }
 

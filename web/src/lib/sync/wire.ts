@@ -70,10 +70,35 @@ async function squash(data: Uint8Array): Promise<Uint8Array> {
   const s = new Blob([data as BlobPart]).stream().pipeThrough(new CompressionStream('deflate-raw'));
   return new Uint8Array(await new Response(s).arrayBuffer());
 }
+/** The most one message (or one snapshot's pieces together) may unpack to: a group member can't send something small
+ *  that unpacks to gigabytes. */
+export const MAX_UNPACKED = 64_000_000;
 async function unsquash(data: Uint8Array): Promise<Uint8Array> {
-  if (!native()) return (await import('fflate')).inflateSync(data);
-  const s = new Blob([data as BlobPart]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
-  return new Uint8Array(await new Response(s).arrayBuffer());
+  const parts: Uint8Array[] = [];
+  let size = 0;
+  const take = (p: Uint8Array) => {
+    size += p.length;
+    if (size > MAX_UNPACKED) throw new Error('too big');
+    parts.push(p);
+  };
+  if (!native()) {
+    const { Inflate } = await import('fflate');
+    const inf = new Inflate((p) => take(p));
+    inf.push(data, true);
+  } else {
+    const reader = new Blob([data as BlobPart]).stream().pipeThrough(new DecompressionStream('deflate-raw')).getReader();
+    try {
+      for (let r = await reader.read(); !r.done; r = await reader.read()) take(r.value);
+    } catch (e) {
+      void reader.cancel().catch(() => undefined);
+      throw e;
+    }
+  }
+  if (parts.length === 1) return parts[0];
+  const all = new Uint8Array(size);
+  let o = 0;
+  for (const p of parts) all.set(p, (o += p.length) - p.length);
+  return all;
 }
 
 const tagOf = (ev: Event, name: string) => ev.tags.find((t) => t[0] === name)?.[1];
@@ -159,6 +184,6 @@ export class SnapshotAssembler {
       all.set(x!, o);
       o += x!.length;
     }
-    return unsquash(all);
+    return unsquash(all).catch(() => null); // (damaged, or unpacks to more than MAX_UNPACKED: ignored)
   }
 }

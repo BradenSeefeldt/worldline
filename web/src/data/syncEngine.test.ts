@@ -422,3 +422,57 @@ describe('development', () => {
     expect(useStore.getState().sync.on).toBe(false);
   });
 });
+
+describe('editing while this device is still joining', () => {
+  it('puts nothing of this device’s into the group: a new event made before the group’s data arrived isn’t sent', async () => {
+    const g = await group([ev('m1', 'Mac one')]);
+    await g.e.flush();
+    g.e.stop();
+    useStore.setState({ events: [] });
+    mem.delete('worldline-sync-doc');
+    const offline = memoryTransport({ down: true });
+    const e = startEngine({ secret: g.s, device: newDeviceKey(), joining: true }, offline, 'join');
+    await sleep(50);
+    useStore.setState((s) => ({ events: [...s.events, ev('p2', 'Phone again')] }));
+    await sleep(1700);
+    offline.down = false;
+    await e.flush();
+    expect(offline.events).toHaveLength(0); // nothing went out
+    expect((readDoc(e.doc) as Synced).events ?? []).toHaveLength(0);
+    e.stop();
+    expect((await g.p.pull()).events.map((x) => x.id)).toEqual(['m1']);
+  });
+});
+
+describe('a message the relays keep refusing', () => {
+  it('is retried less and less often, then left to a snapshot (which carries the change)', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+    try {
+      const r = memoryTransport();
+      useStore.getState().startFresh();
+      useStore.setState({ events: [ev('e1', 'One')] });
+      const sec = newSecret();
+      const e = startEngine({ secret: sec, device: newDeviceKey() }, r, 'create');
+      // (step the clock: sealing a message compresses it on real streams, which fake timers don't wait for)
+      const pass = async (ms: number) => {
+        for (let t = 0; t < ms; t += 5_000) {
+          await vi.advanceTimersByTimeAsync(5_000);
+          for (let i = 0; i < 5; i++) await new Promise((ok) => setImmediate(ok));
+        }
+      };
+      await pass(5_000); // the group's first update and snapshot went out
+      let attempts = 0;
+      r.refuse = (x) => !x.tags.some((t) => t[1]?.includes(':s:')) && ++attempts > 0; // updates refused, snapshots taken
+      useStore.getState().updateEvent('e1', { title: 'One, renamed' });
+      await pass(60 * 60_000);
+      expect(attempts).toBe(6); // 15 s, 30 s, 1 min, 2 min, 4 min… then given up — not 240 tries an hour
+      const snap = r.events.filter((x) => x.tags.some((t) => t[1]?.includes(':s:')));
+      const p = phone(r, deriveSync(sec));
+      expect(snap.length).toBeGreaterThan(0);
+      expect((await p.pull()).events[0].title).toBe('One, renamed');
+      e.stop();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});

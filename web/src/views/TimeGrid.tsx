@@ -71,7 +71,7 @@ export function TimeGrid({ days }: { days: number }) {
   const gutterW = (width && width < 600 ? 46 : 58) + (showHome ? HOME_W : 0);
   const colW = width ? (width - gutterW) / days : 0;
   const hideWeekends = useStore((s) => s.settings.hideWeekends) && days > 1;
-  S = hideWeekends ? weekdaysOnly(D.TOTAL_DAYS, D.ORIGIN.getDay()) : allDays(D.TOTAL_DAYS);
+  S = hideWeekends ? weekdaysOnly(D.TOTAL_DAYS, D.weekStart()) : allDays(D.TOTAL_DAYS);
   const TOTAL_DAYS = S.total; // columns
   const dayStartHour = useStore((s) => s.settings.dayStartHour);
 

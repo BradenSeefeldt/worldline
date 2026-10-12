@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { generateSecretKey, type Event } from 'nostr-tools/pure';
 import { bytesToHex, hexToBytes } from '@noble/hashes/utils.js';
 import { BookView, PollView, type MyBooking } from '../pages/GuestPage';
-import { KIND, REFUSAL_KEEP, derive, latestPerGuest, openAvail, openGuestMsg, parseFragment, resolveHolds, sealGuestMsg, toWithdraw, withHolds, type Decoded, type LinkRef, type RemoteView, type Status } from '../lib/schedwire';
+import { KIND, MAX_ANSWERS, REFUSAL_KEEP, derive, latestPerGuest, openAvail, openGuestMsg, parseFragment, resolveHolds, sealGuestMsg, toWithdraw, withHolds, type Decoded, type LinkRef, type RemoteView, type Status } from '../lib/schedwire';
 import type { Transport } from '../lib/relays';
 import { useNow } from '../lib/hooks';
 import { format } from 'date-fns';
@@ -155,10 +155,13 @@ export function RemoteGuest({ transport, hash }: { transport: Transport; hash: s
   }
 
   // group poll: one answer per guest key, as in the host's results (a name typed twice is two answers)
+  // (only cells the poll offers, and at most as many answers as the host keeps: made-up answers can't swamp the page)
+  const offered = new Set(view.days.flatMap((d) => d.cells ?? d.slots));
   const others = latestPerGuest(all)
     .filter((d) => d.msg.t === 'poll' && !minePks.has(d.pk))
     .sort((a, b) => a.at - b.at)
-    .map((d) => ({ name: (d.msg as { name: string }).name, cells: (d.msg as { cells: number[] }).cells }));
+    .slice(0, MAX_ANSWERS)
+    .map((d) => ({ name: (d.msg as { name: string }).name, cells: (d.msg as { cells: number[] }).cells.filter((c) => offered.has(c)) }));
   const onSave = async (name: string, cells: number[]) => {
     const sk = saved.poll ? hexToBytes(saved.poll.sk) : generateSecretKey();
     const ev = sealGuestMsg({ t: 'poll', name, cells }, ref, sk, Math.max(Math.floor(Date.now() / 1000), (saved.poll?.ev?.created_at ?? 0) + 1, avail!.at + 1));

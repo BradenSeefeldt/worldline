@@ -19,7 +19,7 @@ import { hkdf } from '@noble/hashes/hkdf.js';
 import { hmac } from '@noble/hashes/hmac.js';
 import { sha256 } from '@noble/hashes/sha2.js';
 import { bytesToHex, hexToBytes, utf8ToBytes } from '@noble/hashes/utils.js';
-import { publicView, stillOpen, type BookingLink, type LinkMode, type PollResponse, type PublicDay, type PublicView } from './booking';
+import { openChecker, publicView, type BookingLink, type LinkMode, type PollResponse, type PublicDay, type PublicView } from './booking';
 import type { CalEvent } from '../data/types';
 
 export const PROTO = 1; // link-address and message format version
@@ -298,6 +298,11 @@ export function sealGuestMsg(msg: GuestMsg, ref: LinkRef, guestSk: Uint8Array, c
   return finalizeEvent({ kind: KIND, created_at: createdAt, tags: [['d', msgTag]], content: nip44.encrypt(JSON.stringify(body), key) }, guestSk);
 }
 
+/** A name a guest typed, as shown and stored: one line, no control characters or text-direction overrides (which
+ *  could make a name display as something else), trimmed and capped. */
+export const cleanName = (s: string) =>
+  s.replace(/[\u0000-\u001f\u007f-\u009f\u200e\u200f\u202a-\u202e\u2066-\u2069]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, MAX_NAME);
+
 /** Decode a guest's message with the link (guests and host). With `hostSk`, a booking's sealed name is opened too. */
 export function openGuestMsg(ev: Event, ref: LinkRef, hostSk?: Uint8Array): Decoded | null {
   const { key, msgTag } = derive(ref.secret);
@@ -310,14 +315,14 @@ export function openGuestMsg(ev: Event, ref: LinkRef, hostSk?: Uint8Array): Deco
     let name: string | undefined;
     if (hostSk && typeof b.n === 'string' && b.n.length < 1000)
       try {
-        name = nip44.decrypt(b.n, nip44.getConversationKey(hostSk, ev.pubkey)).trim().slice(0, MAX_NAME) || undefined;
+        name = cleanName(nip44.decrypt(b.n, nip44.getConversationKey(hostSk, ev.pubkey))) || undefined;
       } catch {
         /* unreadable name: book without it */
       }
     const av = isInt(b.a) && typeof b.k === 'string' && TOK.test(b.k) ? { at: b.a, tok: b.k } : undefined;
     return { ...base, msg: { t: 'book', start: b.s * MIN, ...(name ? { name } : {}), ...(av ? { av } : {}) } };
   }
-  if (b.t === 'poll' && typeof b.name === 'string' && b.name.trim() && isIntArr(b.c)) return { ...base, msg: { t: 'poll', name: b.name.trim().slice(0, MAX_NAME), cells: b.c.map((c) => c * MIN) } };
+  if (b.t === 'poll' && typeof b.name === 'string' && cleanName(b.name) && isIntArr(b.c)) return { ...base, msg: { t: 'poll', name: cleanName(b.name), cells: b.c.map((c) => c * MIN) } };
   if (b.t === 'cancel') return { ...base, msg: { t: 'cancel' } };
   return null;
 }
@@ -444,6 +449,9 @@ export function askedAt(d: Decoded, sk: string | undefined, nowSec: number): num
  * counts. Requests for meetings more than KEEP_AFTER over are ignored.
  * `events`: your calendar's events around the link's dates (occurrences expanded).
  */
+/** The most requests answered in one go (the earliest; any more wait for the next round). */
+export const MAX_BATCH = 500;
+
 export function planBookings(link: BookingLink, events: CalEvent[], msgs: Decoded[], now: number) {
   const decided = link.decisions ?? {};
   const len = link.durationMin * MIN;
@@ -457,13 +465,14 @@ export function planBookings(link: BookingLink, events: CalEvent[], msgs: Decode
   // meetings this link already booked (still on your calendar), then the ones accepted in this batch
   const taken: { start: number; end: number }[] = events.filter((e) => e.bookedVia === link.id).map((e) => ({ start: e.start, end: e.end }));
   let closed = !!link.closed;
-  for (const { d, asked } of fresh) {
+  const open = openChecker(link, events); // (the link's times and your busy times, worked out once for the batch)
+  for (const { d, asked } of fresh.slice(0, MAX_BATCH)) {
     const start = (d.msg as { start: number }).start;
     let status: Status;
     if (closed) status = 'closed';
-    else if (asked === null || !stillOpen(link, [], start, asked * 1000)) status = 'invalid'; // a forged clock, or not a time this link offered then
+    else if (asked === null || !open(start, asked * 1000, false)) status = 'invalid'; // a forged clock, or not a time this link offered then
     else if (taken.some((t) => overlap(t, { start, end: start + len }))) status = 'taken';
-    else if (!stillOpen(link, events, start, asked * 1000)) status = 'busy';
+    else if (!open(start, asked * 1000)) status = 'busy';
     else status = 'ok';
     decisions[d.pk] = { id: d.id, status, start, at: now };
     if (status !== 'ok' || asked === null) continue;
@@ -478,6 +487,9 @@ export function planBookings(link: BookingLink, events: CalEvent[], msgs: Decode
  *  Answers are never merged by name: someone typing a name that's already there adds their own answer beside it and
  *  can't replace it; a guest changes their answer from the browser they gave it in (it keeps their key). Worked out
  *  from the whole inbox each time, so the result doesn't depend on the order answers arrived in. */
+/** The most answers one poll keeps. */
+export const MAX_ANSWERS = 300;
+
 export function mergeResponses(link: BookingLink, msgs: Decoded[], offeredCells: Set<number>): { responses: PollResponse[]; changed: string[] } {
   const prev = new Map(link.responses.map((r) => [r.id, r]));
   const updated = new Map<string, PollResponse>();
@@ -487,6 +499,9 @@ export function mergeResponses(link: BookingLink, msgs: Decoded[], offeredCells:
     if (p && p.updatedAt >= d.at * 1000) continue;
     updated.set(d.pk, { id: d.pk, name: d.msg.name, cells: [...new Set(d.msg.cells.filter((c) => offeredCells.has(c)))].sort((a, b) => a - b), updatedAt: d.at * 1000 });
   }
+  // at most MAX_ANSWERS (the earliest guests): a flood of made-up answers can't bury the poll or fill your devices
+  const kept = new Set(link.responses.map((r) => r.id));
+  for (const id of [...updated.keys()]) if (!kept.has(id) && kept.size >= MAX_ANSWERS) updated.delete(id); else kept.add(id);
   return { responses: [...link.responses.filter((r) => !updated.has(r.id)), ...updated.values()], changed: [...updated.values()].map((r) => r.name) };
 }
 

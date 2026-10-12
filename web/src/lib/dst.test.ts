@@ -11,7 +11,7 @@ import { endSeries, removeEvent, updateEvent } from './mutate';
 import { parseQuick } from './quickparse';
 import { parseCommand } from './commands';
 import { upcomingAlerts } from './alerts';
-import { ORIGIN, TOTAL_DAYS, dayIndex, earliestEnd, shiftWall } from './dates';
+import { TOTAL_DAYS, dayIndex, earliestEnd, shiftWall, weekStart } from './dates';
 import { weekdaysOnly } from './slots';
 import { DEFAULT_CALENDARS } from '../data/mock';
 import type { CalEvent } from '../data/types';
@@ -116,7 +116,7 @@ describe('"All events" moves count days and wall-clock time (M11, M12)', () => {
 
 describe('dragging in the grid (M13), alerts (L7), all-day ends (L11)', () => {
   it('M13: with weekends hidden, Friday’s column → Monday’s is 3 days later', () => {
-    const S = weekdaysOnly(TOTAL_DAYS, ORIGIN.getDay()); // the grid's columns, as TimeGrid makes them
+    const S = weekdaysOnly(TOTAL_DAYS, weekStart()); // the grid's columns, as TimeGrid makes them
     const fri = S.toSlot(dayIndex(t(2026, 9, 16)), 'exact');
     const mon = S.toSlot(dayIndex(t(2026, 9, 19)), 'exact');
     expect(mon - fri).toBe(1); // neighbouring columns…

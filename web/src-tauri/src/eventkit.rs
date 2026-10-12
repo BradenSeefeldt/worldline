@@ -41,7 +41,7 @@ pub struct EkEvent {
   recurring: bool,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone)]
 pub struct EkRule {
   freq: String, // daily | weekly | monthly | yearly
   interval: i64,
@@ -166,6 +166,9 @@ fn to_event(e: &EKEvent) -> Option<EkEvent> {
 }
 
 pub fn events(from: f64, to: f64, calendar_ids: Vec<String>) -> Vec<EkEvent> {
+  if !sane_time(from) || !sane_time(to) || to < from {
+    return vec![];
+  }
   unsafe {
     let store = EKEventStore::new();
     let cals = find_calendars(&store, &calendar_ids);
@@ -222,11 +225,34 @@ fn rule(r: &EkRule) -> Retained<EKRecurrenceRule> {
   }
 }
 
+/// A time the bridge accepts: a real instant between 1900 and 2200 (synced data is checked before EventKit sees it).
+fn sane_time(ms: f64) -> bool {
+  ms.is_finite() && (-2_208_988_800_000.0..7_258_118_400_000.0).contains(&ms)
+}
+
+/// Is this something EventKit can be asked to save? (Checked here too, whatever the page sends.)
+pub fn check(s: &EkSave) -> Result<(), String> {
+  if !sane_time(s.start) || !sane_time(s.end) || s.end < s.start {
+    return Err("That event's times aren't valid".into());
+  }
+  if s.occ.is_some_and(|o| !sane_time(o) && o != 0.0) || s.rule.as_ref().is_some_and(|r| r.until.is_some_and(|u| !sane_time(u)) || !(1..=1000).contains(&r.interval)) {
+    return Err("That event's repeat isn't valid".into());
+  }
+  if s.title.len() > 10_000 || s.location.as_ref().is_some_and(|x| x.len() > 10_000) || s.notes.as_ref().is_some_and(|x| x.len() > 1_000_000) || s.url.as_ref().is_some_and(|x| x.len() > 10_000) {
+    return Err("That event is too big for the Calendar app".into());
+  }
+  Ok(())
+}
+
 /// Save one occurrence (or a new event); returns its identifier.
 pub fn save(s: EkSave) -> Result<String, String> {
+  check(&s)?;
   unsafe {
     let store = EKEventStore::new();
     let cal = store.calendarWithIdentifier(&ns(&s.calendar)).ok_or("That calendar is gone from this Mac")?;
+    if !cal.allowsContentModifications() {
+      return Err("That calendar is read-only in the Calendar app".into());
+    }
     let ev = match (&s.ext, s.occ) {
       (Some(ext), Some(occ)) => occurrence(&store, ext, occ, &s.calendar).ok_or("That event is gone from the Calendar app")?,
       _ => EKEvent::eventWithEventStore(&store),
@@ -238,7 +264,15 @@ pub fn save(s: EkSave) -> Result<String, String> {
     ev.setEndDate(Some(&date(if s.all_day { s.end - 1000.0 } else { s.end })));
     ev.setLocation(s.location.as_deref().map(ns).as_deref());
     ev.setNotes(s.notes.as_deref().map(ns).as_deref());
-    ev.setURL(s.url.as_deref().and_then(|u| NSURL::URLWithString(&ns(u))).as_deref());
+    // (a link EventKit can't read leaves the event's link as it was, rather than clearing it)
+    match s.url.as_deref() {
+      None => ev.setURL(None),
+      Some(u) => {
+        if let Some(url) = NSURL::URLWithString(&ns(u)) {
+          ev.setURL(Some(&url));
+        }
+      }
+    }
     if s.ext.is_none() {
       if let Some(r) = &s.rule {
         ev.addRecurrenceRule(&rule(r));
@@ -251,11 +285,40 @@ pub fn save(s: EkSave) -> Result<String, String> {
 
 /// Delete one occurrence.
 pub fn delete(ext: String, occ: f64, calendar: String) -> Result<(), String> {
+  if !(occ == 0.0 || sane_time(occ)) {
+    return Err("That event's time isn't valid".into());
+  }
   unsafe {
     let store = EKEventStore::new();
+    if store.calendarWithIdentifier(&ns(&calendar)).is_some_and(|c| !c.allowsContentModifications()) {
+      return Err("That calendar is read-only in the Calendar app".into());
+    }
     match occurrence(&store, &ext, occ, &calendar) {
       Some(ev) => store.removeEvent_span_commit_error(&ev, EKSpan::ThisEvent, true).map_err(err),
       None => Ok(()), // already gone
     }
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+  fn ev(start: f64, end: f64) -> EkSave {
+    EkSave { ext: None, occ: None, calendar: "c".into(), title: "t".into(), start, end, all_day: false, location: None, notes: None, url: None, rule: None }
+  }
+  #[test]
+  fn checks_what_it_is_asked_to_save() {
+    assert!(check(&ev(1.7e12, 1.7e12 + 3.6e6)).is_ok());
+    assert!(check(&ev(1.7e12, 1.6e12)).is_err()); // ends before it starts
+    assert!(check(&ev(f64::INFINITY, 1.7e12)).is_err());
+    assert!(check(&ev(1e16, 1e16)).is_err());
+    let mut r = ev(1.7e12, 1.7e12 + 1.0);
+    r.rule = Some(EkRule { freq: "weekly".into(), interval: 0, by_day: vec![9], until: None });
+    assert!(check(&r).is_err());
+    r.rule = Some(EkRule { freq: "weekly".into(), interval: 2, by_day: vec![1, 9], until: Some(1.8e12) });
+    assert!(check(&r).is_ok());
+    let mut big = ev(1.7e12, 1.7e12);
+    big.title = "x".repeat(20_000);
+    assert!(check(&big).is_err());
   }
 }

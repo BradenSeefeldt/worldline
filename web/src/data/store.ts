@@ -1,5 +1,5 @@
-// Central app state. Views read from here and call these actions; later the event
-// actions will also talk to the NAS server (which syncs with Google Calendar).
+// Central app state. Views read from here and call these actions. Saved by data/persist.ts; other devices' changes
+// arrive through data/syncEngine.ts (applySynced), the Mac's calendars through data/macCalendars.ts.
 import { create } from 'zustand';
 import { createJSONStorage, persist, type PersistStorage, type StorageValue } from 'zustand/middleware';
 import { addDays, addMonths, startOfDay, startOfMonth } from 'date-fns';
@@ -22,6 +22,7 @@ import { fetchText, canFetchFeeds } from '../lib/platform';
 import { appStorage, dataReplaced, markLoadProblem, onFlush } from './persist';
 import { fmtWhen } from '../lib/format';
 import { STORE_VERSION } from './storeVersion';
+import { cleanEvent, cleanLink, cleanList } from './validate';
 import type { UpdateStatus } from '../lib/updates';
 import { rebaseList, rebaseNested } from '../lib/sync/rebase';
 import type { SyncStatus } from '../lib/sync/status';
@@ -377,10 +378,11 @@ export function cleanSaved(persisted: unknown, current: Pick<State, 'view' | 'ho
     } else out[k] = v;
   }
   const ok = <T,>(k: string, valid: (x: unknown) => boolean, d: T) => (k in out && !valid(out[k]) ? (out[k] = d) : undefined);
-  if (Array.isArray(out.events)) out.events = (out.events as Record<string, unknown>[]).filter((e) => typeof e.id === 'string' && typeof e.calendarId === 'string' && num(e.start) && num(e.end));
+  if (Array.isArray(out.events)) out.events = cleanList(out.events, cleanEvent);
+  if (Array.isArray(out.links)) out.links = cleanList(out.links, cleanLink);
   if (Array.isArray(out.tasks)) out.tasks = (out.tasks as Record<string, unknown>[]).filter((t) => typeof t.id === 'string' && typeof t.title === 'string');
   if (Array.isArray(out.habits)) out.habits = (out.habits as Record<string, unknown>[]).filter((h) => typeof h.id === 'string');
-  for (const k of ['projects', 'threads', 'projectLog', 'links'] as const) if (Array.isArray(out[k])) out[k] = (out[k] as Record<string, unknown>[]).filter((x) => typeof x.id === 'string');
+  for (const k of ['projects', 'threads', 'projectLog'] as const) if (Array.isArray(out[k])) out[k] = (out[k] as Record<string, unknown>[]).filter((x) => typeof x.id === 'string');
   if (Array.isArray(out.calendars)) out.calendars = withWritable((out.calendars as Record<string, unknown>[]).filter((c) => typeof c.id === 'string' && typeof c.name === 'string') as unknown as CalendarSource[]);
   ok('view', (x) => ['day', '3day', 'week', 'month'].includes(x as string), current.view);
   ok('page', (x) => ['calendar', 'habits', 'projects'].includes(x as string), current.page);
@@ -913,6 +915,9 @@ export const useStore = create<State>()(
             for (const k of maps) if (patch[k]) out[k] = rebaseNested(snap[k] as Record<string, unknown>, x[k] as Record<string, unknown>, patch[k] as Record<string, unknown>);
             return out as unknown as Snapshot;
           };
+          // (another device's records are checked like a saved file's: a malformed one must never crash this app)
+          if (patch.events) patch = { ...patch, events: cleanList(patch.events, cleanEvent) };
+          if (patch.links) patch = { ...patch, links: cleanList(patch.links, cleanLink) };
           const { settings, ...rest } = patch as { settings?: Partial<AppSettings> } & Record<string, unknown>;
           set({
             ...(rest as Partial<State>),

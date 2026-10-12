@@ -1,14 +1,19 @@
-// The native side of the app: a window showing the web app, plus plugins — sql (the SQLite database the app saves
-// to), fetch_feed below (reading calendar links: public addresses only), opener (links → browser, folders → Finder), dialog (the Save panel for backups
-// and exports), autostart (Settings → Open at login), updater + process (download a signed new version, restart into it).
+// The native side of the app: a window showing the web app; the database it saves to (src/db.rs: a few fixed
+// operations on worldline.db, nothing else); fetch_feed below (reading calendar links: public addresses only);
+// show_in_finder (folders open in Finder, files are shown there, nothing is ever launched); plugins — opener (web links
+// → the browser), dialog (the Save panel for backups and exports), autostart (Settings → Open at login), updater +
+// process (download a signed new version, restart into it).
 // Reminders: the web app sends the alerts due in the next day (set_alerts, again whenever something changes); a thread
 // here shows each one at its time as a Mac notification — native, so they arrive on time even while the window is
 // hidden and its web page is throttled. Each alert shows once; one more than 5 minutes late (the Mac was asleep) is
 // skipped rather than shown late.
-// Quitting (⌘Q, or Worldline → Quit): the web app is asked to save first (the built-in Quit would end the app before
-// the last keystrokes reached the database), then it quits; if it doesn't answer within 3 s it quits anyway.
+// Quitting — ⌘Q, Worldline → Quit, the Dock's Quit, logging out, shutting down: the web app is asked to save first
+// (otherwise the app would end before the last keystrokes reached the database), then it quits; if it doesn't answer
+// within 3 s it quits anyway. (macOS asks the app before it quits — applicationShouldTerminate, see `quit` below — and
+// waits for the answer.)
 // Closing the window: the web app decides (Settings → General → Keep running): by default it hides the window and the
 // app keeps running (like Calendar or Mail), so scheduling links stay live; ⌘Q quits; the Dock icon brings it back.
+mod db;
 #[cfg(target_os = "macos")]
 mod eventkit;
 
@@ -23,7 +28,7 @@ use tauri_plugin_notification::NotificationExt;
 #[derive(serde::Deserialize, Clone)]
 struct Alert {
   key: String,
-  at: i64, // epoch ms
+  at: f64, // epoch ms
   title: String,
   body: String,
 }
@@ -40,13 +45,63 @@ fn now_ms() -> i64 {
   SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis() as i64).unwrap_or(0)
 }
 
-/// The alerts due soon (replaces the previous list).
+/// The alerts due soon (replaces the previous list). At most 500, each with a real time.
 #[tauri::command]
 fn set_alerts(state: tauri::State<AlertState>, alerts: Vec<Alert>) {
   let (m, c) = &*state.0;
   let mut a = m.lock().unwrap_or_else(|e| e.into_inner());
-  a.list = alerts;
+  a.list = alerts.into_iter().filter(|x| x.at.is_finite()).take(500).collect();
   c.notify_all();
+}
+
+// ---- the database (src/db.rs). Each call runs on a worker thread: a big save never holds up the window.
+type DbState<'a> = tauri::State<'a, std::sync::Arc<db::Db>>;
+async fn on_db<T: Send + 'static>(db: &DbState<'_>, f: impl FnOnce(&db::Db) -> Result<T, String> + Send + 'static) -> Result<T, String> {
+  let d = db.inner().clone();
+  tauri::async_runtime::spawn_blocking(move || f(&d)).await.map_err(|e| e.to_string())?
+}
+#[tauri::command]
+async fn db_get(db: DbState<'_>, key: String) -> Result<Option<String>, String> {
+  on_db(&db, move |d| d.get(&key)).await
+}
+#[tauri::command]
+async fn db_set(db: DbState<'_>, key: String, value: String, snapshot: Option<String>) -> Result<(), String> {
+  on_db(&db, move |d| d.set(&key, &value, now_ms(), snapshot.as_deref())).await
+}
+#[tauri::command]
+async fn db_del(db: DbState<'_>, key: String) -> Result<(), String> {
+  on_db(&db, move |d| d.del(&key)).await
+}
+#[tauri::command]
+async fn db_keys(db: DbState<'_>, prefix: String) -> Result<Vec<String>, String> {
+  on_db(&db, move |d| d.keys(&prefix)).await
+}
+#[tauri::command]
+async fn db_snapshots(db: DbState<'_>) -> Result<Vec<String>, String> {
+  on_db(&db, |d| d.snapshot_days()).await
+}
+#[tauri::command]
+async fn db_snapshot(db: DbState<'_>, day: String) -> Result<Option<String>, String> {
+  on_db(&db, move |d| d.snapshot(&day)).await
+}
+
+/// Show something in Finder: a folder opens there; anything else — a file, an app, any other bundle — is only shown
+/// (selected in its folder), never opened, so a path can't launch a program. Only in your home folder or on a
+/// connected drive.
+#[tauri::command]
+fn show_in_finder(path: String) -> Result<(), String> {
+  let p = std::fs::canonicalize(&path).map_err(|_| "not found".to_string())?;
+  let home = std::env::var("HOME").map_err(|e| e.to_string())?;
+  if !(p.starts_with(&home) || p.starts_with("/Volumes")) {
+    return Err("only folders in your home folder or on a connected drive".into());
+  }
+  let plain_folder = p.is_dir() && p.extension().is_none();
+  let mut cmd = std::process::Command::new("/usr/bin/open");
+  if !plain_folder {
+    cmd.arg("-R");
+  }
+  cmd.arg(&p).spawn().map_err(|e| e.to_string())?;
+  Ok(())
 }
 
 // ---- Calendars on this Mac (src/eventkit.rs). Each runs on a worker thread: asking for access waits for the person.
@@ -117,13 +172,34 @@ mod tests {
   }
 }
 
+/// Names are looked up here, at connect time, and only public addresses are used: a name can't point (or be
+/// re-pointed, between the check and the fetch, or after a redirect) at this Mac or the local network.
+struct PublicOnly;
+impl tauri_plugin_http::reqwest::dns::Resolve for PublicOnly {
+  fn resolve(&self, name: tauri_plugin_http::reqwest::dns::Name) -> tauri_plugin_http::reqwest::dns::Resolving {
+    use std::net::ToSocketAddrs;
+    let host = name.as_str().to_string();
+    Box::pin(async move {
+      type E = Box<dyn std::error::Error + Send + Sync>;
+      let all = tauri::async_runtime::spawn_blocking(move || (host.as_str(), 0).to_socket_addrs().map(|a| a.collect::<Vec<_>>()))
+        .await
+        .map_err(|e| Box::new(e) as E)?
+        .map_err(|e| Box::new(e) as E)?;
+      let ok: Vec<std::net::SocketAddr> = all.into_iter().filter(|a| is_public_ip(a.ip())).collect();
+      if ok.is_empty() {
+        return Err("not a public address".into());
+      }
+      Ok(Box::new(ok.into_iter()) as tauri_plugin_http::reqwest::dns::Addrs)
+    })
+  }
+}
+
 /// Read a calendar link (.ics) for a subscription. Only public web addresses — never this Mac or the local network
 /// (the page can't use this to reach a router, a printer or a dev server), at most 20 MB, 30 s.
 #[tauri::command]
 async fn fetch_feed(url: String) -> Result<String, String> {
   use std::net::{IpAddr, ToSocketAddrs};
   use tauri_plugin_http::reqwest;
-  const public: fn(IpAddr) -> bool = is_public_ip;
   let u = reqwest::Url::parse(&url).map_err(|_| "that isn't a web address".to_string())?;
   if !matches!(u.scheme(), "http" | "https") {
     return Err("only http(s) calendar links can be read".into());
@@ -134,16 +210,17 @@ async fn fetch_feed(url: String) -> Result<String, String> {
     .await
     .map_err(|e| e.to_string())?
     .map_err(|_| "couldn't find that server (check the link, or the internet connection)".to_string())?;
-  if addrs.is_empty() || !addrs.into_iter().all(public) {
+  if addrs.is_empty() || !addrs.into_iter().all(is_public_ip) {
     return Err("that address is on this Mac or the local network — only public calendar links can be read".into());
   }
   let client = reqwest::Client::builder()
     .timeout(std::time::Duration::from_secs(30))
+    .dns_resolver(std::sync::Arc::new(PublicOnly))
     // a redirect may not lead somewhere private either (a name is checked again when it's fetched next time)
     .redirect(reqwest::redirect::Policy::custom(|a| {
       let private = match a.url().host() {
-        Some(url::Host::Ipv4(v)) => !public(IpAddr::V4(v)),
-        Some(url::Host::Ipv6(v)) => !public(IpAddr::V6(v)),
+        Some(url::Host::Ipv4(v)) => !is_public_ip(IpAddr::V4(v)),
+        Some(url::Host::Ipv6(v)) => !is_public_ip(IpAddr::V6(v)),
         Some(url::Host::Domain(d)) => d == "localhost" || d.ends_with(".local") || d.ends_with(".localhost"),
         None => true,
       };
@@ -162,9 +239,14 @@ async fn fetch_feed(url: String) -> Result<String, String> {
   if res.content_length().unwrap_or(0) > 20_000_000 {
     return Err("that calendar is too big (over 20 MB)".into());
   }
-  let bytes = res.bytes().await.map_err(|e| e.to_string())?;
-  if bytes.len() > 20_000_000 {
-    return Err("that calendar is too big (over 20 MB)".into());
+  // read in pieces, stopping at 20 MB (a server needn't say how big it is up front)
+  let mut res = res;
+  let mut bytes = Vec::new();
+  while let Some(chunk) = res.chunk().await.map_err(|e| e.to_string())? {
+    if bytes.len() + chunk.len() > 20_000_000 {
+      return Err("that calendar is too big (over 20 MB)".into());
+    }
+    bytes.extend_from_slice(&chunk);
   }
   Ok(String::from_utf8_lossy(&bytes).into_owned())
 }
@@ -181,16 +263,16 @@ fn run_alerts(app: tauri::AppHandle, state: AlertState) {
     let mut a = m.lock().unwrap_or_else(|e| e.into_inner());
     loop {
       let now = now_ms();
-      let due: Vec<Alert> = a.list.iter().filter(|x| x.at <= now && x.at > now - LATE_MS && !a.fired.contains(&x.key)).cloned().collect();
+      let due: Vec<Alert> = a.list.iter().filter(|x| x.at <= now as f64 && x.at > (now - LATE_MS) as f64 && !a.fired.contains(&x.key)).cloned().collect();
       for d in due {
         let _ = app.notification().builder().title(&d.title).body(&d.body).show();
         let _ = app.emit("alert", (&d.title, &d.body)); // shown inside the app too (in case notifications are off)
         a.fired.insert(d.key);
       }
       // forget alerts no longer listed (and long past), so the set stays small
-      let keep: HashSet<String> = a.list.iter().filter(|x| x.at > now - 2 * LATE_MS).map(|x| x.key.clone()).collect();
+      let keep: HashSet<String> = a.list.iter().filter(|x| x.at > (now - 2 * LATE_MS) as f64).map(|x| x.key.clone()).collect();
       a.fired.retain(|k| keep.contains(k));
-      let next = a.list.iter().filter(|x| x.at > now).map(|x| x.at).min();
+      let next = a.list.iter().filter(|x| x.at > now as f64).map(|x| x.at as i64).min();
       let wait = next.map_or(60_000, |t| (t - now).clamp(50, 60_000)) as u64;
       a = c.wait_timeout(a, Duration::from_millis(wait)).unwrap_or_else(|e| e.into_inner()).0;
     }
@@ -211,19 +293,82 @@ async fn save_file(app: tauri::AppHandle, name: String, contents: String) -> Res
 /// The web app has saved everything (after "quit-requested"): quit now.
 #[tauri::command]
 fn quit_now(app: tauri::AppHandle) {
-  app.exit(0);
+  quit::finish(&app);
 }
 
+/// Ask the web app to save, then quit (it calls quit_now; after 3 s the app quits anyway). Asked once per quit.
 fn request_quit(app: &tauri::AppHandle) {
+  if quit::ASKED.swap(true, std::sync::atomic::Ordering::SeqCst) {
+    return;
+  }
   if app.emit("quit-requested", ()).is_err() {
-    app.exit(0);
+    quit::finish(app);
     return;
   }
   let app = app.clone();
   std::thread::spawn(move || {
     std::thread::sleep(std::time::Duration::from_secs(3));
-    app.exit(0);
+    quit::finish(&app);
   });
+}
+
+/// Quitting however it's asked for. macOS asks the app first (`applicationShouldTerminate:` — the Dock's Quit, logging
+/// out, shutting down, an AppleScript `quit`); the answer is "later", the web app saves, then the answer is yes.
+mod quit {
+  use std::sync::atomic::{AtomicBool, Ordering::SeqCst};
+  pub static ASKED: AtomicBool = AtomicBool::new(false); // the web app has been asked to save
+  static DONE: AtomicBool = AtomicBool::new(false); // saved (or out of time): quitting goes ahead
+  static WAITING: AtomicBool = AtomicBool::new(false); // macOS is waiting for the answer
+  static APP: std::sync::OnceLock<tauri::AppHandle> = std::sync::OnceLock::new();
+
+  /// Quit now: answer macOS if it's waiting, else quit.
+  pub fn finish(app: &tauri::AppHandle) {
+    if DONE.swap(true, SeqCst) {
+      return;
+    }
+    #[cfg(target_os = "macos")]
+    if WAITING.swap(false, SeqCst) {
+      let _ = app.run_on_main_thread(|| unsafe {
+        use objc2::runtime::{AnyObject, Bool};
+        let ns: *mut AnyObject = objc2::msg_send![objc2::class!(NSApplication), sharedApplication];
+        let _: () = objc2::msg_send![ns, replyToApplicationShouldTerminate: Bool::YES];
+      });
+      return;
+    }
+    app.exit(0);
+  }
+
+  #[cfg(target_os = "macos")]
+  extern "C-unwind" fn should_terminate(_this: *mut objc2::runtime::AnyObject, _cmd: objc2::runtime::Sel, _sender: *mut objc2::runtime::AnyObject) -> usize {
+    const NOW: usize = 1;
+    const LATER: usize = 2;
+    match APP.get() {
+      Some(app) if !DONE.load(SeqCst) => {
+        WAITING.store(true, SeqCst);
+        super::request_quit(app);
+        LATER
+      }
+      _ => NOW,
+    }
+  }
+
+  /// Hear macOS's "may I quit?" (added to the app delegate; tao, under Tauri, doesn't answer it).
+  pub fn install(app: &tauri::AppHandle) {
+    let _ = APP.set(app.clone());
+    #[cfg(target_os = "macos")]
+    unsafe {
+      use objc2::runtime::{AnyObject, Imp};
+      let ns: *mut AnyObject = objc2::msg_send![objc2::class!(NSApplication), sharedApplication];
+      let delegate: *mut AnyObject = objc2::msg_send![ns, delegate];
+      if delegate.is_null() {
+        return;
+      }
+      let sel = objc2::sel!(applicationShouldTerminate:);
+      let cls = (*delegate).class() as *const objc2::runtime::AnyClass as *mut objc2::runtime::AnyClass;
+      let imp: Imp = std::mem::transmute(should_terminate as extern "C-unwind" fn(_, _, _) -> usize);
+      objc2::ffi::class_addMethod(cls, sel, imp, c"Q@:@".as_ptr());
+    }
+  }
 }
 
 /// The standard Mac menu, with its Quit swapped for one that saves first.
@@ -314,14 +459,13 @@ fn uninstall(app: tauri::AppHandle) -> Result<(), String> {
     .stderr(std::process::Stdio::null())
     .spawn()
     .map_err(|e| e.to_string())?;
-  app.exit(0);
+  quit::finish(&app);
   Ok(())
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
   tauri::Builder::default()
-    .plugin(tauri_plugin_sql::Builder::default().build())
     .plugin(tauri_plugin_opener::init())
     .plugin(tauri_plugin_dialog::init())
     .plugin(tauri_plugin_autostart::init(tauri_plugin_autostart::MacosLauncher::LaunchAgent, None))
@@ -330,7 +474,8 @@ pub fn run() {
     .plugin(tauri_plugin_notification::init())
     .manage(AlertState::default())
     .invoke_handler(tauri::generate_handler![
-      save_file, quit_now, confirm_uninstall, uninstall, set_alerts, test_alert, fetch_feed,
+      save_file, quit_now, confirm_uninstall, uninstall, set_alerts, test_alert, fetch_feed, show_in_finder,
+      db_get, db_set, db_del, db_keys, db_snapshots, db_snapshot,
       #[cfg(target_os = "macos")] ek_status,
       #[cfg(target_os = "macos")] ek_request,
       #[cfg(target_os = "macos")] ek_calendars,
@@ -344,7 +489,10 @@ pub fn run() {
       }
     })
     .setup(|app| {
+      // the same file earlier versions used: ~/Library/Application Support/<app id>/worldline.db
+      app.manage(std::sync::Arc::new(db::Db::new(app.path().app_config_dir()?.join("worldline.db"))));
       app.set_menu(menu(app.handle())?)?;
+      quit::install(app.handle());
       run_alerts(app.handle().clone(), app.state::<AlertState>().inner().clone());
       if cfg!(debug_assertions) {
         app.handle().plugin(

@@ -28,12 +28,13 @@ export async function openExternal(url: string) {
 /** A local path that the app can open in Finder ("~/papers", "/Users/…"); cluster:… and the like are not. */
 export const isLocalPath = (p: string) => /^(~|\/)/.test(p.trim());
 
-/** Open a folder or file in Finder (the app), or copy its path (a browser can't). Returns what happened. */
+/** Show a folder or file in Finder (the app: a folder opens, a file is shown in its folder — never opened or run,
+ *  src-tauri/src/lib.rs → show_in_finder), or copy its path (a browser can't). Returns what happened. */
 export async function openPath(path: string): Promise<'opened' | 'copied'> {
   const p = path.trim();
   if (isApp() && isLocalPath(p)) {
-    const [{ openPath: open }, { homeDir }] = await Promise.all([import('@tauri-apps/plugin-opener'), import('@tauri-apps/api/path')]);
-    await open(p.startsWith('~') ? (await homeDir()).replace(/\/$/, '') + p.slice(1) : p);
+    const [{ invoke }, { homeDir }] = await Promise.all([import('@tauri-apps/api/core'), import('@tauri-apps/api/path')]);
+    await invoke('show_in_finder', { path: p.startsWith('~') ? (await homeDir()).replace(/\/$/, '') + p.slice(1) : p });
     return 'opened';
   }
   await navigator.clipboard?.writeText(p).catch(() => {});

@@ -6,9 +6,6 @@
   "permissions": [
     "core:default",
     "core:window:allow-start-dragging",
-    "sql:default",
-    "sql:allow-execute",
-    "opener:default",
     "autostart:default",
     "updater:default",
     "process:allow-restart",
@@ -20,10 +17,6 @@
     {
       "identifier": "opener:allow-open-url",
       "allow": [{ "url": "https://*" }, { "url": "http://*" }, { "url": "mailto:*" }]
-    },
-    {
-      "identifier": "opener:allow-open-path",
-      "allow": [{ "path": "$HOME/**" }, { "path": "$HOME" }, { "path": "/Volumes/**" }, { "path": "$APPCONFIG" }, { "path": "$APPCONFIG/**" }]
     }
   ]
 }

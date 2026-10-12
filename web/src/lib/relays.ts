@@ -84,13 +84,15 @@ export function relayTransport(relays = RELAYS): Transport {
 }
 
 /** A relay in memory, behaving like a real one for what we use (replaceable events keep only the newest). For tests. */
-export function memoryTransport(opts: { down?: boolean } = {}): Transport & { events: Event[]; down: boolean } {
+export function memoryTransport(opts: { down?: boolean } = {}): Transport & { events: Event[]; down: boolean; refuse?: (ev: Event) => boolean } {
   const subs = new Set<{ filter: Filter; on: (ev: Event) => void }>();
   const t = {
     events: [] as Event[],
     down: !!opts.down,
+    refuse: undefined as ((ev: Event) => boolean) | undefined, // (connected, but this message isn't taken)
+    health: () => [{ url: 'memory', ok: !t.down }],
     publish: async (ev: Event) => {
-      if (t.down) return 0;
+      if (t.down || t.refuse?.(ev)) return 0;
       const d = ev.tags.find((x) => x[0] === 'd')?.[1];
       const same = (e: Event) => e.kind === ev.kind && e.pubkey === ev.pubkey && e.tags.find((x) => x[0] === 'd')?.[1] === d;
       const cur = t.events.find(same);

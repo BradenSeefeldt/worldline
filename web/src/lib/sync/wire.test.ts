@@ -111,3 +111,15 @@ describe('older Macs and iPhones (no CompressionStream: Safari before 16.4)', ()
     }
   });
 });
+
+describe('unpacking', () => {
+  it('a message that unpacks to more than MAX_UNPACKED is ignored, not unpacked', async () => {
+    const { MAX_UNPACKED, sealUpdate, openMessage, deriveSync, newSecret, newDeviceKey } = await import('./wire');
+    const keys = deriveSync(newSecret());
+    const ev = await sealUpdate(new Uint8Array(MAX_UNPACKED + 1), keys, newDeviceKey());
+    expect(ev.content.length).toBeLessThan(200_000);
+    expect(await openMessage(ev, keys)).toBeNull();
+    const ok = await sealUpdate(new Uint8Array(1_000_000), keys, newDeviceKey());
+    expect((await openMessage(ok, keys))?.kind).toBe('update');
+  });
+});

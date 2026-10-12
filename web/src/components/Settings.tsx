@@ -607,7 +607,7 @@ function DataPane() {
   return (
     <>
       <Group title="Where it’s kept">
-        <Row title={isApp() ? 'On this Mac, in one database file' : 'In this browser'} note={isApp() ? '~/Library/Application Support/io.github.bradenseefeldt.worldline/worldline.db' : 'Development: the browser’s own storage'}>
+        <Row title={isApp() ? 'On this Mac, in one database file' : 'On this device, in the browser’s storage'} note={isApp() ? '~/Library/Application Support/io.github.bradenseefeldt.worldline/worldline.db' : 'Kept here, offline too — save a backup now and then'}>
           {isApp() && <button className="ce-btn" onClick={() => void showDataFolder()}>Show in Finder</button>}
         </Row>
       </Group>
@@ -643,7 +643,7 @@ function DataPane() {
       {msg && <p className={cls('st-msg', msg.bad && 'bad')}>{msg.text}</p>}
       <Group title="Start over">
         {!isApp() && (
-          <Row title="Load the demo data" note="Development: replace everything with sample data">
+          <Row title="Load the demo data" note="Replace everything with sample data, to try things out">
             <button className="ce-btn subtle-danger" onClick={async () => (await ask({ title: 'Replace everything with the demo data?', body: 'Your own events, habits and projects will be gone.', confirm: 'Load demo data', danger: true })) && st.resetDemo()}>Load demo data</button>
           </Row>
         )}
@@ -662,8 +662,8 @@ function DataPane() {
 
 /** Open the app's data folder in Finder (where worldline.db lives). */
 async function showDataFolder() {
-  const [{ appConfigDir }, { openPath }] = await Promise.all([import('@tauri-apps/api/path'), import('@tauri-apps/plugin-opener')]);
-  await openPath(await appConfigDir());
+  const [{ appConfigDir }, { invoke }] = await Promise.all([import('@tauri-apps/api/path'), import('@tauri-apps/api/core')]);
+  await invoke('show_in_finder', { path: await appConfigDir() });
 }
 
 // ---------------------------------------------------------------- About

@@ -4,24 +4,16 @@
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import type { MacEvent, MacSave } from '../lib/macCalendars';
 
-// ---- the fake Mac: its database (for the app's own saving) and its Calendar app
+// ---- the fake Mac: its database (src-tauri/src/db.rs, for the app's own saving) and its Calendar app
 const kv = new Map<string, string>();
-vi.mock('@tauri-apps/plugin-sql', () => ({
-  default: {
-    load: async () => ({
-      execute: async (sql: string, args: unknown[] = []) => {
-        if (/^INSERT INTO kv/.test(sql)) kv.set(String(args[0]), String(args[1]));
-        if (/^DELETE FROM kv/.test(sql)) kv.delete(String(args[0]));
-      },
-      select: async (sql: string, args: unknown[] = []) => (/FROM kv/.test(sql) && kv.has(String(args[0])) ? [{ value: kv.get(String(args[0])) }] : []),
-    }),
-  },
-}));
 const cal = { id: 'IC-HOME', title: 'Home', color: '#ff2d55', account: 'iCloud', writable: true };
 let mac: MacEvent[] = [];
 let nextId = 1;
 const invoke = vi.fn(async (cmd: string, a: Record<string, unknown> = {}) => {
   switch (cmd) {
+    case 'db_get': return kv.get(String(a.key)) ?? null;
+    case 'db_set': return void kv.set(String(a.key), String(a.value));
+    case 'db_del': return void kv.delete(String(a.key));
     case 'ek_status': return 'full';
     case 'ek_calendars': return [cal];
     case 'ek_events': return mac.filter((e) => (a.calendars as string[]).includes(e.calendar)).map((e) => ({ ...e }));

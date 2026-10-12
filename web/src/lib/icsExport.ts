@@ -10,7 +10,10 @@ const pad = (n: number, w = 2) => String(n).padStart(w, '0');
 const utc = (t: number) => new Date(t).toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
 const date = (t: number) => { const d = new Date(t); return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}`; };
 const local = (t: number, tz: string) => { const w = wallClock(t, tz); return `${w.y}${pad(w.m + 1)}${pad(w.d)}T${pad(w.h)}${pad(w.min)}00`; };
-const esc = (s: string) => s.replace(/\\/g, '\\\\').replace(/\n/g, '\\n').replace(/([,;])/g, '\\$1');
+// (any line break, \r included, becomes \n: a raw one would end the line and start a property of its own)
+const esc = (s: string) => s.replace(/\\/g, '\\\\').replace(/\r\n?|\n/g, '\\n').replace(/([,;])/g, '\\$1');
+/** A link as one line (control characters and spaces dropped). */
+const oneLine = (s: string) => s.replace(/[\u0000-\u0020\u007f]/g, '');
 /** Lines over 75 characters continue on the next line, indented (RFC 5545). */
 const fold = (line: string) => line.length <= 75 ? line : line.match(/.{1,74}/g)!.map((p, i) => (i ? ' ' + p : p)).join('\r\n');
 
@@ -33,7 +36,7 @@ export function toIcs(name: string, events: CalEvent[], color?: string): string 
     out.push('BEGIN:VEVENT', `UID:${uid}`, `DTSTAMP:${utc(e.createdAt ?? Date.now())}`, stamp(e, 'DTSTART', e.start, tz), stamp(e, 'DTEND', e.end, tz), `SUMMARY:${esc(e.title || 'Untitled')}`);
     if (e.location) out.push(`LOCATION:${esc(e.location)}`);
     if (e.notes) out.push(`DESCRIPTION:${esc(e.notes)}`);
-    if (e.url) out.push(`URL:${e.url}`);
+    if (e.url && oneLine(e.url)) out.push(`URL:${oneLine(e.url)}`);
     if (e.recurrence) {
       const r = e.recurrence;
       // (an all-day series ends on a date: UNTIL=YYYYMMDD, as RFC 5545 requires with a DATE start)
