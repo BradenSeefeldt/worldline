@@ -37,10 +37,9 @@ jobs:
           cache: npm
           cache-dependency-path: web/package-lock.json
       - run: npm ci
-      - name: Tests
-        run: npm test
-        env:
-          TZ: America/Toronto
+      # in several time zones: date and time bugs often show only away from the zone the code was written in
+      - name: Tests (several time zones)
+        run: for z in America/Toronto UTC Asia/Tokyo Pacific/Auckland America/Los_Angeles Australia/Lord_Howe; do echo "== $z"; TZ=$z npm test || exit 1; done
       - run: npm run build:guest
       - run: npm run build:web
       - run: cp -R dist-web dist-guest/app

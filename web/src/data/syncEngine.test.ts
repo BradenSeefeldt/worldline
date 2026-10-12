@@ -1,5 +1,6 @@
 // Sync end to end: this app (the real store + engine) and a second device (a phone, simulated with the same document
 // and message code), talking through an in-memory relay.
+import { leaks } from '../lib/leaks';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import * as Y from 'yjs';
 import type { Event } from 'nostr-tools/pure';
@@ -148,7 +149,7 @@ describe('syncing between this app and a phone', () => {
 
   it('nothing on the relay is readable without the secret', () => {
     const all = JSON.stringify(relay.events);
-    for (const word of ['Dentist', 'Group meeting', 'Sam', 'Bloor']) expect(all).not.toContain(word);
+    for (const word of ['Dentist', 'Group meeting', 'Sam', 'Bloor']) expect(leaks(all, word)).toBe(false);
   });
 });
 

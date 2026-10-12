@@ -41,10 +41,9 @@ jobs:
 
       - run: npm ci
 
-      - name: Tests
-        run: npm test
-        env:
-          TZ: America/Toronto
+      # in several time zones: date and time bugs often show only away from the zone the code was written in
+      - name: Tests (several time zones)
+        run: for z in America/Toronto UTC Asia/Tokyo Pacific/Auckland America/Los_Angeles Australia/Lord_Howe; do echo "== $z"; TZ=$z npm test || exit 1; done
 
       # The web part is built here, without the update-signing key in reach: npm packages' build code never sees it.
       # (The step below then skips its own web build — "beforeBuildCommand": "" — and only compiles and signs.)

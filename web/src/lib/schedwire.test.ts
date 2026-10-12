@@ -1,3 +1,4 @@
+import { leaks } from './leaks';
 import { describe, expect, it } from 'vitest';
 import { generateSecretKey, getPublicKey, finalizeEvent } from 'nostr-tools/pure';
 import * as nip44 from 'nostr-tools/nip44';
@@ -74,7 +75,7 @@ describe('the published availability', () => {
     const l = link({ title: 'Office hours', location: 'Room 1203' });
     const sealed = sealAvail(publicView(l, secretEvents, NOW), l.nostr!, { noticeMin: 0, singleUse: false, updatedAt: NOW }, sec(NOW));
     const raw = JSON.stringify(sealed);
-    for (const s of ['dean', 'Office', 'Sam', '1203', String(Math.round(t(8, 9) / 60_000))]) expect(raw).not.toContain(s);
+    for (const s of ['dean', 'Office', 'Sam', '1203', String(Math.round(t(8, 9) / 60_000))]) expect(leaks(raw, s)).toBe(false);
   });
   it('the plaintext itself never contains your events (the publicView rule still holds)', () => {
     const json = JSON.stringify(toWire(publicView(link(), secretEvents, NOW), { noticeMin: 0, singleUse: false, updatedAt: NOW }));
@@ -132,7 +133,7 @@ describe('guests’ messages', () => {
     const e = sealGuestMsg({ t: 'book', start: t(8, 11), name: 'Kai' }, ref, generateSecretKey(), sec(NOW));
     expect(openGuestMsg(e, ref)!.msg).toEqual({ t: 'book', start: t(8, 11) });
     expect(openGuestMsg(e, ref, hostSk)!.msg).toEqual({ t: 'book', start: t(8, 11), name: 'Kai' });
-    expect(JSON.stringify(e)).not.toContain('Kai');
+    expect(leaks(JSON.stringify(e), 'Kai')).toBe(false);
   });
   it('a poll answer round-trips (names are visible to the group, as on when2meet)', () => {
     const e = sealGuestMsg({ t: 'poll', name: ' Jordan ', cells: [t(8, 9), t(8, 9, 30)] }, ref, generateSecretKey(), sec(NOW));

@@ -32,7 +32,7 @@ Each feature's doc names its own logic and test files.
 All from `web/`:
 
 ```bash
-npm test             # unit tests
+npm test             # unit tests (CI runs them in six time zones: TZ=Asia/Tokyo npm test, …)
 npm run typecheck    # type-check
 npm run build        # production build
 ```
