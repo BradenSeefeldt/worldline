@@ -1,9 +1,9 @@
 # GitHub Pages — code only; no data is ever stored here:
-#   https://bradenseefeldt.github.io/worldline/      the landing page (Download for Mac · Open on iPhone); with a
+#   https://worldline-calendar.github.io/worldline/      the landing page (Download for Mac · Open on iPhone); with a
 #                                                     scheduling link after the "#", the page guests book on (a link's
 #                                                     keys live after the "#", which browsers never send to the server)
-#   https://bradenseefeldt.github.io/worldline/install.sh   the Terminal installer (web/scripts/install.sh)
-#   https://bradenseefeldt.github.io/worldline/app/  the full app for the iPhone (Add to Home Screen): it works offline
+#   https://worldline-calendar.github.io/worldline/install.sh   the Terminal installer (web/scripts/install.sh)
+#   https://worldline-calendar.github.io/worldline/app/  the full app for the iPhone (Add to Home Screen): it works offline
 #                                                     and keeps its data on the phone; syncing goes through the relays
 # Runs on every push to main that touches the web app, or by hand from the Actions tab.
 name: Website

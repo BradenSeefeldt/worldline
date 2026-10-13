@@ -56,7 +56,7 @@ candidates left), the Action opens an issue instead. Run it by hand from the Act
 `node scripts/check-relays.ts` (from `web/`). Logic and tests: [`web/src/lib/relaylist.ts`](../web/src/lib/relaylist.ts),
 `relaylist.test.ts`.
 
-- **The address** is `https://bradenseefeldt.github.io/worldline/#…`. The page there is code only. Everything after
+- **The address** is `https://worldline-calendar.github.io/worldline/#…`. The page there is code only. Everything after
   `#` — the link's public key and a 32-byte secret — stays in the guest's browser: browsers never send it to the
   server, and the page sends it nowhere.
 - **Your free/busy** (`publicView`, nothing else) is published by Worldline as one message signed with the link's own

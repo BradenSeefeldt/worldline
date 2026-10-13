@@ -30,7 +30,7 @@ function Root({ transport }: { transport: Transport }) {
   return (
     <div className="gp">
       <RemoteGuest key={hash} transport={transport} hash={hash} />
-      <div className="gp-foot">Private: only people with this link can see these times. <a href="https://github.com/BradenSeefeldt/worldline" target="_blank" rel="noreferrer">Worldline</a></div>
+      <div className="gp-foot">Private: only people with this link can see these times. <a href="https://github.com/worldline-calendar/worldline" target="_blank" rel="noreferrer">Worldline</a></div>
     </div>
   );
 }

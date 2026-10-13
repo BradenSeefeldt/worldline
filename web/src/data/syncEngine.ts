@@ -78,7 +78,7 @@ const writeConfig = (c: SyncConfig) => sideStore.set(CONFIG, JSON.stringify(c));
 
 /** The relays sync uses: the same list as scheduling links (kept current weekly — lib/relaylist.ts). */
 async function syncTransport(): Promise<Transport> {
-  const url = isApp() ? 'https://bradenseefeldt.github.io/worldline/relays.json' : import.meta.env.DEV ? '/relays.json' : './relays.json';
+  const url = isApp() ? 'https://worldline-calendar.github.io/worldline/relays.json' : import.meta.env.DEV ? '/relays.json' : './relays.json';
   return relayTransport((await loadRelayList(url))?.relays ?? RELAYS);
 }
 

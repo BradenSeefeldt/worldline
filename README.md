@@ -3,9 +3,9 @@
 A calendar, habits and research-projects app for Mac and iPhone, synced between your devices end-to-end encrypted —
 free, with no account and no server.
 
-**[Download for Mac](https://github.com/BradenSeefeldt/worldline/releases/latest/download/Worldline.dmg)** ·
-**[Open on iPhone](https://bradenseefeldt.github.io/worldline/app/)** ·
-[Website](https://bradenseefeldt.github.io/worldline/)
+**[Download for Mac](https://github.com/worldline-calendar/worldline/releases/latest/download/Worldline.dmg)** ·
+**[Open on iPhone](https://worldline-calendar.github.io/worldline/app/)** ·
+[Website](https://worldline-calendar.github.io/worldline/)
 
 ![Worldline's week view](docs/screenshot.jpg)
 
@@ -15,7 +15,7 @@ macOS 11+ (Apple silicon and Intel) · iOS 16.4+ · 12 MB
 1. Open the `.dmg` and drag **Worldline** onto **Applications**.
 2. The first time you open it: **System Settings → Privacy & Security → Open Anyway** (once only; the app isn't
    signed with a paid Apple Developer ID).
-3. Or skip both steps with Terminal: `curl -fsSL https://bradenseefeldt.github.io/worldline/install.sh | sh`
+3. Or skip both steps with Terminal: `curl -fsSL https://worldline-calendar.github.io/worldline/install.sh | sh`
 
 ## What it does
 

@@ -212,7 +212,7 @@ export function startScheduleSync(t: Transport = relayTransport(), clock = () =>
 }
 
 /** The relay list on the project's GitHub Pages (kept current by a weekly check — lib/relaylist.ts). */
-const RELAY_LIST = import.meta.env.DEV ? '/relays.json' : 'https://bradenseefeldt.github.io/worldline/relays.json';
+const RELAY_LIST = import.meta.env.DEV ? '/relays.json' : 'https://worldline-calendar.github.io/worldline/relays.json';
 
 /** Start syncing on the current relay list; look at the list again every 6 hours and move to the new relays if it
  *  changed (everything is republished there; nothing to restart). */

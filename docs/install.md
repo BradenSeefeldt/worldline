@@ -6,8 +6,8 @@ Worldline runs as a Mac app (macOS 11 Big Sur or later, Apple silicon and Intel)
 ## The Mac app
 
 **Download it:** the latest `Worldline.dmg` is always at
-https://github.com/BradenSeefeldt/worldline/releases/latest/download/Worldline.dmg (older versions are on the
-[Releases](https://github.com/BradenSeefeldt/worldline/releases) page).
+https://github.com/worldline-calendar/worldline/releases/latest/download/Worldline.dmg (older versions are on the
+[Releases](https://github.com/worldline-calendar/worldline/releases) page).
 
 **Install:** open the `.dmg`, drag **Worldline** onto **Applications**, open it from Applications or Spotlight, and
 keep it in the Dock (right-click its Dock icon → *Options → Keep in Dock*). Closing the window keeps it running in the
@@ -40,7 +40,7 @@ That builds the app and makes `web/release/Worldline-<version>.dmg` (the app its
 ## Install from Terminal
 
 ```bash
-curl -fsSL https://bradenseefeldt.github.io/worldline/install.sh | sh
+curl -fsSL https://worldline-calendar.github.io/worldline/install.sh | sh
 ```
 
 This downloads the latest release, copies Worldline into `/Applications` (or `~/Applications` if you can't write to
@@ -61,7 +61,7 @@ app's id, `io.github.bradenseefeldt.worldline`): in `~/Library/` — `Applicatio
 
 ## On your iPhone (free, works offline)
 
-Needs iOS 16.4 or later. Open **https://bradenseefeldt.github.io/worldline/app/** in Safari → Share → **Add to Home
+Needs iOS 16.4 or later. Open **https://worldline-calendar.github.io/worldline/app/** in Safari → Share → **Add to Home
 Screen**. It opens like an app, works with no internet (the whole app is kept on the phone), and keeps its data on the
 phone. Then [pair it with your Mac](sync.md) so both have the same calendar. No App Store, no Apple account, nothing
 to pay.

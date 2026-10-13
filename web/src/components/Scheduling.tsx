@@ -14,7 +14,7 @@ import { guestUrl } from '../lib/schedwire';
 import { useNow } from '../lib/hooks';
 
 /** The guest page: one static page on the project's GitHub Pages (in development, this dev server's copy). */
-const GUEST_PAGE = import.meta.env.DEV ? `${window.location.origin}/book.html` : 'https://bradenseefeldt.github.io/worldline/';
+const GUEST_PAGE = import.meta.env.DEV ? `${window.location.origin}/book.html` : 'https://worldline-calendar.github.io/worldline/';
 /** A link's address: the guest page + its keys after "#" (which never leave the guest's browser). */
 function linkUrl(id: string) {
   useStore.getState().ensureLinkKeys(id);

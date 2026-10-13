@@ -71,9 +71,9 @@ jobs:
           tagName: ${{ github.ref_name }}
           releaseName: Worldline ${{ github.ref_name }}
           releaseBody: |
-            **[Download Worldline.dmg](https://github.com/BradenSeefeldt/worldline/releases/latest/download/Worldline.dmg)** · macOS 11+ · Apple silicon and Intel · or [open it on your iPhone](https://bradenseefeldt.github.io/worldline/app/)
+            **[Download Worldline.dmg](https://github.com/worldline-calendar/worldline/releases/latest/download/Worldline.dmg)** · macOS 11+ · Apple silicon and Intel · or [open it on your iPhone](https://worldline-calendar.github.io/worldline/app/)
 
-            Open the .dmg and drag Worldline onto Applications. The first time you open it, macOS says it can't check the app (it isn't signed with a paid Apple Developer ID): **System Settings → Privacy & Security → Open Anyway**, once. Or install from Terminal, which skips that step: `curl -fsSL https://bradenseefeldt.github.io/worldline/install.sh | sh`
+            Open the .dmg and drag Worldline onto Applications. The first time you open it, macOS says it can't check the app (it isn't signed with a paid Apple Developer ID): **System Settings → Privacy & Security → Open Anyway**, once. Or install from Terminal, which skips that step: `curl -fsSL https://worldline-calendar.github.io/worldline/install.sh | sh`
 
             Already have Worldline? It updates itself within a day (or Settings → About → Check for updates).
           releaseDraft: true

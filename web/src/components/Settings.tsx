@@ -26,7 +26,7 @@ import { ALL_DAY_CHOICES, TIMED_CHOICES } from '../lib/alerts';
 // (loaded when opened: it carries the QR code maker and reader, which nothing else needs)
 const SyncSettings = lazy(() => import('./SyncSettings').then((m) => ({ default: m.SyncSettings })));
 
-const REPO = 'BradenSeefeldt/worldline';
+const REPO = 'worldline-calendar/worldline';
 const STORE_KEY = 'calendar-v1';
 
 const SECTIONS: { id: string; title: string; icon: string; color: string; words: string }[] = [

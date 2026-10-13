@@ -7,7 +7,7 @@
   kept inside it.
 - **iPhone (and any browser):** the browser's own storage (IndexedDB). The app asks the browser to keep it persistent,
   so it isn't cleared to save space. A browser keeps storage per site, and the iPhone app's site
-  (`bradenseefeldt.github.io`) is also where the landing page and the guest page live — the same project's code — and
+  (`worldline-calendar.github.io`) is also where the landing page and the guest page live — the same project's code — and
   would be shared by any other GitHub Pages site on that account. There are none, and none will be added; that's what
   keeps the sync key on your iPhone to Worldline alone.
 

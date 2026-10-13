@@ -1,6 +1,6 @@
 #!/bin/sh
 # Install (or update) Worldline, the Mac app, from the newest published release:
-#   curl -fsSL https://bradenseefeldt.github.io/worldline/install.sh | sh
+#   curl -fsSL https://worldline-calendar.github.io/worldline/install.sh | sh
 # It downloads Worldline.dmg, copies Worldline.app into /Applications (or ~/Applications if that isn't writable), and
 # opens it. Files downloaded by Terminal aren't flagged by macOS, so there's no "Open Anyway" step. A Worldline
 # already there is moved to the Trash (never deleted). Published on GitHub Pages by vite.guest.config.ts.
@@ -9,10 +9,10 @@
 set -eu
 
 main() {
-  url="${WORLDLINE_DMG:-https://github.com/BradenSeefeldt/worldline/releases/latest/download/Worldline.dmg}" # (override: testing)
+  url="${WORLDLINE_DMG:-https://github.com/worldline-calendar/worldline/releases/latest/download/Worldline.dmg}" # (override: testing)
 
   if [ "$(uname -s)" != "Darwin" ]; then
-    echo "Worldline's app is for macOS. On an iPhone, open https://bradenseefeldt.github.io/worldline/app/ in Safari."
+    echo "Worldline's app is for macOS. On an iPhone, open https://worldline-calendar.github.io/worldline/app/ in Safari."
     exit 1
   fi
   if pgrep -f "/Worldline.app/Contents/MacOS/" >/dev/null 2>&1; then

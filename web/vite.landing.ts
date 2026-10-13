@@ -3,7 +3,7 @@ import QRCode from 'qrcode';
 import type { Plugin } from 'vite';
 import pkg from './package.json' with { type: 'json' };
 
-const APP_URL = 'https://bradenseefeldt.github.io/worldline/app/';
+const APP_URL = 'https://worldline-calendar.github.io/worldline/app/';
 
 export const landing = (): Plugin => ({
   name: 'landing',
