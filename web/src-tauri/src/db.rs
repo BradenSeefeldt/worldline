@@ -151,8 +151,11 @@ mod tests {
     std::fs::create_dir_all(&p).unwrap();
     p.join("worldline.db")
   }
-  fn rand_suffix() -> u128 {
-    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()
+  /// A folder of its own for each test (tests run in parallel; the clock alone can give two the same name).
+  fn rand_suffix() -> String {
+    static N: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+    let n = N.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+    format!("{}-{n}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos())
   }
 
   #[test]
