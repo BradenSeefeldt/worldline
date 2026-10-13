@@ -5,6 +5,7 @@ import { Suspense, lazy, useEffect, useMemo, useRef, useState, type CSSPropertie
 import { formatDistanceToNow } from 'date-fns';
 import { useStore } from '../data/store';
 import { DEFAULT_DEADLINE_LOOK, type AppSettings, type DeadlineLook, type StartPage } from '../data/settings';
+import { isFinished } from '../lib/booking';
 import type { ViewMode } from '../data/types';
 import { HOUR_H_RANGE, readOnly } from '../data/store';
 import { TimeZonePicker } from './TimeZonePicker';
@@ -553,6 +554,10 @@ function SchedulingPane() {
     return () => clearInterval(id);
   }, []);
   const working = health.relays.filter((r) => r.ok).length;
+  // Relays are only connected while there's an open link or poll to answer (nothing to do otherwise); the iPhone /
+  // web version never connects for scheduling (the Mac answers links).
+  const links = useStore((x) => x.links);
+  const idle = !links.some((l) => !isFinished(l, Date.now())) && working === 0;
   return (
     <>
       <Group title="New links start with" foot="Each link can still be changed on its own.">
@@ -572,14 +577,18 @@ function SchedulingPane() {
       <Group title="Relays" foot="Kept up to date automatically (checked weekly). Messages go to all of them; any one is enough.">
         <div className="st-row">
           <div className="st-lab st-relays">
-            {health.relays.length ? health.relays.map((r) => (
-              <span key={r.url}><i className={cls('st-dot', r.ok ? 'ok' : 'off')} />{r.url.replace('wss://', '')}{!r.ok && <em> · not connected</em>}</span>
+            {!isApp() ? (
+              <span>Your Mac answers scheduling links, so this device doesn't connect to the relays for them.</span>
+            ) : health.relays.length ? health.relays.map((r) => (
+              <span key={r.url}><i className={cls('st-dot', r.ok ? 'ok' : !idle && 'off')} />{r.url.replace('wss://', '')}{!r.ok && !idle && <em> · not connected</em>}</span>
             )) : <span>Connecting…</span>}
           </div>
-          <div className="st-ctl st-relay-sum">
-            <span>{working} of {health.relays.length} connected</span>
-            {health.updated && <span>List updated {health.updated}</span>}
-          </div>
+          {isApp() && (
+            <div className="st-ctl st-relay-sum">
+              <span>{idle ? 'Standing by — connects when you have an open link or poll' : `${working} of ${health.relays.length} connected`}</span>
+              {health.updated && <span>List updated {health.updated}</span>}
+            </div>
+          )}
         </div>
       </Group>
     </>
