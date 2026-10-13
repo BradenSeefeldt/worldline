@@ -14,7 +14,6 @@ const guestPage: Plugin = {
   transformIndexHtml: (html) => html.replace('<meta charset="UTF-8" />', `<meta charset="UTF-8" />\n    <meta http-equiv="Content-Security-Policy" content="${CSP}" />`),
   closeBundle: () => {
     renameSync('dist-guest/book.html', 'dist-guest/index.html'); // GitHub Pages serves index.html
-    copyFileSync('../docs/screenshot.jpg', 'dist-guest/shot.jpg'); // the landing page's screenshot (the README's; kept out of public/: the apps don't need it)
     copyFileSync('scripts/install.sh', 'dist-guest/install.sh'); // curl -fsSL https://…/worldline/install.sh | sh
   },
 };

@@ -13,84 +13,211 @@
     <!-- Two pages in one address: with a scheduling link after the "#", the guest page (#root, src/guest/guest.tsx);
          without one, this landing page. src/guest/entry.ts picks. -->
     <div id="landing" hidden>
+<a class="skip" href="#features">Skip to features</a>
+<div class="hero">
 <div class="wrap">
   <header>
     <a class="brand" href="./"><img src="./icon.svg" alt="" />Worldline</a>
-    <nav><a href="#features">Features</a><a href="https://github.com/BradenSeefeldt/worldline/tree/main/docs">Docs</a><a href="https://github.com/BradenSeefeldt/worldline">GitHub</a></nav>
+    <nav aria-label="Site"><a href="#features">Features</a><a href="https://github.com/BradenSeefeldt/worldline/tree/main/docs">Docs</a><a class="hide-sm" href="https://github.com/BradenSeefeldt/worldline">GitHub</a></nav>
   </header>
 
-  <section class="hero">
-    <h1>Your calendar, habits<br />and projects. Yours.</h1>
-    <p class="lede">A calendar with quick add, habits that track over years, and a writing space for long projects — on your Mac and iPhone, synced and encrypted. Free, no account, no server.</p>
+  <h1>Your calendar, habits<br />and projects. Yours.</h1>
+  <p class="lede">A calendar you type into, habits tracked over years, and a writing space for long projects — with equations and code. On your Mac and iPhone, synced end-to-end encrypted. Free, no account, no server.</p>
 
-    <div class="ctas for-mac">
-      <a class="btn primary" id="dl" href="https://github.com/BradenSeefeldt/worldline/releases/latest/download/Worldline.dmg"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16.4 12.6c0-2.5 2-3.7 2.1-3.8-1.2-1.7-3-1.9-3.6-2-1.5-.2-3 .9-3.8.9-.8 0-2-.9-3.3-.8-1.7 0-3.2 1-4.1 2.5-1.8 3-.5 7.6 1.3 10.1.8 1.2 1.8 2.6 3.1 2.5 1.2 0 1.7-.8 3.2-.8s1.9.8 3.2.8c1.3 0 2.2-1.2 3-2.5.9-1.4 1.3-2.7 1.3-2.8 0 0-2.4-1-2.4-4.1zM14 5.3c.7-.8 1.1-1.9 1-3-1 0-2.1.6-2.8 1.4-.6.7-1.2 1.8-1 2.9 1 .1 2.1-.5 2.8-1.3z"/></svg>Download for Mac</a>
-      <button class="btn secondary" id="iphone" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="6" y="2" width="12" height="20" rx="3"/><path d="M11 18h2"/></svg>Open on iPhone</button>
-    </div>
-    <div class="meta for-mac">Version %APP_VERSION% · 12 MB · macOS 11 or later · Apple silicon and Intel</div>
-    <div class="ctas for-ios" hidden>
-      <a class="btn primary" id="open-ios" href="./app/"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="6" y="2" width="12" height="20" rx="3"/><path d="M11 18h2"/></svg>Open Worldline</a>
-      <button class="btn secondary" id="get-mac" type="button"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16.4 12.6c0-2.5 2-3.7 2.1-3.8-1.2-1.7-3-1.9-3.6-2-1.5-.2-3 .9-3.8.9-.8 0-2-.9-3.3-.8-1.7 0-3.2 1-4.1 2.5-1.8 3-.5 7.6 1.3 10.1.8 1.2 1.8 2.6 3.1 2.5 1.2 0 1.7-.8 3.2-.8s1.9.8 3.2.8c1.3 0 2.2-1.2 3-2.5.9-1.4 1.3-2.7 1.3-2.8 0 0-2.4-1-2.4-4.1zM14 5.3c.7-.8 1.1-1.9 1-3-1 0-2.1.6-2.8 1.4-.6.7-1.2 1.8-1 2.9 1 .1 2.1-.5 2.8-1.3z"/></svg>Get it for Mac</button>
-    </div>
-    <div class="meta for-ios" hidden>Free · works offline · iOS 16.4 or later</div>
+  <div class="ctas for-mac">
+    <a class="btn primary" id="dl" href="https://github.com/BradenSeefeldt/worldline/releases/latest/download/Worldline.dmg"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16.4 12.6c0-2.5 2-3.7 2.1-3.8-1.2-1.7-3-1.9-3.6-2-1.5-.2-3 .9-3.8.9-.8 0-2-.9-3.3-.8-1.7 0-3.2 1-4.1 2.5-1.8 3-.5 7.6 1.3 10.1.8 1.2 1.8 2.6 3.1 2.5 1.2 0 1.7-.8 3.2-.8s1.9.8 3.2.8c1.3 0 2.2-1.2 3-2.5.9-1.4 1.3-2.7 1.3-2.8 0 0-2.4-1-2.4-4.1zM14 5.3c.7-.8 1.1-1.9 1-3-1 0-2.1.6-2.8 1.4-.6.7-1.2 1.8-1 2.9 1 .1 2.1-.5 2.8-1.3z"/></svg>Download for Mac</a>
+    <button class="btn secondary" id="iphone" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="6" y="2" width="12" height="20" rx="3"/><path d="M11 18h2"/></svg>Open on iPhone</button>
+  </div>
+  <div class="meta for-mac">Version %APP_VERSION% · 12 MB · macOS 11 or later · Apple silicon and Intel</div>
 
-    <!-- after clicking Download for Mac -->
-    <div class="panel" id="mac-steps">
-      <h2><span class="ok">✓</span> Downloading Worldline.dmg — then:</h2>
+  <div class="ctas for-ios" hidden>
+    <a class="btn primary" id="open-ios" href="./app/"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="6" y="2" width="12" height="20" rx="3"/><path d="M11 18h2"/></svg>Open Worldline</a>
+    <button class="btn secondary" id="get-mac" type="button"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16.4 12.6c0-2.5 2-3.7 2.1-3.8-1.2-1.7-3-1.9-3.6-2-1.5-.2-3 .9-3.8.9-.8 0-2-.9-3.3-.8-1.7 0-3.2 1-4.1 2.5-1.8 3-.5 7.6 1.3 10.1.8 1.2 1.8 2.6 3.1 2.5 1.2 0 1.7-.8 3.2-.8s1.9.8 3.2.8c1.3 0 2.2-1.2 3-2.5.9-1.4 1.3-2.7 1.3-2.8 0 0-2.4-1-2.4-4.1zM14 5.3c.7-.8 1.1-1.9 1-3-1 0-2.1.6-2.8 1.4-.6.7-1.2 1.8-1 2.9 1 .1 2.1-.5 2.8-1.3z"/></svg>Get it for Mac</button>
+  </div>
+  <div class="meta for-ios" hidden>Free · works offline · iOS 16.4 or later</div>
+
+  <div class="panel" id="mac-steps" role="region" aria-label="Installing on a Mac">
+    <h2><span class="ok" aria-hidden="true">✓</span> Downloading Worldline.dmg — then:</h2>
+    <ol class="steps">
+      <li>Open <b>Worldline.dmg</b> and drag Worldline onto <b>Applications</b>.</li>
+      <li>Open Worldline. The first time, macOS says it can't check the app (it isn't from the App Store) — click <span class="ui">Done</span>.
+        <small>Worldline is free and open source, so it isn't registered with Apple's paid program.</small></li>
+      <li><b>System Settings → Privacy &amp; Security</b>, scroll down, click <span class="ui">Open Anyway</span>. Only once — after that it opens normally and updates itself.</li>
+    </ol>
+    <div class="alt">Prefer Terminal? One line installs it and skips steps 2–3 (Terminal downloads aren't flagged):
+      <div class="cmd"><code id="cmd">curl -fsSL https://bradenseefeldt.github.io/worldline/install.sh | sh</code><button class="copy" data-copy="cmd" type="button">Copy</button></div>
+    </div>
+  </div>
+  <div class="panel" id="phone-steps" role="region" aria-label="Installing on an iPhone">
+    <h2>Worldline on your iPhone</h2>
+    <div class="phone-steps">
+      <div class="qr" role="img" aria-label="QR code for the iPhone app">%QR%</div>
       <ol class="steps">
-        <li>Open <b>Worldline.dmg</b> and drag Worldline onto <b>Applications</b>.</li>
-        <li>Open Worldline. The first time, macOS says it can't check the app (it isn't from the App Store) — click <span class="ui">Done</span>.
-          <small>Worldline is free and open source, so it isn't registered with Apple's paid program.</small></li>
-        <li><b>System Settings → Privacy &amp; Security</b>, scroll down, click <span class="ui">Open Anyway</span>. Only once — after that it opens normally and updates itself.</li>
+        <li>Point your iPhone's camera here and open the link in <b>Safari</b>.</li>
+        <li>Tap <b>Share</b> <svg class="share" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3v12M7 8l5-5 5 5M5 12v8h14v-8"/></svg> → <b>Add to Home Screen</b>.</li>
+        <li>Open it from your Home Screen. It works offline; pair it with your Mac in <b>Settings → Sync</b>.</li>
       </ol>
-      <div class="alt">Prefer Terminal? One line installs it and skips steps 2–3 (Terminal downloads aren't flagged):
-        <div class="cmd"><code id="cmd">curl -fsSL https://bradenseefeldt.github.io/worldline/install.sh | sh</code><button class="copy" data-copy="cmd">Copy</button></div>
-      </div>
     </div>
+    <div class="alt">Or open <a href="./app/">bradenseefeldt.github.io/worldline/app</a> on the phone.</div>
+  </div>
 
-    <!-- after clicking Open on iPhone, on a computer -->
-    <div class="panel" id="phone-steps">
-      <h2>Worldline on your iPhone</h2>
-      <div class="phone">
-        <div class="qr" role="img" aria-label="QR code for the iPhone app">%QR%</div>
-        <ol class="steps">
-          <li>Point your iPhone's camera here and open the link in <b>Safari</b>.</li>
-          <li>Tap <b>Share</b> <svg class="share" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12M7 8l5-5 5 5M5 12v8h14v-8"/></svg> → <b>Add to Home Screen</b>.</li>
-          <li>Open it from your Home Screen. It works offline; pair it with your Mac in <b>Settings → Sync</b>.</li>
-        </ol>
-      </div>
-      <div class="alt">Or open <a href="./app/">bradenseefeldt.github.io/worldline/app</a> on the phone.</div>
+  <div class="panel" id="ios-steps" role="region" aria-label="Adding it to your Home Screen">
+    <h2>Add it to your Home Screen</h2>
+    <ol class="steps">
+      <li>Tap <b>Open Worldline</b> above, in Safari.</li>
+      <li>Tap <b>Share</b> <svg class="share" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3v12M7 8l5-5 5 5M5 12v8h14v-8"/></svg> → <b>Add to Home Screen</b>.</li>
+      <li>Open it from your Home Screen. No App Store, nothing to pay; works offline.</li>
+    </ol>
+  </div>
+
+  <div class="stage">
+    <div class="window">
+      <div class="bar" aria-hidden="true"><i></i><i></i><i></i></div>
+      <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="./src/guest/img/hero-dark.webp 1440w, ./src/guest/img/hero-dark@2x.webp 2880w" sizes="(max-width: 1100px) 100vw, 1060px" />
+        <img src="./src/guest/img/hero-light.webp" srcset="./src/guest/img/hero-light.webp 1440w, ./src/guest/img/hero-light@2x.webp 2880w" sizes="(max-width: 1100px) 100vw, 1060px" width="1440" height="900" fetchpriority="high"
+          alt="Worldline's week view: events from several calendars, deadlines drawn as runways across the top, and the sidebar with this month, tasks and deadlines" />
+      </picture>
     </div>
+    <div class="device">
+      <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="./src/guest/img/phone-dark.webp 390w, ./src/guest/img/phone-dark@2x.webp 780w" sizes="210px" />
+        <img src="./src/guest/img/phone-light.webp" srcset="./src/guest/img/phone-light.webp 390w, ./src/guest/img/phone-light@2x.webp 780w" sizes="210px" width="390" height="844" alt="The same calendar on an iPhone, three days at a time" />
+      </picture>
+    </div>
+  </div>
+</div>
+</div>
 
-    <!-- on an iPhone -->
-    <div class="panel" id="ios-steps">
-      <h2>Add it to your Home Screen</h2>
-      <ol class="steps">
-        <li>Tap <b>Open Worldline</b> above, in Safari.</li>
-        <li>Tap <b>Share</b> <svg class="share" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12M7 8l5-5 5 5M5 12v8h14v-8"/></svg> → <b>Add to Home Screen</b>.</li>
-        <li>Open it from your Home Screen. No App Store, nothing to pay; works offline.</li>
-      </ol>
+<main class="wrap" id="features">
+  <section class="row" aria-labelledby="f1">
+    <div class="text">
+      <p class="kicker">Quick add</p>
+      <h2 class="big" id="f1">Type it, and it's on your calendar.</h2>
+      <p>One box for events, tasks and deadlines, in plain English — with a preview of exactly what you'll get before you press Return.</p>
+      <ul>
+        <li><span class="say">lunch with Sam tomorrow 12:30 #social for 90 min</span></li>
+        <li>Change things the same way: <span class="say">move Alex's meeting to tues at 3pm</span>, <span class="say">skip gym this week</span></li>
+        <li>Deadlines get a runway that changes colour as the day gets close</li>
+        <li>Reminders before events and deadlines, as Mac notifications</li>
+      </ul>
+    </div>
+    <div class="frame">
+      <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="./src/guest/img/quickadd-dark.webp 680w, ./src/guest/img/quickadd-dark@2x.webp 1360w" sizes="(max-width: 860px) 100vw, 640px" />
+        <img src="./src/guest/img/quickadd-light.webp" srcset="./src/guest/img/quickadd-light.webp 680w, ./src/guest/img/quickadd-light@2x.webp 1360w" sizes="(max-width: 860px) 100vw, 640px" width="680" height="400" loading="lazy" alt="Quick add with “lunch with Sam tomorrow 12:30 #social for 90 min” typed, previewing an event on Wednesday from 12:30 to 2 PM in the Social calendar" />
+      </picture>
     </div>
   </section>
 
-  <div class="shot"><div class="bar"><i></i><i></i><i></i></div><img src="./shot.jpg" width="1600" height="1000" loading="lazy" alt="Worldline's week view: events, deadlines as runways, tasks in the sidebar" /></div>
-
-  <section class="features" id="features">
-    <div class="f"><b>Type it, it's scheduled</b><span>“lunch with Sam friday 12:30” → an event. “skip group meeting this week” → done. Tasks and deadlines from the same box.</span></div>
-    <div class="f"><b>Every calendar you have</b><span>Subscribe to any iCal link — department seminars, a team's schedule, a Google calendar. Time zones handled when you travel.</span></div>
-    <div class="f"><b>Habits over years</b><span>Strength instead of fragile streaks, rest days, and full history — year by year.</span></div>
-    <div class="f"><b>Projects you write in</b><span>Threads, dated notes, to-dos that know who you're waiting on, and LaTeX equations.</span></div>
-    <div class="f"><b>Scheduling links</b><span>Like Calendly and when2meet: guests pick a time, no sign-up, no email.</span></div>
-    <div class="f"><b>Mac and iPhone, synced</b><span>End-to-end encrypted, through public relays. Pair with a QR code.</span></div>
+  <section class="row flip" aria-labelledby="f2">
+    <div class="text">
+      <p class="kicker">Calendars</p>
+      <h2 class="big" id="f2">Every calendar you have, both ways.</h2>
+      <p>The calendars already on your Mac — iCloud, Google, Exchange — show up and can be edited here; changes go back to them.</p>
+      <ul>
+        <li>Subscribe to any iCal link: seminars, a team's schedule, a Google calendar</li>
+        <li>Repeating events, time zones and travel handled properly</li>
+        <li>Export any calendar as an .ics file, back everything up in one file</li>
+      </ul>
+    </div>
+    <div class="frame">
+      <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="./src/guest/img/month-dark.webp 1190w, ./src/guest/img/month-dark@2x.webp 2380w" sizes="(max-width: 860px) 100vw, 640px" />
+        <img src="./src/guest/img/month-light.webp" srcset="./src/guest/img/month-light.webp 1190w, ./src/guest/img/month-light@2x.webp 2380w" sizes="(max-width: 860px) 100vw, 640px" width="1190" height="800" loading="lazy" alt="The month view of October, with meetings, all-day events and multi-day events from several calendars" />
+      </picture>
+    </div>
   </section>
 
-  <p class="promise">Everything stays on your devices. No account, no tracking, no server — and it's free, for everyone.</p>
+  <section class="row" aria-labelledby="f3">
+    <div class="text">
+      <p class="kicker">Habits</p>
+      <h2 class="big" id="f3">Habits that hold up over years.</h2>
+      <p>Strength instead of a fragile streak: missing one day doesn't wipe out months. Every year of history stays.</p>
+      <ul>
+        <li>Daily, a few times a week, or an amount (pages, minutes)</li>
+        <li>Rest days that don't count against you</li>
+        <li>Ticks itself from your calendar (“counts gym events”)</li>
+      </ul>
+    </div>
+    <div class="frame">
+      <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="./src/guest/img/habits-dark.webp 1190w, ./src/guest/img/habits-dark@2x.webp 2380w" sizes="(max-width: 860px) 100vw, 640px" />
+        <img src="./src/guest/img/habits-light.webp" srcset="./src/guest/img/habits-light.webp 1190w, ./src/guest/img/habits-light@2x.webp 2380w" sizes="(max-width: 860px) 100vw, 640px" width="1190" height="640" loading="lazy" alt="Three habits — Gym, Read and Meditate — each with its strength, streak and a year of history as a grid of days" />
+      </picture>
+    </div>
+  </section>
+
+  <section class="row flip" aria-labelledby="f4">
+    <div class="text">
+      <p class="kicker">Projects</p>
+      <h2 class="big" id="f4">Projects you write in.</h2>
+      <p>Long-running work as pages and dated notes. Worldline gathers what's in them: your to-dos, the ideas you jotted, who you're waiting on and what's still open.</p>
+      <ul>
+        <li>LaTeX equations, inline and displayed</li>
+        <li>Code blocks with syntax colours — Python, Bash, C++, Julia, Fortran, SQL…</li>
+        <li>Search across every page and note</li>
+      </ul>
+    </div>
+    <div class="frame">
+      <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="./src/guest/img/projects-dark.webp 910w, ./src/guest/img/projects-dark@2x.webp 1820w" sizes="(max-width: 860px) 100vw, 640px" />
+        <img src="./src/guest/img/projects-light.webp" srcset="./src/guest/img/projects-light.webp 910w, ./src/guest/img/projects-light@2x.webp 1820w" sizes="(max-width: 860px) 100vw, 640px" width="910" height="690" loading="lazy" alt="A project page with a methods draft, a displayed equation for the waiting-time distribution and a Python code block" />
+      </picture>
+    </div>
+  </section>
+
+  <section class="row" aria-labelledby="f5">
+    <div class="text">
+      <p class="kicker">Mac and iPhone</p>
+      <h2 class="big" id="f5">On your phone too — synced, encrypted.</h2>
+      <p>Pair your iPhone with a QR code. Changes go between your devices end-to-end encrypted, through public relays that only ever see ciphertext.</p>
+      <ul>
+        <li>Works offline on both; catches up when it's back</li>
+        <li>The iPhone app opens from Safari — no App Store, nothing to pay</li>
+        <li>No account: the pairing code is the only key</li>
+      </ul>
+    </div>
+    <div class="phones">
+      <div class="device">
+        <picture>
+          <source media="(prefers-color-scheme: dark)" srcset="./src/guest/img/phone-dark.webp 390w, ./src/guest/img/phone-dark@2x.webp 780w" sizes="240px" />
+          <img src="./src/guest/img/phone-light.webp" srcset="./src/guest/img/phone-light.webp 390w, ./src/guest/img/phone-light@2x.webp 780w" sizes="240px" width="390" height="844" loading="lazy" alt="The calendar on an iPhone" />
+        </picture>
+      </div>
+      <div class="device">
+        <picture>
+          <source media="(prefers-color-scheme: dark)" srcset="./src/guest/img/phonehabits-dark.webp 390w, ./src/guest/img/phonehabits-dark@2x.webp 780w" sizes="240px" />
+          <img src="./src/guest/img/phonehabits-light.webp" srcset="./src/guest/img/phonehabits-light.webp 390w, ./src/guest/img/phonehabits-light@2x.webp 780w" sizes="240px" width="390" height="844" loading="lazy" alt="Habits on an iPhone" />
+        </picture>
+      </div>
+    </div>
+  </section>
+
+  <section class="grid" aria-labelledby="more">
+    <h2 id="more">And the rest</h2>
+    <div class="f"><b>Scheduling links</b><span>Like Calendly and when2meet: guests pick a time or mark when they're free. No sign-up, no email.</span></div>
+    <div class="f"><b>Travel-proof</b><span>All-day events stay on their day; a weekly 3 PM meeting stays 3 PM in its own time zone wherever you are.</span></div>
+    <div class="f"><b>Backups and undo</b><span>A daily snapshot on the Mac, one-file backups, and ⌘Z for everything.</span></div>
+    <div class="f"><b>Keyboard first</b><span>Shortcuts for everything, and events and tasks reachable with Tab for screen readers.</span></div>
+    <div class="f"><b>Fast with years of data</b><span>Tested with ten years of events, habits and notes: typing and switching views stay instant.</span></div>
+    <div class="f"><b>Updates itself</b><span>Signed updates arrive within a day; the iPhone app refreshes on its own.</span></div>
+  </section>
+
+  <div class="promise">
+    <h2>Yours, and free — for everyone.</h2>
+    <p>Everything stays on your devices. No account, no tracking, no server — and the code is open (MIT).</p>
+    <div class="ctas">
+      <a class="btn primary" href="https://github.com/BradenSeefeldt/worldline/releases/latest/download/Worldline.dmg" data-go="dl">Download for Mac</a>
+      <a class="btn secondary" href="https://github.com/BradenSeefeldt/worldline/tree/main/docs">Read the docs</a>
+    </div>
+  </div>
 
   <footer>
     <span>Worldline · MIT licence</span>
-    <nav><a href="https://github.com/BradenSeefeldt/worldline/tree/main/docs">Docs</a><a href="https://github.com/BradenSeefeldt/worldline/releases">All versions</a><a href="https://github.com/BradenSeefeldt/worldline">Source</a></nav>
+    <nav aria-label="More"><a href="https://github.com/BradenSeefeldt/worldline/tree/main/docs">Docs</a><a href="https://github.com/BradenSeefeldt/worldline/blob/main/docs/privacy.md">Privacy</a><a href="https://github.com/BradenSeefeldt/worldline/releases">All versions</a><a href="https://github.com/BradenSeefeldt/worldline">Source</a></nav>
   </footer>
-</div>
+</main>
     </div>
     <div id="root"></div>
     <script type="module" src="/src/guest/entry.ts"></script>

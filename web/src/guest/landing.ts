@@ -16,6 +16,7 @@ const show = (id: string) => {
   $(id)!.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 };
 $('dl')!.addEventListener('click', () => show('mac-steps')); // the download itself goes ahead (it's a link)
+document.querySelector('[data-go="dl"]')?.addEventListener('click', () => show('mac-steps')); // (the one at the bottom too)
 $('iphone')!.addEventListener('click', () => show('phone-steps'));
 $('get-mac')!.addEventListener('click', () => show('mac-steps'));
 document.querySelectorAll<HTMLButtonElement>('[data-copy]').forEach((b) =>
