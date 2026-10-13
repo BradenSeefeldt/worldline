@@ -225,10 +225,10 @@ describe.runIf(RUN)('performance with ten years of data', () => {
     const w = { projects: st().projects, threads: st().threads, projectLog: st().projectLog };
     const data = `${w.projects.length} projects, ${w.threads.length} threads, ${w.projectLog.length} notes`;
     let hits = 0;
-    bench('Projects search "reconnection" (all)', data, () => (hits = Pj.search(w, 'reconnection').length), 5, 50);
+    bench('Projects search "calibration" (all)', data, () => (hits = Pj.search(w, 'calibration').length), 5, 50);
     note('  hits', '', String(hits));
     bench('Projects search, no match', data, () => Pj.search(w, 'zzzqqq'), 5, 30);
-    bench('Projects search within one project', data, () => Pj.search(w, 'reconnection', w.projects[10].id), 5, 5);
+    bench('Projects search within one project', data, () => Pj.search(w, 'calibration', w.projects[10].id), 5, 5);
     bench('Projects board: columnOf + openItems + ideasOf for every live project, statusOf per tile', data, () => {
       for (const p of w.projects.filter((x) => !x.archived)) {
         const col = Pj.columnOf(w, p.id);

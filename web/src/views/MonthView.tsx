@@ -17,6 +17,7 @@ import { prefs } from '../lib/prefs';
 interface Item { ev: CalEvent; a: number; b: number; bar: boolean; lane: number }
 
 export function MonthView() {
+  useStore((s) => s.settings.deadlineLook); // (deadline colours: redrawn when they change in Settings)
   const ref = useRef<HTMLDivElement>(null);
   const { width, height } = useElementSize(ref);
   const narrow = width > 0 && width < 600;

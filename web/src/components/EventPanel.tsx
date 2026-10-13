@@ -84,6 +84,7 @@ function ruleOf(c: RepeatChoice, start: number): Recurrence | undefined {
 }
 
 export function EventPanel() {
+  useStore((s) => s.settings.deadlineLook); // (deadline colours: redrawn when they change in Settings)
   const events = useStore((s) => s.events);
   const selectedId = useStore((s) => s.selectedId);
   const ev = useMemo(() => resolveEvent(events, selectedId), [events, selectedId]);

@@ -19,12 +19,16 @@ export const daysLeft = (e: CalEvent, now = Date.now()) => differenceInCalendarD
 /** Fraction of the runway still ahead: 1 (or more) before work should start, 0 at the due moment. */
 export const runwayLeft = (e: CalEvent, now = Date.now()) => (e.start - now) / (leadDays(e) * 86_400_000);
 
-// Colour says how much runway is left: green > 60%, yellow 25–60%, orange < 25%, red overdue.
-export type Urgency = 'plenty' | 'halfway' | 'closing' | 'overdue';
+// Colour says how close it is (Settings → Tasks & Deadlines; these are the defaults): green with over 60% of the
+// runway left, yellow below 60%, orange below 25%, red in the last 48 hours, dark red once it's overdue.
+export type Urgency = 'plenty' | 'halfway' | 'closing' | 'soon' | 'overdue';
+export const URGENCY_ORDER: Urgency[] = ['plenty', 'halfway', 'closing', 'soon', 'overdue'];
 export function urgency(e: CalEvent, now = Date.now()): Urgency {
   if (e.start < now) return 'overdue';
+  const look = prefs.deadlineLook;
+  if (e.start - now <= look.soonHours * 3_600_000) return 'soon';
   const f = runwayLeft(e, now);
-  return f < 0.25 ? 'closing' : f < 0.6 ? 'halfway' : 'plenty';
+  return f < look.closing / 100 ? 'closing' : f < look.halfway / 100 ? 'halfway' : 'plenty';
 }
 
 /** Mon–Fri days from tomorrow through the due date. */
@@ -53,9 +57,7 @@ export function strengthAt(e: CalEvent, t: number) {
   return Math.min(1, Math.max(0, (t - a) / Math.max(1, e.start - a)));
 }
 
-export const URGENCY_COLOR: Record<Urgency, string> = {
-  plenty: '#20b26b', // green
-  halfway: '#e0ae00', // yellow
-  closing: '#f2801d', // orange
-  overdue: '#ef4b4b', // red
-};
+/** Each stage's colour (Settings → Tasks & Deadlines). Read at drawing time; views subscribe to the setting. */
+export const URGENCY_COLOR: Record<Urgency, string> = new Proxy({} as Record<Urgency, string>, {
+  get: (_, k: string) => prefs.deadlineLook.colors[k as Urgency],
+});

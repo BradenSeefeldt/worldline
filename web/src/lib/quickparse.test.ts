@@ -119,7 +119,7 @@ const CASES: [string, Expect][] = [
   ["Coffee at Balzac's with Sam tomorrow 3", { title: 'Coffee with Sam', start: '2026-10-08 15:00', loc: "Balzac's" }],
   ['Talk at the Fields Institute friday 4pm', { title: 'Talk', start: '2026-10-09 16:00', loc: 'the Fields Institute' }],
   ['Look at data tomorrow', { title: 'Look at data', start: '2026-10-08' }],
-  ['meeting in MP 1318 thursday 2pm', { title: 'Meeting', start: '2026-10-08 14:00', loc: 'MP 1318' }],
+  ['meeting in Room 1318 thursday 2pm', { title: 'Meeting', start: '2026-10-08 14:00', loc: 'Room 1318' }],
   ['yoga @ the studio tomorrow 7am', { title: 'Yoga', start: '2026-10-08 07:00', loc: 'the studio' }],
   ['work from home friday', { title: 'Work from home', start: '2026-10-09' }],
   ['Dinner at 7pm at Pai', { title: 'Dinner', start: '2026-10-08 19:00', loc: 'Pai' }],

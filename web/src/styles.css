@@ -2712,3 +2712,14 @@ html.in-app .sidebar .mini { top: calc(8px - env(safe-area-inset-top)); }
   .tk-check, .hb-btn { position: relative; }
   .tk-check::before, .hb-btn::before { content: ''; position: absolute; inset: -11px; }
 }
+
+/* Settings → Tasks & Deadlines → Deadline colours */
+.st-dl-title { display: inline-flex; align-items: center; gap: 10px; }
+.st-color { appearance: none; -webkit-appearance: none; width: 22px; height: 22px; padding: 0; border: 1px solid var(--line); border-radius: 50%; background: none; cursor: pointer; flex: none; overflow: hidden; }
+.st-color::-webkit-color-swatch-wrapper { padding: 0; }
+.st-color::-webkit-color-swatch { border: 0; border-radius: 50%; }
+.st-color::-moz-color-swatch { border: 0; border-radius: 50%; }
+.st-dl-bar { display: flex; height: 8px; border-radius: 4px; overflow: hidden; margin: 2px 0 8px; }
+.st-dl-bar i { flex: 1; }
+.st-link { appearance: none; border: 0; background: none; padding: 0; color: var(--focus); font: inherit; cursor: pointer; }
+.st-link:hover { text-decoration: underline; }

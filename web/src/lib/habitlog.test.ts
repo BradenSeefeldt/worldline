@@ -81,7 +81,7 @@ describe('logging a habit from quick add', () => {
     // And sentences built on purpose around the habits' own words.
     const tricky = [
       'Gym tomorrow 7am', 'gym w/ Sam fri 6pm', 'Run club thursday at 6', 'Writing session 2-4', 'thesis writing block mon 9-12',
-      'Read group 3pm', 'Meditation class sat 10am', 'climbing with Sasha saturday', 'push gym back 30 min', 'skip gym tomorrow',
+      'Read group 3pm', 'Meditation class sat 10am', 'climbing with Robin saturday', 'push gym back 30 min', 'skip gym tomorrow',
       'move climb to friday', 'done gym fees', 'did gym fees', 'read 20 pages of Dune friday', 'ran into Alex at noon',
       'cancel all gym', 'extend writing by 30 min', 'gym every monday at 6pm', 'run 5k every saturday at 8am',
     ];

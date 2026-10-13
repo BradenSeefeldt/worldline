@@ -4,7 +4,7 @@
 import { Suspense, lazy, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { formatDistanceToNow } from 'date-fns';
 import { useStore } from '../data/store';
-import type { AppSettings, StartPage } from '../data/settings';
+import { DEFAULT_DEADLINE_LOOK, type AppSettings, type DeadlineLook, type StartPage } from '../data/settings';
 import type { ViewMode } from '../data/types';
 import { HOUR_H_RANGE, readOnly } from '../data/store';
 import { TimeZonePicker } from './TimeZonePicker';
@@ -376,12 +376,48 @@ function TasksPane() {
           <Pick label="Runway" value={s.leadDays} options={[[3, '3 days'], [7, '1 week'], [14, '2 weeks'], [21, '3 weeks'], [30, '1 month']]} onChange={(v) => set({ leadDays: v })} />
         </Row>
       </Group>
+      <DeadlineColors />
       <Group title="Suggestions" foot="Each switch turns off one kind of suggestion in the quick-add box.">
         <Row title="Nudge overdue tasks" note="One suggestion after 3 days overdue"><Toggle label="Nudge overdue tasks" on={s.suggest.stale} onChange={(v) => sug('stale', v)} /></Row>
         <Row title="Offer focus blocks for deadlines" note="“Work on NSERC proposal tomorrow at 9am”"><Toggle label="Offer focus blocks" on={s.suggest.focus} onChange={(v) => sug('focus', v)} /></Row>
         <Row title="Suggest missing regular meetings" note="A weekly meeting that isn’t on this week"><Toggle label="Suggest missing regular meetings" on={s.suggest.add} onChange={(v) => sug('add', v)} /></Row>
       </Group>
     </>
+  );
+}
+
+/** When a deadline changes colour, and to what — on the calendar's runways, in the sidebar and in the event panel. */
+function DeadlineColors() {
+  const [s, set] = useSettings();
+  const look = s.deadlineLook;
+  const put = (p: Partial<DeadlineLook>) => set({ deadlineLook: { ...look, ...p } });
+  const color = (k: keyof DeadlineLook['colors'], name: string) => (
+    <input type="color" className="st-color" aria-label={`${name} colour`} value={look.colors[k]} onChange={(e) => put({ colors: { ...look.colors, [k]: e.target.value } })} />
+  );
+  const pct = (v: number) => [v, `${v}% left`] as [number, string];
+  const stages: [keyof DeadlineLook['colors'], string, ReactNode, ReactNode][] = [
+    ['plenty', 'Plenty of time', 'Most of the runway still ahead', null],
+    ['halfway', 'Halfway', 'Less of the runway left than', <Pick label="Yellow from" value={look.halfway} options={[40, 50, 60, 70, 80].map(pct)} onChange={(v) => put({ halfway: v, closing: Math.min(look.closing, v) })} />],
+    ['closing', 'Getting close', 'Less of the runway left than', <Pick label="Orange from" value={look.closing} options={[10, 15, 20, 25, 33, 40].filter((v) => v <= look.halfway).map(pct)} onChange={(v) => put({ closing: v })} />],
+    ['soon', 'Due very soon', 'In the last', <Pick label="Red from" value={look.soonHours} options={[[0, 'never'], [12, '12 hours'], [24, '24 hours'], [48, '48 hours'], [72, '3 days'], [168, '1 week']]} onChange={(v) => put({ soonHours: v })} />],
+    ['overdue', 'Overdue', 'Past its due time', null],
+  ];
+  const changed = JSON.stringify(look) !== JSON.stringify(DEFAULT_DEADLINE_LOOK);
+  return (
+    <Group
+      title="Deadline colours"
+      foot={
+        <>
+          <span className="st-dl-bar" aria-hidden>{stages.map(([k]) => <i key={k} style={{ background: look.colors[k] }} />)}</span>
+          A deadline's runway and its countdown change colour as the due time gets closer.{' '}
+          {changed && <button className="st-link" onClick={() => set({ deadlineLook: DEFAULT_DEADLINE_LOOK })}>Back to the usual colours</button>}
+        </>
+      }
+    >
+      {stages.map(([k, title, note, pick]) => (
+        <Row key={k} title={<span className="st-dl-title">{color(k, title)}{title}</span>} note={note}>{pick}</Row>
+      ))}
+    </Group>
   );
 }
 

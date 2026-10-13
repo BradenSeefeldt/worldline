@@ -60,6 +60,7 @@ const lastIndex = (t: Date | number) => S.toSlot(D.dayIndex(t), 'floor'); // …
 const exactIndex = (t: Date | number) => S.toSlot(D.dayIndex(t), 'exact'); // -1 for a hidden day
 
 export function TimeGrid({ days }: { days: number }) {
+  useStore((s) => s.settings.deadlineLook); // (deadline colours: redrawn when they change in Settings)
   const scrollerRef = useRef<HTMLDivElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
   const { width } = useElementSize(scrollerRef);

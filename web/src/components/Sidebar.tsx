@@ -5,7 +5,7 @@ import { useDeadlinesIn, useEventsIn } from '../data/useEvents';
 import { weekNumber, weekStart } from '../lib/dates';
 import { useNow } from '../lib/hooks';
 import { cls, fmtTime } from '../lib/format';
-import { URGENCY_COLOR, countdown, urgency, workingDays, type Urgency } from '../lib/deadlines';
+import { URGENCY_COLOR, URGENCY_ORDER, countdown, urgency, workingDays, type Urgency } from '../lib/deadlines';
 import { Chevron } from './Icons';
 import { HabitEditor, HabitsBadge, HabitsCardBody } from './Habits';
 import { CalendarEditor } from './CalendarEditor';
@@ -230,6 +230,7 @@ function Calendars() {
 function Deadlines() {
   const selectedId = useStore((s) => s.selectedId);
   const showOnCalendar = useStore((s) => s.showDeadlines);
+  useStore((s) => s.settings.deadlineLook); // (redrawn when the colours change)
   const now = useNow(60_000);
   const today0 = startOfDay(now).getTime();
   const events = useDeadlinesIn(today0 - 120 * 86_400_000, today0 + 400 * 86_400_000);
@@ -250,7 +251,7 @@ function Deadlines() {
   const st = useStore.getState;
   const overdue = list.filter((e) => e.start < now);
   // The most urgent open deadline sets the card's colour (red if anything is overdue), even when folded.
-  const RANK: Urgency[] = ['plenty', 'halfway', 'closing', 'overdue'];
+  const RANK = URGENCY_ORDER;
   const worst = list.reduce<Urgency | null>((w, e) => {
     const u = urgency(e, now);
     return !w || RANK.indexOf(u) > RANK.indexOf(w) ? u : w;

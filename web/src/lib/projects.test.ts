@@ -124,8 +124,8 @@ describe('the demo projects', () => {
   it('read back as intended: waiting threads, ideas from notes, nothing blank', () => {
     const w = makeDemoProjects(new Date(NOW));
     const waiting = w.threads.filter((t) => statusOf(w, t).kind === 'waiting').map((t) => [t.title, statusOf(w, t).who]);
-    expect(waiting).toEqual([['Compare with the observations', 'Alex'], ['Archival spectra from Sam', 'Sam']]);
-    expect(ideasOf(w, 'demo-kai').map((x) => x.text)).toContain('feature sizes as a proxy for the event durations — links the project to the statistics paper.');
+    expect(waiting).toEqual([['Compare with the model', 'Alex'], ['Older data sets from Sam', 'Sam']]);
+    expect(ideasOf(w, 'demo-kai').map((x) => x.text)).toContain('the event sizes could stand in for their durations — links the project to the results paper.');
     for (const t of w.threads) expect(docText(t.body).trim(), t.title).not.toBe('');
   });
 });
@@ -146,10 +146,10 @@ describe('action items: capture now, file later', () => {
   });
   it('filing: the thread sharing the most words with the to-do comes first, then the most recently edited', () => {
     const run = th({ title: 'Get the a = 0.94 run going on cluster', updatedAt: NOW - 5 * DAY });
-    const paper = th({ title: 'Flux eruption statistics paper', updatedAt: NOW });
+    const paper = th({ title: 'Event statistics paper', updatedAt: NOW });
     const done = th({ title: 'Old run', status: 'done' });
     const w = world([run, paper, done]);
-    expect(bestThreads(w, 'p', 'Rerun the restart with the a094 run on cluster').map(({ t, score }) => [t.title, score])).toEqual([['Get the a = 0.94 run going on cluster', 2], ['Flux eruption statistics paper', 0]]);
+    expect(bestThreads(w, 'p', 'Rerun the restart with the a094 run on cluster').map(({ t, score }) => [t.title, score])).toEqual([['Get the a = 0.94 run going on cluster', 2], ['Event statistics paper', 0]]);
     expect(bestThreads(w, 'p', 'Email the department').map(({ t }) => t.id)).toEqual([paper.id, run.id]);
   });
 });

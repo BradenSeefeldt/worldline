@@ -43,12 +43,12 @@ export function rng(seed: number) {
 }
 type R = ReturnType<typeof rng>;
 
-const WORDS = ('the simulation flux tube eruption reconnection plasmoid accretion disk magnetic field black hole horizon jet ' +
-  'temperature density spectrum resolution grid checkpoint cluster node restart output analysis figure paper draft ' +
+const WORDS = ('the experiment measurement signal sample data set instrument calibration model prediction theory effect ' +
+  'temperature density spectrum resolution grid checkpoint server node restart output analysis figure paper draft ' +
   'referee comment section method result discussion appendix error bar fit model parameter sample survey archive ' +
-  'light curve flare infrared x-ray timescale variability turbulence current sheet guide field heating cooling ' +
-  'radiative transfer ray tracing camera image movie frame pipeline script python julia notebook plot histogram').split(' ');
-const NAMES = ['Alex', 'Sam', 'Jordan', 'Kai', 'Sasha', 'Bart', 'Norman', 'Priya', 'Lena', 'Omar'];
+  'time series event rate timescale variability noise baseline control trial group comparison estimate uncertainty ' +
+  'review student course lecture grant budget meeting image frame pipeline script python julia notebook plot histogram').split(' ');
+const NAMES = ['Alex', 'Sam', 'Jordan', 'Kai', 'Robin', 'Morgan', 'Taylor', 'Priya', 'Lena', 'Omar'];
 const sentence = (r: R, n = r.int(8, 22)) => {
   const w = Array.from({ length: n }, () => r.pick(WORDS));
   w[0] = w[0][0].toUpperCase() + w[0].slice(1);
@@ -61,7 +61,7 @@ const para = (...c: DocNode[]): DocNode => ({ type: 'paragraph', ...(c.length ? 
 const heading = (level: number, t: string): DocNode => ({ type: 'heading', attrs: { level }, content: [text(t)] });
 const CODE = [
   ['python', 'import numpy as np\nimport h5py\n\ndef load(path, field="b2"):\n    with h5py.File(path) as f:\n        return np.asarray(f[field])\n\nfor step in range(0, 5000, 500):\n    b2 = load(f"out/data{step:05d}.h5")\n    print(step, b2.mean(), b2.max())\n'],
-  ['bash', '#!/bin/bash\n#SBATCH --nodes=64\n#SBATCH --time=24:00:00\nmodule load hdf5/1.14 openmpi\nsrun ./bhac -i amrvac.par -if checkpoint_0042.dat\n'],
+  ['bash', '#!/bin/bash\n#SBATCH --nodes=64\n#SBATCH --time=24:00:00\nmodule load hdf5/1.14 openmpi\nsrun ./model -i params.par --resume checkpoint_0042.dat\n'],
   ['julia', 'using Statistics\nfunction waiting_times(t::Vector{Float64})\n    dt = diff(sort(t))\n    return mean(dt), std(dt)\nend\n'],
   ['cpp', '#include <cmath>\ndouble lorentz(double v2) { return 1.0 / std::sqrt(1.0 - v2); }\n'],
 ] as const;
@@ -80,7 +80,7 @@ const richPara = (r: R): DocNode => {
   if (k < 0.1) return para(text('Idea: ' + sentence(r)));
   if (k < 0.18) return para(text('Q: ' + sentence(r)), ...(r.chance(0.3) ? [] : []));
   if (k < 0.24) return para(text('Decided: ' + sentence(r)));
-  if (k < 0.34) return para(text(sentence(r) + ' With '), { type: 'inlineMath', attrs: { latex: '\\sigma = B^2/(4\\pi\\rho c^2)' } }, text(' ' + sentence(r)));
+  if (k < 0.34) return para(text(sentence(r) + ' With '), { type: 'inlineMath', attrs: { latex: '\\bar x = \\frac{1}{N}\\sum_i x_i' } }, text(' ' + sentence(r)));
   if (k < 0.44) return para(text(sentence(r) + ' '), text(r.pick(WORDS), [{ type: 'bold' }]), text(' see '), text('~/runs/big', [{ type: 'code' }]), text('.'));
   return para(text(Array.from({ length: r.int(1, 4) }, () => sentence(r)).join(' ')));
 };
@@ -90,7 +90,7 @@ export function page(r: R, kb: number): DocNode {
   let size = 0;
   while (size < kb * 1024) {
     const k = r.next();
-    const b = k < 0.08 ? heading(r.int(2, 3), sentence(r, 4).slice(0, -1)) : k < 0.18 ? taskList(r, r.int(2, 6)) : k < 0.25 ? bullets(r, r.int(2, 5)) : k < 0.31 ? codeBlock(r) : k < 0.34 ? { type: 'blockMath', attrs: { latex: '\\partial_t (\\sqrt{-g}\\, b^\\mu) = -\\partial_i [\\sqrt{-g}\\,(b^i u^\\mu - b^\\mu u^i)]' } } : richPara(r);
+    const b = k < 0.08 ? heading(r.int(2, 3), sentence(r, 4).slice(0, -1)) : k < 0.18 ? taskList(r, r.int(2, 6)) : k < 0.25 ? bullets(r, r.int(2, 5)) : k < 0.31 ? codeBlock(r) : k < 0.34 ? { type: 'blockMath', attrs: { latex: '\\chi^2 = \\sum_i \\frac{(y_i - f(x_i))^2}{\\sigma_i^2}' } } : richPara(r);
     content.push(b);
     size += JSON.stringify(b).length;
   }
@@ -178,7 +178,7 @@ export function bigState(o: BigOptions) {
   ];
   const events: CalEvent[] = [];
   const local = ['personal', 'research', 'teaching', 'social'];
-  const TITLES = ['Gym', 'Run', 'Piano practice', 'Meditation', 'Read', 'Meeting with Bart', 'Meeting with Norman', 'Group meeting', 'Lunch with Sam', 'Telecon', 'Office hours', 'Lecture', 'Dentist', 'Climbing', 'Coffee with Priya', 'Write paper', 'Code review', 'Seminar prep', 'Call home', 'Groceries'];
+  const TITLES = ['Gym', 'Run', 'Piano practice', 'Meditation', 'Read', 'Meeting with Morgan', 'Meeting with Taylor', 'Group meeting', 'Lunch with Sam', 'Telecon', 'Office hours', 'Lecture', 'Dentist', 'Climbing', 'Coffee with Priya', 'Write paper', 'Code review', 'Seminar prep', 'Call home', 'Groceries'];
 
   // one-offs, over the whole span
   const nLocal = o.localEvents ?? 13_000;
@@ -305,7 +305,7 @@ export function bigState(o: BigOptions) {
   for (let i = 0; i < nP; i++) {
     const createdAt = t0 + Math.floor((i / nP) * span * 0.9);
     projects.push({
-      id: id('p'), title: `${r.pick(['Flux eruptions', 'BAL winds', 'Detector', 'BHART', 'Teaching', 'Postdoc apps', 'Plasmoids', 'Thesis'])} ${i}`, color: '#2f7cf6', createdAt,
+      id: id('p'), title: `${r.pick(['Main study', 'Review', 'Instrument', 'Software', 'Teaching', 'Hiring', 'Side project', 'Grant'])} ${i}`, color: '#2f7cf6', createdAt,
       about: sentence(r, 12), doc: page(r, r.int(1, 4)), archived: createdAt < now - 4 * 365 * DAY && r.chance(0.6),
       pins: Array.from({ length: r.int(0, 4) }, (_, k) => ({ id: id('pin'), label: `Pin ${k}`, href: r.chance(0.5) ? 'https://github.com/x/y' : '~/runs/big' })),
       ideas: Array.from({ length: r.int(0, 8) }, () => ({ id: id('i'), text: sentence(r), at: createdAt + r.int(0, 300) * DAY })),

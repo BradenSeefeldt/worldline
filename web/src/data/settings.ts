@@ -29,6 +29,9 @@ export interface AppSettings {
   // Tasks & Deadlines
   dueMinutes: number;
   leadDays: number;
+  /** A deadline's colour as its due time gets closer (Settings → Tasks & Deadlines): yellow below `halfway` per cent
+   *  of the runway left, orange below `closing` per cent, red in the last `soonHours` hours, then the overdue colour. */
+  deadlineLook: DeadlineLook;
   suggest: Record<SuggestionKey, boolean>; // each kind of quick-add suggestion on / off
   // Habits
   habitsFromCalendar: boolean;
@@ -39,6 +42,19 @@ export interface AppSettings {
   // Scheduling: what a new link starts with
   linkDefaults: { durationMin: number; windowStart: number; windowEnd: number; singleUse: boolean; bufferMin: number; noticeMin: number };
 }
+
+export interface DeadlineLook {
+  halfway: number;
+  closing: number;
+  soonHours: number;
+  colors: { plenty: string; halfway: string; closing: string; soon: string; overdue: string };
+}
+export const DEFAULT_DEADLINE_LOOK: DeadlineLook = {
+  halfway: 60,
+  closing: 25,
+  soonHours: 48,
+  colors: { plenty: '#20b26b', halfway: '#e0ae00', closing: '#f2801d', soon: '#ef3b3b', overdue: '#b0123a' },
+};
 
 export const DEFAULT_SETTINGS: AppSettings = {
   weekStartsOn: 1,
@@ -57,6 +73,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   subsRefreshMin: 30,
   dueMinutes: 17 * 60,
   leadDays: 14,
+  deadlineLook: DEFAULT_DEADLINE_LOOK,
   suggest: { stale: true, focus: true, add: true, habit: true },
   habitsFromCalendar: true,
   alertMin: 10,
@@ -73,6 +90,21 @@ const bool = (x: unknown, d: boolean) => (typeof x === 'boolean' ? x : d);
 const minOrNone = (x: unknown, lo: number, hi: number, d: number | null) => (x === null ? null : num(x, lo, hi, d as number) ?? d);
 
 /** Saved settings (any shape) → complete, valid settings. */
+const HEX = /^#[0-9a-f]{6}$/i;
+function normalizeLook(raw: unknown): DeadlineLook {
+  const r = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
+  const c = (r.colors && typeof r.colors === 'object' ? r.colors : {}) as Record<string, unknown>;
+  const d = DEFAULT_DEADLINE_LOOK;
+  const color = (k: keyof DeadlineLook['colors']) => (typeof c[k] === 'string' && HEX.test(c[k] as string) ? (c[k] as string).toLowerCase() : d.colors[k]);
+  const halfway = num(r.halfway, 5, 95, d.halfway);
+  return {
+    halfway,
+    closing: Math.min(num(r.closing, 1, 90, d.closing), halfway),
+    soonHours: num(r.soonHours, 0, 14 * 24, d.soonHours),
+    colors: { plenty: color('plenty'), halfway: color('halfway'), closing: color('closing'), soon: color('soon'), overdue: color('overdue') },
+  };
+}
+
 export function normalizeSettings(raw: unknown): AppSettings {
   const r = (raw && typeof raw === 'object' ? raw : {}) as Partial<Record<keyof AppSettings, unknown>>;
   const d = DEFAULT_SETTINGS;
@@ -97,6 +129,7 @@ export function normalizeSettings(raw: unknown): AppSettings {
     subsRefreshMin: num(r.subsRefreshMin, 5, 24 * 60, d.subsRefreshMin),
     dueMinutes: num(r.dueMinutes, 0, 24 * 60 - 1, d.dueMinutes),
     leadDays: num(r.leadDays, 1, 365, d.leadDays),
+    deadlineLook: normalizeLook(r.deadlineLook),
     suggest: { stale: bool(sg.stale, true), focus: bool(sg.focus, true), add: bool(sg.add, true), habit: bool(sg.habit, true) },
     habitsFromCalendar: bool(r.habitsFromCalendar, d.habitsFromCalendar),
     alertMin: 'alertMin' in r ? minOrNone(r.alertMin, 0, 7 * 1440, d.alertMin) : d.alertMin,

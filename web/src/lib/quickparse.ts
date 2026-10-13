@@ -160,7 +160,7 @@ const MEALS: [RegExp, number][] = [
 // "June 10/22" is June + a slash date, so a day number only counts if no slash follows it.
 const LONE_MONTH =
   /(?<!\d\s*)\b(january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec)\b(?!\.?\s*\d{1,2}(?:st|nd|rd|th)?\b(?!\/\d))/gi;
-// Room numbers etc. ("MP 1318") must not be read as years; "at 1530" (24-hour time) and 20xx years are kept.
+// Room numbers etc. ("Room 1318") must not be read as years; "at 1530" (24-hour time) and 20xx years are kept.
 const LONG_NUMBER = /(?<![:/\d]|\bat\s)\b(?!20\d\d\b)\d{3,}\b(?![:/])/g;
 // "Cottage weekend" is a name; only "this/next/the weekend" (or "on/over the weekend") is a date.
 const LONE_WEEKEND = /(?<!\b(?:this|next|the|coming)\s+)\bweekend\b/gi;

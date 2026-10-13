@@ -1133,6 +1133,6 @@ export const useStore = create<State>()(
 
 // The settings plain helpers need (week start, 24-hour time, parser defaults) — copied over whenever they change.
 const applyPrefs = (s: AppSettings) =>
-  setPrefs({ weekStartsOn: s.weekStartsOn, hour24: s.hour24, defaultEventMin: s.defaultEventMin, dueMinutes: s.dueMinutes, leadDays: s.leadDays, habitsFromCalendar: s.habitsFromCalendar });
+  setPrefs({ weekStartsOn: s.weekStartsOn, hour24: s.hour24, defaultEventMin: s.defaultEventMin, dueMinutes: s.dueMinutes, leadDays: s.leadDays, habitsFromCalendar: s.habitsFromCalendar, deadlineLook: s.deadlineLook });
 applyPrefs(useStore.getState().settings);
 useStore.subscribe((s, p) => s.settings !== p.settings && applyPrefs(s.settings));

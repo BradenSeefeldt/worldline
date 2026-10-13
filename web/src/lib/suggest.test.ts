@@ -19,7 +19,7 @@ const BASE: CalEvent[] = [
   ...weekly('Dept lunch talk', 9, 15, 8, 12), // Thursdays, incl. tomorrow
   ...weekly('Jordan — BAL winds', 8, 30, 3, 14, 0, 60, 14), // every other Wednesday: Sep 2, 16, 30
   ...weekly('Coffee with Ana', 5, 9, 6, 10), // Tuesdays — last in June: months ago
-  ev('Telecon with Sasha', 9, 8, 12, 30, 30), // clashes with tomorrow's lunch talk
+  ev('Telecon with Robin', 9, 8, 12, 30, 30), // clashes with tomorrow's lunch talk
 ];
 const run = (events = BASE, extra = {}) => suggest(events, DEFAULT_CALENDARS, { now: NOW, ...extra });
 const phrases = (events?: CalEvent[], extra?: object) => run(events, extra).map((s) => s.phrase);
@@ -51,7 +51,7 @@ describe('suggestions', () => {
     expect(phrases(moved).some((p) => p.startsWith('Meeting with Alex'))).toBe(false);
   });
   it('offers to move the one-off event out of a clash, to the nearest free slot', () => {
-    expect(phrases()).toContain('Move Telecon with Sasha to tomorrow at 1pm');
+    expect(phrases()).toContain('Move Telecon with Robin to tomorrow at 1pm');
   });
   it('offers to push back something starting soon', () => {
     const soon = [...BASE, ev('Group meeting', 9, 7, 20)];

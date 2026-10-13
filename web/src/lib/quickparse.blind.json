@@ -49,11 +49,11 @@
     "end": "2026-10-30 17:00"
   },
   {
-    "input": "Thesis committee meeting Nov 12 2-3:30 in MP 1318",
+    "input": "Thesis committee meeting Nov 12 2-3:30 in Room 1318",
     "title": "Thesis committee meeting",
     "start": "2026-11-12 14:00",
     "end": "2026-11-12 15:30",
-    "loc": "MP 1318"
+    "loc": "Room 1318"
   },
   {
     "input": "Dept lunch talk wed 12:00 #department",
@@ -170,8 +170,8 @@
     "end": "2026-11-01"
   },
   {
-    "input": "Schedule a meeting with Alex tomorrow at 11 about the flux eruption paper",
-    "title": "Meeting with Alex about the flux eruption paper",
+    "input": "Schedule a meeting with Alex tomorrow at 11 about the review paper",
+    "title": "Meeting with Alex about the review paper",
     "start": "2026-10-08 11:00",
     "end": "2026-10-08 12:00"
   },

@@ -27,7 +27,7 @@ const EVENTS: CalEvent[] = [
   ev('Journal club', 9, 11, 0),
   ev('Gym', 8, 7, 30),
   ev('Dentist', 13, 9, 0),
-  ev('Telecon with Sasha', 8, 16, 0, 30),
+  ev('Telecon with Robin', 8, 16, 0, 30),
   ev('Catch up with Sam', 9, 16, 0),
   ev('Thesis writing', 8, 9, 0, 120),
   ev('Group meeting', 8, 10, 0),
@@ -58,7 +58,7 @@ describe('commands: finding the event', () => {
     expect(target("cancel Alex's meeting")).toBe('Meeting with Alex');
     expect(target('cancel Alexs meeting')).toBe('Meeting with Alex');
     expect(target('skip journl club')).toBe('Journal club');
-    expect(target('delete telcon with sasha')).toBe('Telecon with Sasha');
+    expect(target('delete telcon with robin')).toBe('Telecon with Robin');
   });
   it('“all” applies to every match in scope', () => {
     const c = run('skip all lunch talks this week')!;

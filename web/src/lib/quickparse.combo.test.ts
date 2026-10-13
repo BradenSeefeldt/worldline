@@ -25,7 +25,7 @@ const TIMES: [string, string, string | null][] = [
   ['3-4pm', '15:00', '16:00'], ['at 2 PM', '14:00', null], ['at half past 3', '15:30', null], ['at 1530', '15:30', null],
 ];
 const PLACES: [string, string | undefined][] = [
-  ['', undefined], ["at Fran's", "Fran's"], ['in MP 1318', 'MP 1318'], ['@ the lab', 'the lab'], ['at the Fields Institute', 'the Fields Institute'],
+  ['', undefined], ["at Fran's", "Fran's"], ['in Room 1318', 'Room 1318'], ['@ the lab', 'the lab'], ['at the Fields Institute', 'the Fields Institute'],
 ];
 const DURATIONS: [string, number | undefined][] = [['', undefined], ['for 2h', 120], ['for 45 min', 45], ['for half an hour', 30]];
 const WRAPPERS: ((s: string) => string)[] = [

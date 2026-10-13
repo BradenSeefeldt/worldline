@@ -46,7 +46,7 @@ green = adds or completes (+ event, ☐+ task, ⚑ deadline, ✓ done), blue = c
 | “skip **all** lunch talks this week” | delete every upcoming match |
 | “move Alex’s meeting to tues at 3pm”, “reschedule dentist to monday” | move it (date only keeps the time; time only keeps the day) |
 | “push gym back 30 min”, “shift Kai meeting by half hour early”, “delay telecon an hour” | shift it |
-| “extend thesis writing by 30 min”, “shorten … by an hour” | change its length |
+| “extend paper writing by 30 min”, “shorten … by an hour” | change its length |
 
 The event is found by forgiving name matching (possessives, plurals, typos); “tomorrow”, “this
 week” or “the 3pm meeting” narrow it down. The preview shows exactly what will change; Tab steps
@@ -94,8 +94,9 @@ work before it (2 weeks unless you say otherwise) — not an all-day event.
 - **Quick add:** “NSERC proposal due nov 18”, “abstract due fri 3pm”, “finish slides by thursday”,
   “grant report due dec 1 needs 3 weeks”. Tick off: “done NSERC proposal”, “mark abstract done”,
   “submitted grant report”. Move: “push NSERC deadline to nov 20”.
-- **Not in a calendar.** A deadline's colour is how much of its runway is left: **green** > 60%,
-  **yellow** 25–60%, **orange** < 25%, **red** overdue. The Deadlines section has its own
+- **Not in a calendar.** A deadline's colour says how close it is: **green** with more than 60% of its runway left,
+  **yellow** below 60%, **orange** below 25%, **red** in the last 48 hours, **dark red** once overdue. The thresholds
+  and the colours are yours to change (Settings → Tasks & Deadlines → Deadline colours). The Deadlines section has its own
   “on calendar” toggle.
 - **Day/week view:** each open deadline is a *runway track* under the day names — coloured text on a
   thin line that fades in toward a ⚑ pennant at the due moment — so it never looks like an event.
