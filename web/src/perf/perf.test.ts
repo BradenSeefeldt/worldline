@@ -29,6 +29,10 @@ const heapMB = () => (gc(), gc(), process.memoryUsage().heapUsed / 1e6);
 
 // ---- measuring
 interface Row { op: string; data: string; ms: number; budget?: number; note?: string }
+/** Budgets are for a recent Mac; a slower machine (a CI runner is ~3-4x slower) sets PERF_SLACK to scale them. */
+const SLACK = Number(process.env.PERF_SLACK) || 1;
+/** Each test's time limit (whole sections run many repetitions). */
+const LIMIT = 900_000;
 const rows: Row[] = [];
 const med = (xs: number[]) => [...xs].sort((a, b) => a - b)[Math.floor(xs.length / 2)];
 function bench(op: string, data: string, fn: (i: number) => unknown, reps = 5, budget?: number) {
@@ -41,7 +45,7 @@ function bench(op: string, data: string, fn: (i: number) => unknown, reps = 5, b
   }
   const ms = med(ts);
   rows.push({ op, data, ms, budget });
-  if (budget !== undefined) expect(ms, `${op} took ${ms.toFixed(1)} ms (budget ${budget})`).toBeLessThan(budget);
+  if (budget !== undefined) expect(ms, `${op} took ${ms.toFixed(1)} ms (budget ${budget} × ${SLACK})`).toBeLessThan(budget * SLACK);
   return ms;
 }
 async function benchAsync(op: string, data: string, fn: (i: number) => Promise<unknown>, reps = 3, budget?: number) {
@@ -53,7 +57,7 @@ async function benchAsync(op: string, data: string, fn: (i: number) => Promise<u
   }
   const ms = med(ts);
   rows.push({ op, data, ms, budget });
-  if (budget !== undefined) expect(ms, `${op} took ${ms.toFixed(1)} ms (budget ${budget})`).toBeLessThan(budget);
+  if (budget !== undefined) expect(ms, `${op} took ${ms.toFixed(1)} ms (budget ${budget} × ${SLACK})`).toBeLessThan(budget * SLACK);
   return ms;
 }
 const note = (op: string, data: string, value: string) => rows.push({ op, data, ms: NaN, note: value });
@@ -90,7 +94,7 @@ describe.runIf(RUN)('performance with ten years of data', () => {
     const h2 = heapMB();
     note('heap: app modules loaded (demo data)', '', `${(h1 - h0).toFixed(0)} MB`);
     note('heap: + ten years of data in the store', `${big.events.length} events`, `${(h2 - h1).toFixed(0)} MB`);
-  }, 120_000);
+  }, LIMIT);
 
   afterAll(() => {
     if (!RUN) return;
@@ -117,7 +121,7 @@ describe.runIf(RUN)('performance with ten years of data', () => {
     mem.set('calendar-v1', json);
     await benchAsync('hydrate: persist.rehydrate() end to end', MB(json.length), async () => S.useStore.persist.rehydrate(), 3, 300);
     expect(st().events.length).toBe(big.events.length);
-  }, 120_000);
+  }, LIMIT);
 
   // ------------------------------------------------------------------ edits (what a keystroke / tap costs)
   it('actions: one edit, then the save it causes', async () => {
@@ -144,7 +148,7 @@ describe.runIf(RUN)('performance with ten years of data', () => {
     await P.flush();
     note('saved string written per save (every edit burst; Mac: also through IPC into SQLite)', '', MB(mem.get('calendar-v1')!.length));
     expect(ms.toast).toBeLessThan(ms.key + 1);
-  }, 120_000);
+  }, LIMIT);
 
   it('undo history: memory held by 50 steps of event edits', () => {
     const ev = st().events.find((e) => e.calendarId === 'teaching' && !e.recurrence)!;
@@ -214,7 +218,7 @@ describe.runIf(RUN)('performance with ten years of data', () => {
     const masters = st().events.filter((e) => e.recurrence).map(decodeEvent);
     bench('parseCommand: "move gym to friday at 3" (per keystroke in QuickAdd)', `${withTasks.length} events+tasks`, () => parseCommand('move gym to friday at 3', withTasks, cals, new Date(), masters), 5, 20);
     bench('parseCommand: "delete dentist" ', `${withTasks.length} events+tasks`, () => parseCommand('delete dentist', withTasks, cals, new Date(), masters), 5, 100);
-  }, 120_000);
+  }, LIMIT);
 
   it('projects: search and the board', async () => {
     const Pj = await import('../lib/projects');
@@ -233,7 +237,7 @@ describe.runIf(RUN)('performance with ten years of data', () => {
         for (const t of col.live) (Pj.statusOf(w, t), Pj.openItems(w, t.id));
       }
     }, 3, 80);
-  }, 120_000);
+  }, LIMIT);
 
   it('backup and .ics export', async () => {
     const { makeBackup, readBackup } = await import('../lib/backup');
@@ -249,7 +253,7 @@ describe.runIf(RUN)('performance with ten years of data', () => {
       bench(`.ics export of "${id}"`, `${evs.length} events`, () => (ics = toIcs(id, evs)), 3, 300);
       note(`  .ics size "${id}"`, '', MB(ics.length));
     }
-  }, 120_000);
+  }, LIMIT);
 
   // ------------------------------------------------------------------ sync
   it('sync document: build, size, snapshot, catch-up, single edits', async () => {
@@ -343,7 +347,7 @@ describe.runIf(RUN)('performance with ten years of data', () => {
     }
     rows.push({ op: 'sync: 300 app launches each with one edit (load doc → edit → encode)', data: '', ms: (performance.now() - t) / 300, note: undefined });
     note('doc growth: 300 launch sessions with one edit each', '', `+${((saved.length - before) / 1e3).toFixed(0)} kB; state vector ${sv} B (${(sv / 300).toFixed(1)} B per session)`);
-  }, 300_000);
+  }, LIMIT);
 
   it('subscription refreshes: time, and what they leave in the sync doc', async () => {
     // refreshCalendar fetches the feed (stubbed here: the generated feed, a week later each time) and replaces the
@@ -385,7 +389,7 @@ describe.runIf(RUN)('performance with ten years of data', () => {
     expect(med(writes)).toBeLessThan(100);
     note('  sync update sent per weekly refresh (median)', '', `${(med(ups) / 1e3).toFixed(0)} kB`);
     note('doc growth: 52 weekly refreshes of one subscription', '', `+${((size1 - size0) / 1e3).toFixed(0)} kB raw (${((size1 - size0) / 52 / 1e3).toFixed(1)} kB/week; events rolling out of the window stay as tombstones)`);
-  }, 300_000);
+  }, LIMIT);
 
   it('sync engine running: edit cost and turn-on', async () => {
     const { startEngine } = await import('../data/syncEngine');
@@ -402,7 +406,7 @@ describe.runIf(RUN)('performance with ten years of data', () => {
     await benchAsync('sync engine flush: merge + seal + send + saveDoc (encode + base64 + app save)', '', () => engine.flush(), 3, 60);
     note('relay messages stored after turn-on + edits', '', String(relay.events.length));
     engine.stop();
-  }, 300_000);
+  }, LIMIT);
 });
 
 it('perf suite is opt-in (PERF=1)', () => expect(true).toBe(true));

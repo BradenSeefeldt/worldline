@@ -462,11 +462,13 @@ describe('a message the relays keep refusing', () => {
         }
       };
       await pass(5_000); // the group's first update and snapshot went out
-      let attempts = 0;
-      r.refuse = (x) => !x.tags.some((t) => t[1]?.includes(':s:')) && ++attempts > 0; // updates refused, snapshots taken
+      const attempts = new Map<string, number>(); // (per message: the edit may go out as one message or two)
+      r.refuse = (x) => !x.tags.some((t) => t[1]?.includes(':s:')) && attempts.set(x.id, (attempts.get(x.id) ?? 0) + 1) !== undefined; // updates refused, snapshots taken
       useStore.getState().updateEvent('e1', { title: 'One, renamed' });
       await pass(60 * 60_000);
-      expect(attempts).toBe(6); // 15 s, 30 s, 1 min, 2 min, 4 min… then given up — not 240 tries an hour
+      expect(attempts.size).toBeGreaterThan(0);
+      expect(attempts.size).toBeLessThanOrEqual(3);
+      for (const n of attempts.values()) expect(n).toBe(6); // 15 s, 30 s, 1 min, 2 min, 4 min… then given up — not 240 tries an hour
       const snap = r.events.filter((x) => x.tags.some((t) => t[1]?.includes(':s:')));
       const p = phone(r, deriveSync(sec));
       expect(snap.length).toBeGreaterThan(0);

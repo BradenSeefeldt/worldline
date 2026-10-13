@@ -50,6 +50,8 @@ jobs:
       # ten years of data: anything that got much slower fails here (src/perf; budgets are several times the measured times)
       - name: Performance budgets
         run: npm run test:perf
+        env:
+          PERF_SLACK: 3 # (the runner is ~3-4x slower than a recent Mac)
 
       # The web part is built here, without the update-signing key in reach: npm packages' build code never sees it.
       # (The step below then skips its own web build — "beforeBuildCommand": "" — and only compiles and signs.)
