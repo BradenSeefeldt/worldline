@@ -171,6 +171,8 @@ function todos(...xs: (Todo | Todo[][])[]): DocNode {
   return { type: 'taskList', content: out };
 }
 const doc = (...blocks: DocNode[]): DocNode => ({ type: 'doc', content: blocks });
+const code = (language: string, text: string): DocNode => ({ type: 'codeBlock', attrs: { language }, content: [{ type: 'text', text }] });
+const math = (latex: string): DocNode => ({ type: 'blockMath', attrs: { latex } });
 
 /** Demo projects: an example researcher (an advisor Alex, a collaborator Jordan, a student Kai), with threads at
  *  different stages, notes from meetings, people owing things, ideas and some history. */
@@ -223,6 +225,7 @@ export function makeDemoProjects(now = new Date()): { projects: Project[]; threa
   const threads: Thread[] = [
     th('demo-sim', 'Get the big run going on the cluster', 1, doc(
       para('High-resolution run. Config in ', { code: '~/runs/big' }, ' on the cluster; checkpoints every 500 steps.'),
+      code('bash', '#!/bin/bash\n#SBATCH --nodes=64 --time=24:00:00\nmodule load hdf5/1.14\nsrun ./sim --config ~/runs/big/params.ini --restart latest'),
       todos('x Compile with the new HDF5 module', 'x Short test run', 'Restart from a checkpoint', [['Queue the full run', 'Check the first results']]),
     )),
     th('demo-sim', 'Statistics paper', 2, doc(
@@ -231,6 +234,8 @@ export function makeDemoProjects(now = new Date()): { projects: Project[]; threa
       h2('§2 Methods (draft)'),
       para('We identify events as sharp drops in the measured flux, exceeding 15 per cent within 200 time units. For each event we record the amplitude, the duration and the energy released…'),
       para('The waiting times between events follow an approximately exponential distribution, consistent with a memoryless process. (Check against the low-resolution runs before claiming this.)'),
+      math('P(\\Delta t) = \\lambda\\, e^{-\\lambda \\Delta t}, \\qquad \\hat\\lambda = \\frac{N}{\\sum_i \\Delta t_i}'),
+      code('python', 'import numpy as np\n\ndt = np.diff(event_times)          # waiting times\nlam = len(dt) / dt.sum()           # maximum-likelihood rate\nprint(f"rate = {lam:.3g} per unit time, mean wait = {1 / lam:.1f}")'),
       h2('§3 Results'),
     )),
     th('demo-sim', 'Compare with the observations', 2, doc(
